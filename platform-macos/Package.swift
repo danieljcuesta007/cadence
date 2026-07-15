@@ -19,5 +19,46 @@ let package = Package(
             dependencies: ["CadenceInsertion"],
             path: "Insertion/Sources/insertctl"
         ),
+
+        // C ABI of the Rust core (ADR-0005). The header is a symlink to the canonical copy
+        // in core/ffi/include/; the library comes from `cargo build -p cadence-ffi`.
+        .target(
+            name: "CCadenceFFI",
+            path: "Core/CCadenceFFI"
+        ),
+        // AVAudioEngine (CoreAudio) capture → 16 kHz mono i16 chunks (§16.1, §18 step 2).
+        .target(
+            name: "CadenceCapture",
+            path: "Capture/Sources/CadenceCapture"
+        ),
+        // Global PTT + cancel via a CGEvent tap (§12.4). Requires Accessibility.
+        .target(
+            name: "CadenceHotkeys",
+            path: "Hotkeys/Sources/CadenceHotkeys"
+        ),
+        // Non-activating NSPanel HUD (§12.1): state glyph, level bar, local/cloud chip.
+        .target(
+            name: "CadenceOverlay",
+            path: "Overlay/Sources/CadenceOverlay"
+        ),
+        // The menu-bar shell (§25 App/): interprets core effects, owns lifecycle.
+        // Build the Rust side first — qa/build-shell.sh does both in order.
+        .executableTarget(
+            name: "cadence",
+            dependencies: [
+                "CCadenceFFI", "CadenceCapture", "CadenceHotkeys", "CadenceOverlay",
+                "CadenceInsertion",
+            ],
+            path: "App/Sources/cadence",
+            linkerSettings: [
+                .linkedLibrary("cadence_ffi"),
+                .linkedLibrary("c++"), // whisper.cpp/ggml objects inside libcadence_ffi.a
+                .linkedFramework("Metal"),
+                .linkedFramework("MetalKit"),
+                .linkedFramework("Accelerate"),
+                .linkedFramework("AVFoundation"),
+                .unsafeFlags(["-L\(Context.packageDirectory)/../target/release"]),
+            ]
+        ),
     ]
 )

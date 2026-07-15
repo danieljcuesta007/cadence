@@ -1,0 +1,194 @@
+// EffectRouter — the shell-side interpreter of core effects (ADR-0001/0005).
+//
+// route() is called on the core's orchestrator thread. UI work trampolines to `uiQueue`
+// (main in app mode, nil = inline in selftest mode); insertion runs on its own serial
+// queue, off any UI thread, per §16.3.
+
+import AppKit
+import CadenceCapture
+import CadenceInsertion
+import CadenceOverlay
+import Foundation
+
+final class EffectRouter {
+    // Wired by the composition root; all optional so selftest can run headless.
+    var overlay: OverlayHUD?
+    var statusUpdate: ((String) -> Void)?
+    var capture: AudioCapture?
+    var engine: (() -> CoreEngine?) = { nil }
+    /// nil = allowed; otherwise the refusal reason. Selftest installs a frontmost-app
+    /// guard here; live dictation intentionally has none — the focused field IS the target.
+    var insertionGuard: (() -> String?)?
+    var uiQueue: DispatchQueue?
+    var earconsEnabled = true
+    /// Selftest hook: fires on fade-to-idle with the last inserted text (nil = none).
+    var onIdle: ((String?) -> Void)?
+
+    private let insertionEngine = InsertionEngine()
+    private let insertionQueue = DispatchQueue(label: "cadence.insertion", qos: .userInteractive)
+    private var lastInsertedText: String?
+    private var captureStartedAt: Date?
+
+    // Read by the hotkey monitor (main thread) to decide Esc consumption.
+    private(set) var activeState = "idle"
+
+    private func onUI(_ block: @escaping () -> Void) {
+        if let q = uiQueue { q.async(execute: block) } else { block() }
+    }
+
+    static let debug = ProcessInfo.processInfo.environment["CADENCE_DEBUG"] != nil
+
+    func route(_ json: String) {
+        if Self.debug { log("effect: \(json)") }
+        guard let data = json.data(using: .utf8),
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+            let type = obj["type"] as? String
+        else {
+            log("unroutable effect: \(json)")
+            return
+        }
+        switch type {
+        case "start_capture":
+            onUI { self.startCapture() }
+        case "stop_capture":
+            onUI { self.stopCapture() }
+        case "discard_capture":
+            onUI { self.capture?.stop() }
+        case "play_sound":
+            if earconsEnabled { Earcons.play(obj["sound"] as? String ?? "") }
+        case "show_overlay":
+            let state = obj["state"] as? String ?? "idle"
+            let chip = obj["location_chip"] as? String
+            onUI {
+                self.activeState = state
+                self.overlay?.show(state: state, chip: chip)
+                self.statusUpdate?(state)
+            }
+        case "update_waveform":
+            let level = (obj["level"] as? NSNumber)?.floatValue ?? 0
+            onUI { self.overlay?.setLevel(level) }
+        case "show_partial":
+            break // streaming instant pass is the next spike (§32 step 2)
+        case "run_insertion":
+            insertionQueue.async { self.runInsertion(obj) }
+        case "notify_text_on_clipboard":
+            let text = obj["text"] as? String ?? ""
+            onUI {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                self.log("words preserved on clipboard (\(text.count) chars)")
+            }
+        case "persist_utterance":
+            History.append(record: obj, text: lastInsertedText)
+        case "arm_undo":
+            break // dedicated undo hotkey lands with per-app rules (§32 Phase 1, later slice)
+        case "schedule_fade_to_idle":
+            onUI {
+                self.activeState = "idle"
+                self.overlay?.scheduleFade()
+                self.statusUpdate?("idle")
+                self.onIdle?(self.lastInsertedText)
+            }
+        default:
+            log("unknown effect type: \(type)")
+        }
+    }
+
+    private func startCapture() {
+        guard let capture else {
+            // Selftest mode: audio is injected directly; nothing to start.
+            return
+        }
+        let t0 = Date()
+        do {
+            try capture.start()
+            let ms = Int(Date().timeIntervalSince(t0) * 1000)
+            captureStartedAt = t0
+            log("capture started in \(ms) ms") // §28: perceived start ≤ 50 ms — measured here
+        } catch {
+            log("capture start failed: \(error) — cancelling utterance")
+            engine()?.cancel()
+        }
+    }
+
+    private func stopCapture() {
+        if let capture {
+            capture.stop()
+            if let t0 = captureStartedAt {
+                log("capture window \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
+            }
+        }
+        // Confirm even in selftest (no real capture): the core holds the ASR drain for this.
+        engine()?.captureStopped()
+    }
+
+    private func runInsertion(_ obj: [String: Any]) {
+        let utterance = obj["utterance"] as? String ?? ""
+        let text = obj["text"] as? String ?? ""
+        if let reason = insertionGuard?() {
+            log("insertion refused by guard: \(reason)")
+            engine()?.insertionFailed(utterance: utterance)
+            return
+        }
+        lastInsertedText = text
+        let result = insertionEngine.insert(text)
+        let strategy: String
+        switch result.strategy {
+        case .direct: strategy = "direct"
+        case .pasteRestore: strategy = "paste_restore"
+        case .clipboardNotify: strategy = "clipboard_notify"
+        }
+        log(
+            "insertion: \(strategy) inserted=\(result.inserted) "
+                + "clipboardRestored=\(result.clipboardRestored) \(result.elapsedMs) ms")
+        engine()?.insertionResult(
+            utterance: utterance, strategy: strategy, inserted: result.inserted,
+            clipboardRestored: result.clipboardRestored)
+    }
+
+    func log(_ msg: String) {
+        FileHandle.standardError.write(Data("[cadence] \(msg)\n".utf8))
+    }
+}
+
+/// Stand-in for core/store (§24): append-only JSONL so no utterance is ever unrecoverable
+/// (AC-22 baseline until the encrypted SQLite store lands).
+enum History {
+    static let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".cadence/history.jsonl")
+
+    static func append(record: [String: Any], text: String?) {
+        var rec = record
+        rec["text"] = text
+        rec["ts"] = ISO8601DateFormatter().string(from: Date())
+        guard let data = try? JSONSerialization.data(withJSONObject: rec),
+            var line = String(data: data, encoding: .utf8)
+        else { return }
+        line += "\n"
+        let dir = url.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(line.utf8))
+        } else {
+            try? Data(line.utf8).write(to: url)
+        }
+    }
+}
+
+enum Earcons {
+    /// Distinct, subtle system sounds (§12.6) until we ship our own assets.
+    static func play(_ sound: String) {
+        let name: String
+        switch sound {
+        case "capture_start": name = "Tink"
+        case "capture_cancel": name = "Bottle"
+        case "insertion_done": name = "Pop"
+        case "didnt_catch_that": name = "Basso"
+        case "error": name = "Basso"
+        default: return
+        }
+        NSSound(named: name)?.play()
+    }
+}
