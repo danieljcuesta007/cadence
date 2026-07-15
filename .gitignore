@@ -1,0 +1,12 @@
+/target
+**/*.rs.bk
+Cargo.lock.orig
+.DS_Store
+/platform-macos/.build
+/platform-macos/.swiftpm
+/models/artifacts/*.bin
+/models/artifacts/*.gguf
+/tools/cmake-local/
+/qa/fixtures/*.wav
+*.log
+.env

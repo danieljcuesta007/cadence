@@ -1,0 +1,10 @@
+[package]
+name = "cadence-orchestrator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cadence-ipc = { path = "../ipc" }
+cadence-asr = { path = "../asr" }
+cadence-cleanup = { path = "../cleanup" }
+serde = { workspace = true }
