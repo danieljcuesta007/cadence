@@ -1,0 +1,20 @@
+[package]
+name = "cadence-ffi"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "cadence_ffi"
+# staticlib/cdylib for the native shells; rlib so the FFI surface stays testable from Rust.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = []
+whisper = ["cadence-asr/whisper"]
+
+[dependencies]
+cadence-ipc = { path = "../ipc" }
+cadence-asr = { path = "../asr" }
+cadence-cleanup = { path = "../cleanup" }
+cadence-orchestrator = { path = "../orchestrator" }
+serde_json = { workspace = true }

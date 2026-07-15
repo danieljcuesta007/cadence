@@ -1,93 +1,81 @@
 # STATUS — Cadence build progress
 
-Updated: 2026-07-14 · Phase: **0 (foundations & spikes)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+Updated: 2026-07-15 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
-## Phase-0 exit criteria
+## Phase-0 exit criteria (closed 2026-07-14, except the deferred Windows gate)
 
 | Criterion (§32) | Status |
 |---|---|
-| Headless core transcribes WAV → cleaned text | ✅ **Met.** `cargo run -p cadence-headless --features whisper -- --wav qa/fixtures/hello.wav` runs mic-window → whisper.cpp (Metal) → rule cleanup + hallucination guard → insertion sink, through the real orchestrator. |
-| Insertion prototype passes 20-app subset, 0 freezes / 0 corruption | 🟢 **9 real-app targets run automated (Accessibility granted 2026-07-14): 9/9 pass, 0 freezes (max engine time 335 ms), 0 clipboard corruption (sentinel restored every run), secure-field refusal verified live in Safari.** Remaining for an interactive pass (user at keyboard): Spotlight, Messages, Slack, Pages, Word + not-installed apps (iTerm2, VS Code, Cursor, Discord, Xcode, JetBrains). See results table below. |
-| Windows insertion spike | 🔴 **Deferred — no Windows environment on this machine** (ADR-0004). First task when one exists. |
-| Orchestrator + IPC schema, headless, fully tested | ✅ 44 Rust tests green (all §12.2 transitions, cancel at each stage, cloud→local fallbacks, stale-callback rejection, interference abort, per-app disable, privacy truth, ring-buffer no-lost-words). |
-| Golden local model chosen + verified fetch | 🟡 Working candidate: whisper.cpp `ggml-base.en` (sha256-pinned fetch script). Final golden model selection needs the §30 eval harness (Phase 1). Signing/registry (§17.5) not built yet. |
+| Headless core transcribes WAV → cleaned text | ✅ 144 ms warm / 553 ms cold, 282 MB peak (M4, base.en, Metal) |
+| Insertion prototype, 0 freezes / 0 corruption | ✅ automated 9/9, 0 freezes, 0 corruption (full table: `qa/matrix-results.jsonl` + git history of this file). Interactive leftovers for a user-at-keyboard pass: Spotlight, Messages, Slack, Pages, Word + not-installed apps |
+| Windows insertion spike | 🔴 Deferred — no Windows env (ADR-0004); first task when one exists |
+| Orchestrator + IPC schema, headless, fully tested | ✅ |
+| Golden local model chosen + verified fetch | 🟡 base.en working candidate; final selection needs §30 eval harness |
 
-## What works today
+## Phase-1 spine — what works today (2026-07-15)
 
-- **Rust core** (`cargo test --workspace`: 44/44): `cadence-ipc` typed event/effect schema;
-  `cadence-orchestrator` pure state machine + ring buffer + headless pipeline;
-  `cadence-cleanup` rule engine + §17.2 hallucination guard; `cadence-asr` trait + mock +
-  whisper.cpp (Metal) behind a feature flag.
-- **WAV → cleaned text** (Apple M4, base.en): **asr 144 ms warm / 553 ms first-run** on a 3.5 s
-  utterance; cleanup <1 ms; **peak RSS 282 MB** with model loaded. §28 budgets: local p50 ≤
-  700 ms ✅ (warm), active RAM < 1.2 GB ✅. (Idle <150 MB budget is about model unload — Phase 1.)
-- **macOS insertion engine spike** (`platform-macos`): capability detection (AX trust, secure
-  event input, focused role/settability) → cascade **direct AX → paste-with-restore →
-  clipboard+notify**, every strategy off-thread with a 250 ms deadline +
-  `AXUIElementSetMessagingTimeout`; secure fields refused outright; clipboard snapshot/restore
-  refuses to clobber third-party writes. `insertctl` CLI: `check` / `insert` / `selftest`.
-- **QA harness**: `qa/insertion-matrix.sh` + 20-app spec in `qa/INSERTION_MATRIX.md`.
+**Live end-to-end path built:** menu-bar shell (`cadence run`) → Right-Option PTT (CGEvent
+tap) → AVAudioEngine capture → FFI ring buffer → whisper.cpp (Metal, worker thread) → rule
+cleanup + hallucination guard → real insertion cascade → history JSONL. All driven by the
+Phase-0 orchestrator over the new C ABI (ADR-0005).
 
-## Insertion matrix — automated run, 2026-07-14 (Apple M4, macOS 26)
+- **`core/ffi`** (`cadence-ffi`): C ABI + JSON ipc effects; compute effects interpreted
+  in-core on core threads; no-lost-words drain contract (`capture_stopped` + 500 ms grace);
+  panic-fenced externs. Workspace tests: **50/50** (6 FFI incl. an AC-5 regression test).
+- **Swift shell** (`platform-macos`): `CCadenceFFI` (header symlinked from core),
+  `CadenceCapture` (16 kHz mono i16 + RMS level), `CadenceHotkeys` (PTT/Esc tap, self-healing),
+  `CadenceOverlay` (non-activating NSPanel pill: state glyph, level bars, local chip),
+  `cadence` executable (menu-bar agent + effect router + WAV selftest). Build:
+  `qa/build-shell.sh`.
+- **E2E verification** (`qa/spine-selftest.sh`, run 3× green): WAV injected through the real
+  FFI audio path → whisper → cleanup → **direct AX insertion into TextEdit**, readback
+  verified, clipboard sentinel restored. **Pipeline 203–233 ms** (3.5 s utterance, model load
+  ~180 ms warm), insertion 26–29 ms.
+- **Safety, structural:** selftest cannot insert without a frontmost-app guard (default
+  TextEdit); the Phase-0 "pasted into WhatsApp" class is closed for all automated runs.
 
-| Target | Strategy | Inserted | Clipboard restored | Verified in field | Engine ms |
-|---|---|---|---|---|---|
-| TextEdit | direct (AX) | ✅ | ✅ | ✅ | 53 |
-| Safari textarea | pasteRestore | ✅ | ✅ | ✅ | 288 |
-| Safari password field | **refused** ✅ (AXSecureTextField) | — | ✅ | — | 41 |
-| Notes | pasteRestore | ✅ | ✅ | — (AX readback opaque) | 307 |
-| Chrome textarea | pasteRestore | ✅ | ✅ | ✅ | 303 |
-| WhatsApp (unintended, see note) | pasteRestore | ✅ | ✅ | ✅ | 315 |
-| Terminal (new window) | pasteRestore | ✅ | ✅ | ✅ | 329 |
-| Finder rename field | pasteRestore | ✅ | ✅ | — (cleanup esc reverted before readback) | 333 |
-| Mail compose | pasteRestore | ✅ | ✅ | — | 335 |
+### Fixed this session
+- **AC-5 regression (found live):** ring cleared on `StartCapture` raced instant-start audio —
+  first 8 000 of 56 235 samples lost, mangling leading words. Clear now happens synchronously
+  in `trigger_down` on the caller thread; regression test pins the full window.
 
-**Gate metrics: 0 freezes · 0 clipboard corruption · 9/9 pass.**
-
-Notes:
-- Direct AX works on native NSTextView (TextEdit); WebKit/Chromium fields reject the
-  AXSelectedText settable check → cascade correctly falls to pasteRestore. Raising direct-AX
-  coverage is a Phase-1 quality goal, not a correctness gap.
-- The WhatsApp row was a harness safety failure, not an engine failure: one test bypassed the
-  frontmost-app guard while the user had focus, and the payload pasted into their WhatsApp
-  input (not sent). The guard is now mandatory in `qa/matrix-driver.sh`. Lesson feeds §12.3
-  user-interference design: focus verification immediately before insert, always.
-- Skipped (need interactive run via `qa/insertion-matrix.sh`): Spotlight (panel won't take
-  focus from a background process), Messages/Slack (real messaging surfaces — deliberately not
-  automated), Pages/Word (focus contention during run), plus apps not installed on this
-  machine (iTerm2, VS Code, Cursor, Discord, Xcode, JetBrains, 1Password).
+### Not yet run
+- **Live mic dictation** — mic TCC is *notDetermined* for the terminal; the first
+  `cadence run` must happen with the user present to grant the prompt. Everything after the
+  mic is the tested path.
 
 ## What's stubbed / not started
-
-- Streaming instant-pass ASR (two-pass §17.1) — whisper.cpp plain API is batch; Phase 1 needs
-  its streaming mode or a Parakeet-class model. **Open risk.**
-- Local small-LLM cleanup (rule-based stand-in per ADR-0002), dictionary, redaction, store,
-  sync, privacy dashboard, overlay/HUD, hotkeys, capture (CoreAudio), Windows everything,
-  cloud everything.
-- FFI surface for shells (pipeline runner exists; `swift-bridge`/C-ABI export not yet).
+- Streaming instant pass (§17.1 two-pass) — next spike: whisper.cpp stream vs Parakeet ONNX.
+  `show_partial` is routed but never emitted. **Open risk.**
+- Local small-LLM cleanup (ADR-0002 rule engine standing in), dictionary, redaction, real
+  store (JSONL stand-in at `~/.cadence/history.jsonl`), undo (`arm_undo` routed, no-op),
+  per-app rules, settings UI, onboarding, model registry/signing (§17.5), idle model unload
+  (<150 MB budget), caret-anchored overlay, Windows everything, cloud everything.
 
 ## Current metrics vs targets (§28)
 
 | Metric | Target | Measured |
 |---|---|---|
-| Local refined-pass latency (3.5 s utterance, M4) | ≤ 700 ms p50 | 144 ms warm; 553 ms first-run |
-| Active RAM peak (model loaded) | < 1.2 GB | 282 MB |
-| Insertion engine call bound | ≤ 250 ms + fallback | deadline enforced; degraded path 19 ms |
-| Idle RAM / CPU / network | <150 MB / <1% / 0 | n/a — no resident app yet |
+| Local refined-pass pipeline (3.5 s utterance, M4) | ≤ 700 ms p50 | 203–233 ms (WAV-injected, incl. insertion) |
+| Insertion engine call | ≤ 250 ms + fallback | 26–29 ms (direct AX, TextEdit) |
+| Key-down → capture start | ≤ 50 ms perceived | **unmeasured** — needs live mic run (logged by shell) |
+| Active RAM peak | < 1.2 GB | 282 MB (Phase-0 headless; shell unmeasured) |
+| Idle RAM / CPU / network | <150 MB / <1% / 0 | unmeasured — needs resident-app soak |
 
 ## Open risks (watchlist)
+1. **Windows spike unproven** (ADR-0004).
+2. **Streaming/instant pass** unsolved locally (§12.3 strategy B).
+3. **One-off 30 s whisper Metal stall** in a backgrounded selftest (1 of ~6 runs, never
+   reproduced). Mitigation in place: ProcessInfo activity assertion during dictation. Watch
+   during soak.
+4. Direct-AX coverage across Electron/web apps still shallow (falls back to pasteRestore).
+5. TTS fixtures only; WER harness (§30) not started.
 
-1. **Windows spike unproven** — the market leader's freeze bug lives there (ADR-0004).
-2. **Streaming/instant pass** unsolved for the local engine (affects §12.3 strategy B).
-3. Direct-AX insertion coverage across Electron/web apps unknown until the matrix runs.
-4. TTS fixtures only; real-voice eval sets + WER harness (§30) not started.
-
-## Next steps (in order)
-
-1. **User action:** grant Accessibility to the terminal → run `qa/insertion-matrix.sh` → paste
-   results here; fix what fails until the 20-app subset is green.
-2. CoreAudio capture + hotkey listener + minimal overlay (menu-bar shell) driving the same
-   orchestrator over FFI — first live end-to-end dictation on macOS.
-3. Streaming instant-pass spike (whisper.cpp stream mode vs Parakeet-class ONNX).
-4. Model registry + signature verification (§17.5); idle unload for the <150 MB budget.
-5. Windows environment → port the insertion spike (ADR-0004).
+## Next steps (§32 order)
+1. **User at keyboard:** first live `cadence run` — grant mic prompt, dictate into TextEdit;
+   capture-start latency + resource numbers land then. Then remaining interactive matrix
+   targets.
+2. Streaming instant-pass ASR spike (whisper.cpp stream mode vs Parakeet-class ONNX).
+3. Model registry + signature verify (§17.5) + idle model unload (<150 MB idle budget).
+4. Real store (encrypted SQLite §24) + undo + per-app rules on the live spine.
+5. Windows environment → port insertion spike + this FFI (header already C-clean).

@@ -5,6 +5,7 @@ members = [
     "core/orchestrator",
     "core/asr",
     "core/cleanup",
+    "core/ffi",
     "tools/headless",
 ]
 

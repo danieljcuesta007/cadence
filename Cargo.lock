@@ -54,6 +54,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cadence-ffi"
+version = "0.0.1"
+dependencies = [
+ "cadence-asr",
+ "cadence-cleanup",
+ "cadence-ipc",
+ "cadence-orchestrator",
+ "serde_json",
+]
+
+[[package]]
 name = "cadence-headless"
 version = "0.0.1"
 dependencies = [

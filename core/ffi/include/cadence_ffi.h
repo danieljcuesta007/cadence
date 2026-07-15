@@ -1,0 +1,64 @@
+/* cadence_ffi.h — C ABI for the Cadence core engine (§23, ADR-0005).
+ *
+ * Canonical copy lives in core/ffi/include/; platform shells import it via their
+ * package plumbing (platform-macos/Core/CCadenceFFI symlinks here).
+ *
+ * Effects arrive on the callback as JSON in the cadence-ipc schema, one effect per
+ * call, in order, on a core-owned thread — trampoline to your UI thread. Compute
+ * effects (run_asr / run_cleanup) never cross this boundary; the shell only sees
+ * presentation + insertion effects.
+ */
+#ifndef CADENCE_FFI_H
+#define CADENCE_FFI_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct CadenceEngine CadenceEngine;
+
+typedef void (*cadence_effect_cb)(const char *effect_json, void *ctx);
+
+/* Engine backed by whisper.cpp at model_path (requires the core built with the
+ * `whisper` feature). NULL on failure — see cadence_last_error(). */
+CadenceEngine *cadence_engine_new(const char *model_path, cadence_effect_cb cb, void *ctx);
+
+/* Engine with a deterministic mock ASR (tests / no model present). */
+CadenceEngine *cadence_engine_new_mock(const char *refined_text, cadence_effect_cb cb, void *ctx);
+
+/* Blocks briefly joining core threads; no callbacks fire after it returns. */
+void cadence_engine_free(CadenceEngine *engine);
+
+/* PTT lifecycle. Phase 1 policy is always local-only. */
+void cadence_engine_trigger_down(CadenceEngine *engine, bool verbatim);
+void cadence_engine_trigger_up(CadenceEngine *engine);
+void cadence_engine_cancel(CadenceEngine *engine);
+
+/* Confirm capture is stopped and the final audio buffer has been pushed. The core
+ * holds the ASR window open for this (500 ms grace) so no trailing words are lost. */
+void cadence_engine_capture_stopped(CadenceEngine *engine);
+
+/* Append captured PCM (16 kHz mono i16). Audio-thread-safe. level in [0,1]. */
+void cadence_engine_push_audio(CadenceEngine *engine, const int16_t *samples, size_t len,
+                               float level);
+
+/* Outcome of a run_insertion effect. strategy: "direct" | "tsf" | "paste_restore" |
+ * "clipboard_notify" (ipc snake_case names). */
+void cadence_engine_insertion_result(CadenceEngine *engine, const char *utterance_id,
+                                     const char *strategy, bool inserted,
+                                     bool clipboard_restored);
+void cadence_engine_insertion_failed(CadenceEngine *engine, const char *utterance_id);
+
+/* Last error on the calling thread, or NULL. Valid until the next failing call. */
+const char *cadence_last_error(void);
+const char *cadence_version(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* CADENCE_FFI_H */
