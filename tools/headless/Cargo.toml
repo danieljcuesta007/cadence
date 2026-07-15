@@ -1,0 +1,16 @@
+[package]
+name = "cadence-headless"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+whisper = ["cadence-asr/whisper"]
+
+[dependencies]
+cadence-ipc = { path = "../../core/ipc" }
+cadence-asr = { path = "../../core/asr" }
+cadence-cleanup = { path = "../../core/cleanup" }
+cadence-orchestrator = { path = "../../core/orchestrator" }
+hound = "3"
+serde_json = { workspace = true }
