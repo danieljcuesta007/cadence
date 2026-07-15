@@ -64,10 +64,20 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 
 ## Open risks (watchlist)
 1. **Windows spike unproven** (ADR-0004).
-2. **Streaming/instant pass** unsolved locally (§12.3 strategy B).
+2. **Streaming/instant pass** — DONE for push-to-talk: `transcribe_partial` is wired into both
+   interpreters (headless `Pipeline` + FFI core loop) via a shared `PartialScheduler`, with a
+   load-time warmup decode; verified end-to-end over real whisper (partial "hello" + refined
+   insert) by an FFI integration test — no mic needed (ADR-0006). Still open: a sliding/chunked
+   window with context carry for *long* dictations — the current re-decode is O(window)/step,
+   fine for short PTT (~4 s tested) but grows on multi-tens-of-seconds utterances.
 3. **One-off 30 s whisper Metal stall** in a backgrounded selftest (1 of ~6 runs, never
-   reproduced). Mitigation in place: ProcessInfo activity assertion during dictation. Watch
-   during soak.
+   reproduced). Model loaded fine; the *decode* (audio→text) never returned, and the Metal
+   crash fired during process-exit cleanup — confirming a decode was still in flight, not a
+   load/init fault. Suspected App Nap (run launched from a script with Terminal backgrounded).
+   Mitigation in place: ProcessInfo activity assertion during dictation (disables App Nap for
+   the dictation window) — plausibly mitigated, NOT confirmed fixed. Containment: not
+   word-losing — audio stays in the ring/history path and a hung utterance does not crash the
+   hotkey listener. First suspect if any dictation hangs in "thinking". Watch during soak.
 4. Direct-AX coverage across Electron/web apps still shallow (falls back to pasteRestore).
 5. TTS fixtures only; WER harness (§30) not started.
 
@@ -75,7 +85,10 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 1. **User at keyboard:** first live `cadence run` — grant mic prompt, dictate into TextEdit;
    capture-start latency + resource numbers land then. Then remaining interactive matrix
    targets.
-2. Streaming instant-pass ASR spike (whisper.cpp stream mode vs Parakeet-class ONNX).
+2. ~~Streaming instant-pass ASR spike + wire into live loop~~ ✅ DONE (ADR-0006; shared
+   `PartialScheduler`, warmup, FFI real-whisper test green). Follow-on: sliding/chunked window
+   with context carry for long dictations; confirm partials render in the real overlay on the
+   first live `cadence run` (shell already routes `show_partial`).
 3. Model registry + signature verify (§17.5) + idle model unload (<150 MB idle budget).
 4. Real store (encrypted SQLite §24) + undo + per-app rules on the live spine.
 5. Windows environment → port insertion spike + this FFI (header already C-clean).

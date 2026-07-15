@@ -9,10 +9,11 @@ use cadence_asr::{pcm_i16_to_f32, AsrEngine, AsrError};
 use cadence_cleanup::CleanupEngine;
 use cadence_ipc::{
     Effect, Event, InsertionOutcome, InsertionStrategy, Mode, PrivacyRecord, ProcessingLocation,
-    ProcessingPolicy,
+    ProcessingPolicy, State,
 };
 
 use crate::machine::Orchestrator;
+use crate::partial::PartialScheduler;
 use crate::ring::RingBuffer;
 
 /// Where the final text lands. The real shells implement the §7 F20 cascade; tests and the
@@ -55,6 +56,8 @@ pub struct RunReport {
     pub timings: Timings,
     pub audio_samples: usize,
     pub dropped_samples: u64,
+    /// Instant-pass partials shown while the user was still speaking (§12.3), in order.
+    pub partials: Vec<String>,
 }
 
 pub struct Pipeline<'a> {
@@ -97,7 +100,13 @@ impl<'a> Pipeline<'a> {
             timings: Timings::default(),
             audio_samples: pcm.len(),
             dropped_samples: 0,
+            partials: Vec::new(),
         };
+
+        // Fresh instant-pass stream for this utterance (the engine may be reused across runs).
+        self.asr.reset_stream();
+        let mut scheduler = PartialScheduler::default();
+        let mut listening_utt = None;
 
         let mut queue: VecDeque<Event> = VecDeque::new();
         queue.push_back(Event::TriggerDown { mode, policy });
@@ -115,14 +124,45 @@ impl<'a> Pipeline<'a> {
         while let Some(event) = queue.pop_front() {
             // Mirror what the capture side does: samples land in the ring buffer as the
             // AudioCaptured events flow.
-            if let Event::AudioCaptured { samples, .. } = &event {
+            let audio_samples = if let Event::AudioCaptured { samples, .. } = &event {
                 let end = (audio_fed + samples).min(pcm.len());
                 self.ring.push(&pcm[audio_fed..end]);
                 audio_fed = end;
-            }
+                Some(*samples)
+            } else {
+                None
+            };
             let effects = self.machine.handle(event);
             for effect in effects {
+                if let Effect::StartCapture { utterance } = &effect {
+                    listening_utt = Some(utterance.clone());
+                    scheduler.reset();
+                }
                 self.execute(effect, &mut queue, &mut report);
+            }
+
+            // Instant pass (§12.3): on cadence, decode the growing window and feed a partial
+            // back into the machine, which surfaces it as ShowPartial. Synchronous here, so the
+            // partial "completes" the moment it returns.
+            if let (Some(samples), Some(utt)) = (audio_samples, listening_utt.clone()) {
+                if self.machine.state() == State::Listening && scheduler.on_audio(samples) {
+                    let window = self.ring.snapshot();
+                    if let Ok(t) = self.asr.transcribe_partial(&pcm_i16_to_f32(&window)) {
+                        if let Some(text) = t.instant {
+                            // Synchronous here: feed the partial through the machine now, while
+                            // still Listening, so its ShowPartial isn't stranded behind the
+                            // queued TriggerUp (after which the machine drops late partials).
+                            let fx = self.machine.handle(Event::AsrPartial {
+                                utterance: utt,
+                                text,
+                            });
+                            for effect in fx {
+                                self.execute(effect, &mut queue, &mut report);
+                            }
+                        }
+                    }
+                    scheduler.on_complete();
+                }
             }
         }
 
@@ -196,12 +236,14 @@ impl<'a> Pipeline<'a> {
                 report.inserted = outcome.inserted;
                 queue.push_back(Event::InsertionCompleted { utterance, outcome });
             }
+            // Instant-pass partial: headlessly, record it so tests can assert the two-pass
+            // sequence (the shells render it in the overlay).
+            Effect::ShowPartial { text } => report.partials.push(text),
             // Presentation-only effects: no-ops headlessly.
             Effect::StartCapture { .. }
             | Effect::PlaySound { .. }
             | Effect::ShowOverlay { .. }
             | Effect::UpdateWaveform { .. }
-            | Effect::ShowPartial { .. }
             | Effect::NotifyTextOnClipboard { .. }
             | Effect::PersistUtterance { .. }
             | Effect::ArmUndo { .. }
