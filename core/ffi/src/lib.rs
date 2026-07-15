@@ -375,6 +375,41 @@ pub extern "C" fn cadence_version() -> *const c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
 }
 
+/// Verify a model file's SHA-256 against `expected_sha256_hex` (lowercase hex). Returns true
+/// iff the file hashes to the expected value. On mismatch or I/O error returns false and sets
+/// `cadence_last_error`. Lets the shell gate `cadence_engine_new` on integrity before loading a
+/// model (§17.5) — the registry/rollback logic lives in `cadence-models`. Streams the file, so
+/// it is safe on a ~140 MB model.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_model_verify(
+    model_path: *const c_char,
+    expected_sha256_hex: *const c_char,
+) -> bool {
+    guarded("cadence_model_verify", || {
+        let (Some(path), Some(expected)) =
+            (cstr_arg(model_path), cstr_arg(expected_sha256_hex))
+        else {
+            set_last_error("cadence_model_verify: NULL/invalid argument".into());
+            return false;
+        };
+        let expected = expected.to_lowercase();
+        match cadence_models::sha256_file(std::path::Path::new(&path)) {
+            Ok(actual) if actual == expected => true,
+            Ok(actual) => {
+                set_last_error(format!(
+                    "model hash mismatch ({path}): expected {expected}, got {actual}"
+                ));
+                false
+            }
+            Err(e) => {
+                set_last_error(format!("model verify ({path}): {e}"));
+                false
+            }
+        }
+    })
+    .unwrap_or(false)
+}
+
 unsafe fn cstr_arg(p: *const c_char) -> Option<String> {
     if p.is_null() {
         return None;
@@ -852,6 +887,27 @@ mod tests {
             ftext.contains("hello") && ftext.contains("test") && ftext.contains("pipeline"),
             "refined text unexpected: {ftext}"
         );
+    }
+
+    #[test]
+    fn model_verify_accepts_match_and_rejects_tamper() {
+        let content = b"pretend model weights";
+        let mut path = std::env::temp_dir();
+        path.push(format!("cadence-ffi-verify-{}", std::process::id()));
+        std::fs::write(&path, content).unwrap();
+        let path_c = CString::new(path.to_str().unwrap()).unwrap();
+
+        let good = cadence_models::sha256::sha256_hex(content);
+        let good_c = CString::new(good).unwrap();
+        assert!(unsafe { cadence_model_verify(path_c.as_ptr(), good_c.as_ptr()) });
+
+        let bad_c = CString::new("0".repeat(64)).unwrap();
+        assert!(!unsafe { cadence_model_verify(path_c.as_ptr(), bad_c.as_ptr()) });
+        // last_error is populated on failure.
+        let err = unsafe { CStr::from_ptr(cadence_last_error()) }.to_str().unwrap();
+        assert!(err.contains("mismatch"), "unexpected error: {err}");
+
+        std::fs::remove_file(&path).ok();
     }
 
     #[test]

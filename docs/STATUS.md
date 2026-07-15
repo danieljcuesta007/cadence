@@ -89,6 +89,11 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    `PartialScheduler`, warmup, FFI real-whisper test green). Follow-on: sliding/chunked window
    with context carry for long dictations; confirm partials render in the real overlay on the
    first live `cadence run` (shell already routes `show_partial`).
-3. Model registry + signature verify (§17.5) + idle model unload (<150 MB idle budget).
-4. Real store (encrypted SQLite §24) + undo + per-app rules on the live spine.
+3. Model registry + integrity ✅ DONE (`core/models`: dependency-free SHA-256 + `ModelRegistry`
+   verify/golden-rollback §17.5/§29; FFI `cadence_model_verify` gate; ADR-0007). Remaining:
+   **idle model unload (<150 MB)** — designed, deferred (tension w/ ~7 s cold load, ADR-0006);
+   asymmetric signature verify (needs signing key); full registry-resolve over FFI + a manifest
+   in the shell.
+4. Real store (encrypted SQLite §24) + undo + per-app rules on the live spine (registry's
+   `ModelStore` trait already plugs in here).
 5. Windows environment → port insertion spike + this FFI (header already C-clean).

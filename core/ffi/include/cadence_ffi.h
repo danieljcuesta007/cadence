@@ -53,6 +53,11 @@ void cadence_engine_insertion_result(CadenceEngine *engine, const char *utteranc
                                      bool clipboard_restored);
 void cadence_engine_insertion_failed(CadenceEngine *engine, const char *utterance_id);
 
+/* Verify a model file's SHA-256 against expected_sha256_hex (lowercase). Returns true iff it
+ * matches; on mismatch/error returns false and sets cadence_last_error. Gate engine creation
+ * on this before cadence_engine_new (model integrity, §17.5). Streams the file. */
+bool cadence_model_verify(const char *model_path, const char *expected_sha256_hex);
+
 /* Last error on the calling thread, or NULL. Valid until the next failing call. */
 const char *cadence_last_error(void);
 const char *cadence_version(void);
