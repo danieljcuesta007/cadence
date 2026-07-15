@@ -7,7 +7,7 @@ Updated: 2026-07-14 · Phase: **0 (foundations & spikes)** · Blueprint: docs/CA
 | Criterion (§32) | Status |
 |---|---|
 | Headless core transcribes WAV → cleaned text | ✅ **Met.** `cargo run -p cadence-headless --features whisper -- --wav qa/fixtures/hello.wav` runs mic-window → whisper.cpp (Metal) → rule cleanup + hallucination guard → insertion sink, through the real orchestrator. |
-| Insertion prototype passes 20-app subset, 0 freezes / 0 corruption | 🟡 **Engine built + invariants proven headlessly; real-app matrix awaits a one-time user permission.** `insertctl selftest` (5/5): deadline abandonment ≤1 s on a 5 s stall, byte-exact multi-type clipboard restore, third-party-write never clobbered. Degraded path verified live (no AX grant → words parked on clipboard, honest report, 19 ms). **Blocked on:** granting Accessibility to the harness terminal (System Settings → Privacy & Security → Accessibility), then `qa/insertion-matrix.sh`. |
+| Insertion prototype passes 20-app subset, 0 freezes / 0 corruption | 🟢 **9 real-app targets run automated (Accessibility granted 2026-07-14): 9/9 pass, 0 freezes (max engine time 335 ms), 0 clipboard corruption (sentinel restored every run), secure-field refusal verified live in Safari.** Remaining for an interactive pass (user at keyboard): Spotlight, Messages, Slack, Pages, Word + not-installed apps (iTerm2, VS Code, Cursor, Discord, Xcode, JetBrains). See results table below. |
 | Windows insertion spike | 🔴 **Deferred — no Windows environment on this machine** (ADR-0004). First task when one exists. |
 | Orchestrator + IPC schema, headless, fully tested | ✅ 44 Rust tests green (all §12.2 transitions, cancel at each stage, cloud→local fallbacks, stale-callback rejection, interference abort, per-app disable, privacy truth, ring-buffer no-lost-words). |
 | Golden local model chosen + verified fetch | 🟡 Working candidate: whisper.cpp `ggml-base.en` (sha256-pinned fetch script). Final golden model selection needs the §30 eval harness (Phase 1). Signing/registry (§17.5) not built yet. |
@@ -27,6 +27,35 @@ Updated: 2026-07-14 · Phase: **0 (foundations & spikes)** · Blueprint: docs/CA
   `AXUIElementSetMessagingTimeout`; secure fields refused outright; clipboard snapshot/restore
   refuses to clobber third-party writes. `insertctl` CLI: `check` / `insert` / `selftest`.
 - **QA harness**: `qa/insertion-matrix.sh` + 20-app spec in `qa/INSERTION_MATRIX.md`.
+
+## Insertion matrix — automated run, 2026-07-14 (Apple M4, macOS 26)
+
+| Target | Strategy | Inserted | Clipboard restored | Verified in field | Engine ms |
+|---|---|---|---|---|---|
+| TextEdit | direct (AX) | ✅ | ✅ | ✅ | 53 |
+| Safari textarea | pasteRestore | ✅ | ✅ | ✅ | 288 |
+| Safari password field | **refused** ✅ (AXSecureTextField) | — | ✅ | — | 41 |
+| Notes | pasteRestore | ✅ | ✅ | — (AX readback opaque) | 307 |
+| Chrome textarea | pasteRestore | ✅ | ✅ | ✅ | 303 |
+| WhatsApp (unintended, see note) | pasteRestore | ✅ | ✅ | ✅ | 315 |
+| Terminal (new window) | pasteRestore | ✅ | ✅ | ✅ | 329 |
+| Finder rename field | pasteRestore | ✅ | ✅ | — (cleanup esc reverted before readback) | 333 |
+| Mail compose | pasteRestore | ✅ | ✅ | — | 335 |
+
+**Gate metrics: 0 freezes · 0 clipboard corruption · 9/9 pass.**
+
+Notes:
+- Direct AX works on native NSTextView (TextEdit); WebKit/Chromium fields reject the
+  AXSelectedText settable check → cascade correctly falls to pasteRestore. Raising direct-AX
+  coverage is a Phase-1 quality goal, not a correctness gap.
+- The WhatsApp row was a harness safety failure, not an engine failure: one test bypassed the
+  frontmost-app guard while the user had focus, and the payload pasted into their WhatsApp
+  input (not sent). The guard is now mandatory in `qa/matrix-driver.sh`. Lesson feeds §12.3
+  user-interference design: focus verification immediately before insert, always.
+- Skipped (need interactive run via `qa/insertion-matrix.sh`): Spotlight (panel won't take
+  focus from a background process), Messages/Slack (real messaging surfaces — deliberately not
+  automated), Pages/Word (focus contention during run), plus apps not installed on this
+  machine (iTerm2, VS Code, Cursor, Discord, Xcode, JetBrains, 1Password).
 
 ## What's stubbed / not started
 

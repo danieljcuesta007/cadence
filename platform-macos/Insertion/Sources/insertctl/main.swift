@@ -50,6 +50,65 @@ case "insert":
     printJSON(result)
     exit(result.inserted ? 0 : 1)
 
+case "find-click":
+    // insertctl find-click "secure" — find + click a matching element in the frontmost app.
+    guard args.count >= 2 else {
+        FileHandle.standardError.write(Data("insertctl find-click <query> [--delay s]\n".utf8))
+        exit(2)
+    }
+    if let i = args.firstIndex(of: "--delay"), i + 1 < args.count, let d = Double(args[i + 1]) {
+        Thread.sleep(forTimeInterval: d)
+    }
+    let result = findAndClick(args[1])
+    printJSON(result)
+    exit(result.clicked ? 0 : 1)
+
+case "frontmost":
+    print(NSWorkspace.shared.frontmostApplication?.localizedName ?? "unknown")
+
+case "read":
+    // Dump the focused element (role/subrole/value/selection) — matrix verification readback.
+    if let i = args.firstIndex(of: "--delay"), i + 1 < args.count, let d = Double(args[i + 1]) {
+        Thread.sleep(forTimeInterval: d)
+    }
+    printJSON(readFocused())
+
+case "key":
+    // insertctl key cmd-n | return | esc | cmd-space | cmd-a ...   (CGEvents; AX perm only)
+    guard args.count >= 2 else {
+        FileHandle.standardError.write(Data("insertctl key <combo> [--delay s]\n".utf8))
+        exit(2)
+    }
+    if let i = args.firstIndex(of: "--delay"), i + 1 < args.count, let d = Double(args[i + 1]) {
+        Thread.sleep(forTimeInterval: d)
+    }
+    let combo = args[1].lowercased().split(separator: "-").map(String.init)
+    var flags: CGEventFlags = []
+    var keyName: String = combo.last ?? ""
+    for part in combo.dropLast() {
+        switch part {
+        case "cmd": flags.insert(.maskCommand)
+        case "shift": flags.insert(.maskShift)
+        case "opt", "alt": flags.insert(.maskAlternate)
+        case "ctrl": flags.insert(.maskControl)
+        default:
+            FileHandle.standardError.write(Data("unknown modifier: \(part)\n".utf8))
+            exit(2)
+        }
+    }
+    let keyMap: [String: CGKeyCode] = [
+        "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
+        "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32,
+        "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46,
+        "return": 36, "tab": 48, "space": 49, "delete": 51, "esc": 53,
+        "down": 125, "up": 126, "left": 123, "right": 124,
+    ]
+    guard let code = keyMap[keyName] else {
+        FileHandle.standardError.write(Data("unknown key: \(keyName)\n".utf8))
+        exit(2)
+    }
+    exit(postKey(code, flags: flags) ? 0 : 1)
+
 case "selftest":
     // Runs every headless invariant: deadline abandonment (the no-freeze mechanism) and the
     // clipboard snapshot/restore contract, on a private pasteboard (user clipboard untouched).

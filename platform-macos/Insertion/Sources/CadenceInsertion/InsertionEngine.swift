@@ -189,15 +189,164 @@ public final class InsertionEngine {
     }
 }
 
+// MARK: - focused-element inspection (used by `insertctl read` and the matrix harness)
+
+public struct FocusReport: Codable {
+    public var app: String
+    public var focusError: String?
+    public var role: String?
+    public var subrole: String?
+    public var value: String?
+    public var selectedText: String?
+    public var roleDescription: String?
+    public var attributeNames: [String]?
+}
+
+public func readFocused() -> FocusReport {
+    let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "unknown"
+    var report = FocusReport(
+        app: front, focusError: nil, role: nil, subrole: nil, value: nil, selectedText: nil)
+    switch focusedElementDetailed() {
+    case .failure(let detail):
+        report.focusError = detail
+    case .success(let el):
+        AXUIElementSetMessagingTimeout(el, 0.25)
+        report.role = axString(el, kAXRoleAttribute)
+        report.subrole = axString(el, kAXSubroleAttribute)
+        report.value = axString(el, kAXValueAttribute)
+        report.selectedText = axString(el, kAXSelectedTextAttribute)
+        report.roleDescription = axString(el, kAXRoleDescriptionAttribute)
+        var names: CFArray?
+        if AXUIElementCopyAttributeNames(el, &names) == .success,
+           let list = names as? [String] {
+            report.attributeNames = list
+        }
+    }
+    return report
+}
+
+/// Post a modifier+key chord as CGEvents (accessibility permission only — no Apple Events).
+public func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags) -> Bool {
+    guard let src = CGEventSource(stateID: .combinedSessionState),
+          let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true),
+          let up = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false)
+    else { return false }
+    down.flags = flags
+    up.flags = flags
+    down.post(tap: .cghidEventTap)
+    up.post(tap: .cghidEventTap)
+    return true
+}
+
+// MARK: - AX tree search + synthetic click (matrix harness: focus a field deterministically)
+
+public struct FindClickResult: Codable {
+    public var found: Bool
+    public var clicked: Bool
+    public var role: String?
+    public var subrole: String?
+    public var roleDescription: String?
+}
+
+func axFrame(_ el: AXUIElement) -> CGRect? {
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(el, "AXFrame" as CFString, &value) == .success,
+          let v = value, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+    var rect = CGRect.zero
+    guard AXValueGetValue((v as! AXValue), .cgRect, &rect) else { return nil }
+    return rect
+}
+
+func axChildren(_ el: AXUIElement) -> [AXUIElement] {
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(el, kAXChildrenAttribute as CFString, &value) == .success,
+          let arr = value as? [AXUIElement] else { return [] }
+    return arr
+}
+
+func findElement(_ el: AXUIElement, matching query: String, depth: Int) -> AXUIElement? {
+    if depth > 30 { return nil }
+    AXUIElementSetMessagingTimeout(el, 0.25)
+    let role = axString(el, kAXRoleAttribute) ?? ""
+    let subrole = axString(el, kAXSubroleAttribute) ?? ""
+    let desc = axString(el, kAXRoleDescriptionAttribute) ?? ""
+    let placeholder = axString(el, "AXPlaceholderValue") ?? ""
+    let q = query.lowercased()
+    if role.lowercased().contains(q) || subrole.lowercased().contains(q)
+        || desc.lowercased().contains(q) || placeholder.lowercased().contains(q) {
+        return el
+    }
+    for child in axChildren(el) {
+        if let hit = findElement(child, matching: query, depth: depth + 1) {
+            return hit
+        }
+    }
+    return nil
+}
+
+/// Search the frontmost app's AX tree for an element matching `query` (role/subrole/role
+/// description/placeholder substring) and click its center. Used by the matrix harness to
+/// focus web-content fields that never receive keyboard focus on page load.
+public func findAndClick(_ query: String) -> FindClickResult {
+    var result = FindClickResult(
+        found: false, clicked: false, role: nil, subrole: nil, roleDescription: nil)
+    guard let app = NSWorkspace.shared.frontmostApplication else { return result }
+    let appEl = AXUIElementCreateApplication(app.processIdentifier)
+    guard let hit = findElement(appEl, matching: query, depth: 0) else { return result }
+    result.found = true
+    result.role = axString(hit, kAXRoleAttribute)
+    result.subrole = axString(hit, kAXSubroleAttribute)
+    result.roleDescription = axString(hit, kAXRoleDescriptionAttribute)
+    guard let frame = axFrame(hit), frame.width > 0 else { return result }
+    let point = CGPoint(x: frame.midX, y: frame.midY)
+    guard let src = CGEventSource(stateID: .combinedSessionState),
+          let down = CGEvent(mouseEventSource: src, mouseType: .leftMouseDown,
+                             mouseCursorPosition: point, mouseButton: .left),
+          let up = CGEvent(mouseEventSource: src, mouseType: .leftMouseUp,
+                           mouseCursorPosition: point, mouseButton: .left)
+    else { return result }
+    down.post(tap: .cghidEventTap)
+    up.post(tap: .cghidEventTap)
+    result.clicked = true
+    return result
+}
+
 // MARK: - direct AX insertion (free function so the deadline closure captures no self)
 
+enum FocusLookup {
+    case success(AXUIElement)
+    case failure(String)
+}
+
+/// Focused element via the frontmost app's AX tree (more reliable than the system-wide
+/// element from a background/agent process), falling back to the system-wide query.
+func focusedElementDetailed() -> FocusLookup {
+    if let app = NSWorkspace.shared.frontmostApplication {
+        let appEl = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(appEl, 0.25)
+        var value: CFTypeRef?
+        let err = AXUIElementCopyAttributeValue(
+            appEl, kAXFocusedUIElementAttribute as CFString, &value)
+        if err == .success, let v = value {
+            return .success(v as! AXUIElement)
+        }
+        // Fall through to system-wide, but remember why.
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.25)
+        var sysValue: CFTypeRef?
+        let sysErr = AXUIElementCopyAttributeValue(
+            system, kAXFocusedUIElementAttribute as CFString, &sysValue)
+        if sysErr == .success, let v = sysValue {
+            return .success(v as! AXUIElement)
+        }
+        return .failure("app query: AXError \(err.rawValue); system query: AXError \(sysErr.rawValue)")
+    }
+    return .failure("no frontmost application")
+}
+
 func focusedElement() -> AXUIElement? {
-    let system = AXUIElementCreateSystemWide()
-    var value: CFTypeRef?
-    let err = AXUIElementCopyAttributeValue(
-        system, kAXFocusedUIElementAttribute as CFString, &value)
-    guard err == .success, let v = value else { return nil }
-    return (v as! AXUIElement)
+    if case .success(let el) = focusedElementDetailed() { return el }
+    return nil
 }
 
 func axString(_ el: AXUIElement, _ attr: String) -> String? {
