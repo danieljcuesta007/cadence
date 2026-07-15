@@ -86,13 +86,10 @@ pub mod whisper {
             state
                 .full(params, pcm)
                 .map_err(|e| AsrError::Engine(format!("decode: {e}")))?;
-            let n = state
-                .full_n_segments()
-                .map_err(|e| AsrError::Engine(format!("segments: {e}")))?;
             let mut refined = String::new();
-            for i in 0..n {
-                if let Ok(seg) = state.full_get_segment_text(i) {
-                    refined.push_str(&seg);
+            for segment in state.as_iter() {
+                if let Ok(text) = segment.to_str() {
+                    refined.push_str(text);
                 }
             }
             let refined = refined.trim().to_string();

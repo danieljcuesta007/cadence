@@ -29,7 +29,10 @@ Format: date · decision · why · reversibility. Larger decisions get an ADR in
 9. **IDs**: Phase-0 utterance ids are monotonic strings (`utt-N`) from the orchestrator —
    deterministic for tests, zero deps. The `core/store` layer (Phase 1) will mint UUIDv4 per
    §24 when records are persisted.
-10. **Insertion spike scope**: AX-direct → paste-with-clipboard-restore → notify+copy cascade
+10. **whisper-rs pinned to 0.16** (not 0.14): the older crate's whisper.cpp ran the encoder on
+    the CPU/BLAS path on this M4 (9.4 s for 3.5 s audio); 0.16's whisper.cpp Metal path does the
+    same file in 144–553 ms. Perf measurements below in STATUS.md.
+11. **Insertion spike scope**: AX-direct → paste-with-clipboard-restore → notify+copy cascade
     with `AXUIElementSetMessagingTimeout` (250 ms) as the no-freeze mechanism + all AX work off
     the calling thread. Full 20-app matrix run requires the user to grant Accessibility to the
     terminal running `qa/insertion-matrix.sh` — flagged in STATUS.md.

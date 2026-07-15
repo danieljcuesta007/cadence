@@ -10,4 +10,4 @@ whisper = ["dep:whisper-rs"]
 [dependencies]
 cadence-ipc = { path = "../ipc" }
 thiserror = { workspace = true }
-whisper-rs = { version = "0.14", optional = true, features = ["metal"] }
+whisper-rs = { version = "0.16", optional = true, features = ["metal"] }
