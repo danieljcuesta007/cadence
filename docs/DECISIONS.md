@@ -68,3 +68,10 @@ Format: date · decision · why · reversibility. Larger decisions get an ADR in
     partial timing policy can't drift between interpreters (§16.2). Warmup decode runs on the ASR
     worker at startup; `reset_stream` fires at each utterance boundary. Verified over real whisper
     by an FFI integration test (no mic). See ADR-0006.
+21. **Model integrity = pinned SHA-256, not signatures (yet)** — dependency-free streaming
+    sha256 in `core/models` (no crypto crate; offline; validated vs FIPS vectors + system
+    `shasum` on the real model). `ModelRegistry.resolve_verified` verifies the active model and
+    rolls back to the bundled golden on corruption (§17.5/§29), storage-agnostic behind a
+    `ModelStore` trait (SQLite §24 plugs in later; JSON manifest for now). FFI gate
+    `cadence_model_verify`. Idle model unload (<150 MB) designed but deferred — tension with the
+    ~7 s cold load (ADR-0006). See ADR-0007.

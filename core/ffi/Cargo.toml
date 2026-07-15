@@ -18,3 +18,4 @@ cadence-asr = { path = "../asr" }
 cadence-cleanup = { path = "../cleanup" }
 cadence-orchestrator = { path = "../orchestrator" }
 serde_json = { workspace = true }
+cadence-models = { path = "../models" }
