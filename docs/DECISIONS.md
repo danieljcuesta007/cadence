@@ -59,3 +59,12 @@ Format: date · decision · why · reversibility. Larger decisions get an ADR in
     (userInitiated+latencyCritical) during dictation — one unreproduced 30 s Metal decode stall
     in a backgrounded selftest is on the watchlist; this is cheap insurance and correct per §28
     regardless.
+19. **Instant pass = whisper.cpp growing-window re-decode** (not a second streaming engine) —
+    fast params (greedy/single_segment/no_context) + reused per-utterance state + `audio_ctx=512`
+    hit ~40–90 ms/partial on M4/base.en, well under the 0.4 s cadence. Parakeet/ONNX deferred.
+    See ADR-0006. Reversible (behind `AsrEngine`; `transcribe_partial` has a default impl).
+20. **Instant-pass cadence lives in a shared `PartialScheduler`** (pure struct in
+    `core/orchestrator`), consumed by both the headless `Pipeline` and the FFI core loop, so the
+    partial timing policy can't drift between interpreters (§16.2). Warmup decode runs on the ASR
+    worker at startup; `reset_stream` fires at each utterance boundary. Verified over real whisper
+    by an FFI integration test (no mic). See ADR-0006.

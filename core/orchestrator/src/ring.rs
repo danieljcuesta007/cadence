@@ -61,14 +61,22 @@ impl RingBuffer {
         self.len = (self.len + samples.len()).min(cap);
     }
 
-    /// Drain the buffered window in chronological order and reset.
-    pub fn drain(&mut self) -> Vec<i16> {
+    /// Copy the buffered window in chronological order **without** consuming it. Used by the
+    /// instant pass (§12.3), which re-reads the growing window while the user is still speaking;
+    /// the refined pass still [`drain`](RingBuffer::drain)s at end-of-utterance.
+    pub fn snapshot(&self) -> Vec<i16> {
         let cap = self.buf.len();
         let start = (self.head + cap - self.len) % cap;
         let mut out = Vec::with_capacity(self.len);
         for i in 0..self.len {
             out.push(self.buf[(start + i) % cap]);
         }
+        out
+    }
+
+    /// Drain the buffered window in chronological order and reset.
+    pub fn drain(&mut self) -> Vec<i16> {
+        let out = self.snapshot();
         self.head = 0;
         self.len = 0;
         out
@@ -124,6 +132,19 @@ mod tests {
         assert_eq!(r.dropped(), 0);
         r.push(&[7]);
         assert_eq!(r.drain(), vec![7]);
+    }
+
+    #[test]
+    fn snapshot_reads_without_consuming() {
+        let mut r = RingBuffer::new(8);
+        r.push(&[1, 2, 3]);
+        assert_eq!(r.snapshot(), vec![1, 2, 3]);
+        // Non-destructive: a second snapshot, and a later push, both still see the data.
+        assert_eq!(r.snapshot(), vec![1, 2, 3]);
+        r.push(&[4]);
+        assert_eq!(r.snapshot(), vec![1, 2, 3, 4]);
+        assert_eq!(r.drain(), vec![1, 2, 3, 4]);
+        assert!(r.snapshot().is_empty());
     }
 
     #[test]

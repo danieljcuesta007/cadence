@@ -30,9 +30,9 @@ use cadence_asr::{pcm_i16_to_f32, AsrEngine, AsrError, MockAsr};
 use cadence_cleanup::{CleanupEngine, Guarded, RuleCleanup};
 use cadence_ipc::{
     Effect, Event, InsertionOutcome, InsertionStrategy, Mode, ProcessingLocation,
-    ProcessingPolicy, UtteranceId,
+    ProcessingPolicy, State, UtteranceId,
 };
-use cadence_orchestrator::{Orchestrator, RingBuffer};
+use cadence_orchestrator::{Orchestrator, PartialScheduler, RingBuffer};
 
 /// 60 s of 16 kHz mono i16 — the PTT window bound; older audio is dropped (and counted).
 const RING_CAPACITY: usize = 16_000 * 60;
@@ -44,12 +44,25 @@ pub type EffectCallback = unsafe extern "C" fn(effect_json: *const c_char, ctx: 
 enum Control {
     Event(Event),
     CaptureStopped,
+    /// An instant-pass decode finished on the ASR worker: `Some((utt, text))` on success,
+    /// `None` on empty/failure. Either way it clears the scheduler's in-flight latch.
+    PartialComplete(Option<(UtteranceId, String)>),
     Shutdown,
 }
 
-struct AsrJob {
-    utterance: UtteranceId,
-    window: Vec<i16>,
+/// Work handed to the ASR worker. `Partial` is the instant pass over a growing snapshot
+/// (§12.3); `Final` is the authoritative refined pass over the drained window.
+enum AsrJob {
+    Partial { utterance: UtteranceId, window: Vec<i16> },
+    Final { utterance: UtteranceId, window: Vec<i16> },
+}
+
+impl AsrJob {
+    fn utterance(&self) -> &UtteranceId {
+        match self {
+            AsrJob::Partial { utterance, .. } | AsrJob::Final { utterance, .. } => utterance,
+        }
+    }
 }
 
 pub struct Engine {
@@ -69,6 +82,11 @@ struct OrchLoop {
     /// for the engine's lifetime.
     ctx: usize,
     pending_drain: Option<(UtteranceId, Instant)>,
+    /// Instant-pass cadence (§12.3), shared policy with the headless pipeline.
+    partials: PartialScheduler,
+    /// The utterance currently capturing, so partial jobs can be tagged. Set on StartCapture,
+    /// cleared when the machine leaves Listening.
+    listening_utt: Option<UtteranceId>,
 }
 
 impl OrchLoop {
@@ -88,9 +106,50 @@ impl OrchLoop {
                 }
             };
             match msg {
-                Control::Event(ev) => self.pump(ev),
+                Control::Event(ev) => {
+                    // Note the audio size before `pump` consumes the event, so a partial can be
+                    // scheduled once the machine has (still) settled in Listening.
+                    let audio = if let Event::AudioCaptured { samples, .. } = &ev {
+                        Some(*samples)
+                    } else {
+                        None
+                    };
+                    self.pump(ev);
+                    if let Some(samples) = audio {
+                        self.maybe_dispatch_partial(samples);
+                    }
+                }
                 Control::CaptureStopped => self.drain_to_asr(),
+                Control::PartialComplete(partial) => {
+                    self.partials.on_complete();
+                    if let Some((utterance, text)) = partial {
+                        // The machine drops this if we've already left Listening (stale partial).
+                        self.pump(Event::AsrPartial { utterance, text });
+                    }
+                }
                 Control::Shutdown => return,
+            }
+        }
+    }
+
+    /// On cadence, snapshot the growing window and hand a partial decode to the ASR worker.
+    /// Only while Listening, and only one partial in flight at a time (the scheduler coalesces).
+    fn maybe_dispatch_partial(&mut self, samples: usize) {
+        if self.machine.state() != State::Listening {
+            return;
+        }
+        let Some(utterance) = self.listening_utt.clone() else {
+            return;
+        };
+        if self.partials.on_audio(samples) {
+            let window = self.ring.lock().unwrap().snapshot();
+            if self
+                .asr_tx
+                .send(AsrJob::Partial { utterance, window })
+                .is_err()
+            {
+                // Worker gone (shutdown): don't leave the latch stuck.
+                self.partials.on_complete();
             }
         }
     }
@@ -98,7 +157,7 @@ impl OrchLoop {
     fn drain_to_asr(&mut self) {
         if let Some((utterance, _)) = self.pending_drain.take() {
             let window = self.ring.lock().unwrap().drain();
-            let _ = self.asr_tx.send(AsrJob { utterance, window });
+            let _ = self.asr_tx.send(AsrJob::Final { utterance, window });
         }
     }
 
@@ -110,6 +169,13 @@ impl OrchLoop {
         while let Some(ev) = q.pop_front() {
             for effect in self.machine.handle(ev) {
                 match effect {
+                    Effect::StartCapture { utterance } => {
+                        // New utterance is now capturing: reset the instant-pass cadence and
+                        // remember the id so partial jobs can be tagged.
+                        self.listening_utt = Some(utterance.clone());
+                        self.partials.reset();
+                        self.emit(&Effect::StartCapture { utterance });
+                    }
                     Effect::RunAsr { utterance, .. } => {
                         self.pending_drain = Some((utterance, Instant::now()));
                     }
@@ -162,39 +228,62 @@ fn debug_log(msg: &str) {
 }
 
 fn asr_worker(mut engine: Box<dyn AsrEngine + Send>, rx: Receiver<AsrJob>, tx: Sender<Control>) {
+    // Warm the Metal pipeline (encode + both decode paths) once, so the user's first partial
+    // isn't the slow cold one (ADR-0006). Silence → Empty is the expected, ignored result.
+    let warm = vec![0.0f32; 8_000];
+    let _ = engine.transcribe(&warm);
+    let _ = engine.transcribe_partial(&warm);
+    engine.reset_stream();
+
+    let mut last_utt: Option<UtteranceId> = None;
     while let Ok(job) = rx.recv() {
-        let t = Instant::now();
-        debug_log(&format!(
-            "asr job {} ({} samples)",
-            job.utterance.0,
-            job.window.len()
-        ));
-        let result = engine.transcribe(&pcm_i16_to_f32(&job.window));
-        debug_log(&format!(
-            "asr done {} in {} ms (ok={})",
-            job.utterance.0,
-            t.elapsed().as_millis(),
-            result.is_ok()
-        ));
-        let ev = match result {
-            Ok(t) => Event::AsrFinal {
-                utterance: job.utterance,
-                transcript: t,
-                location: ProcessingLocation::Local,
-            },
-            Err(AsrError::Empty) => Event::AsrFailed {
-                utterance: job.utterance,
-                location: ProcessingLocation::Local,
-                empty: true,
-            },
-            Err(_) => Event::AsrFailed {
-                utterance: job.utterance,
-                location: ProcessingLocation::Local,
-                empty: false,
-            },
-        };
-        if tx.send(Control::Event(ev)).is_err() {
-            return;
+        // Utterance boundary: drop stale instant-pass stream state before the new one's partials.
+        if last_utt.as_ref() != Some(job.utterance()) {
+            engine.reset_stream();
+            last_utt = Some(job.utterance().clone());
+        }
+        match job {
+            AsrJob::Partial { utterance, window } => {
+                let result = engine.transcribe_partial(&pcm_i16_to_f32(&window));
+                let partial = match result {
+                    Ok(t) => t.instant.map(|text| (utterance, text)),
+                    Err(_) => None,
+                };
+                if tx.send(Control::PartialComplete(partial)).is_err() {
+                    return;
+                }
+            }
+            AsrJob::Final { utterance, window } => {
+                let t = Instant::now();
+                debug_log(&format!("asr job {} ({} samples)", utterance.0, window.len()));
+                let result = engine.transcribe(&pcm_i16_to_f32(&window));
+                debug_log(&format!(
+                    "asr done {} in {} ms (ok={})",
+                    utterance.0,
+                    t.elapsed().as_millis(),
+                    result.is_ok()
+                ));
+                let ev = match result {
+                    Ok(t) => Event::AsrFinal {
+                        utterance,
+                        transcript: t,
+                        location: ProcessingLocation::Local,
+                    },
+                    Err(AsrError::Empty) => Event::AsrFailed {
+                        utterance,
+                        location: ProcessingLocation::Local,
+                        empty: true,
+                    },
+                    Err(_) => Event::AsrFailed {
+                        utterance,
+                        location: ProcessingLocation::Local,
+                        empty: false,
+                    },
+                };
+                if tx.send(Control::Event(ev)).is_err() {
+                    return;
+                }
+            }
         }
     }
 }
@@ -221,6 +310,8 @@ impl Engine {
                 cb,
                 ctx: ctx as usize,
                 pending_drain: None,
+                partials: PartialScheduler::default(),
+                listening_utt: None,
             };
             std::thread::Builder::new()
                 .name("cadence-orchestrator".into())
@@ -525,7 +616,11 @@ mod tests {
 
         /// Wait for the next effect whose `type` matches, collecting along the way.
         fn expect(&self, ty: &str) -> serde_json::Value {
-            let deadline = Instant::now() + Duration::from_secs(3);
+            self.expect_timeout(ty, Duration::from_secs(3))
+        }
+
+        fn expect_timeout(&self, ty: &str, timeout: Duration) -> serde_json::Value {
+            let deadline = Instant::now() + timeout;
             loop {
                 let remaining = deadline
                     .checked_duration_since(Instant::now())
@@ -591,6 +686,30 @@ mod tests {
         assert_eq!(overlay["state"], "done");
         h.expect("persist_utterance");
         h.expect("schedule_fade_to_idle");
+    }
+
+    #[test]
+    fn instant_pass_emits_show_partial_while_listening() {
+        // §12.3: enough audio to cross the partial stride → the core runs transcribe_partial on
+        // the growing window and emits show_partial before the utterance ends. Mock's default
+        // partial echoes its refined text.
+        let h = Harness::new();
+        unsafe { cadence_engine_trigger_down(h.engine, false) };
+        h.expect("start_capture");
+        // 8 × 1600 = 12 800 samples, well past the 6 400-sample stride.
+        for _ in 0..8 {
+            push_chunk(&h, 1600);
+        }
+        let partial = h.expect("show_partial");
+        assert!(
+            partial["text"].as_str().unwrap().contains("hello"),
+            "unexpected partial text: {partial}"
+        );
+        // The utterance still finishes through the refined pass.
+        unsafe { cadence_engine_trigger_up(h.engine) };
+        h.expect("stop_capture");
+        unsafe { cadence_engine_capture_stopped(h.engine) };
+        h.expect("run_insertion");
     }
 
     #[test]
@@ -679,6 +798,59 @@ mod tests {
         assert!(
             text.contains("4800 samples"),
             "leading audio was lost: {text}"
+        );
+    }
+
+    /// End-to-end over the real whisper engine (no mic): a fixture WAV pushed through the C ABI
+    /// must surface a live partial *and* the refined insert. Skips if the model isn't fetched.
+    #[cfg(feature = "whisper")]
+    #[test]
+    fn instant_pass_over_real_whisper_emits_partial_then_final() {
+        use std::path::PathBuf;
+
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let model = root.join("models/artifacts/ggml-base.en.bin");
+        if !model.exists() {
+            eprintln!("skip: {} not present (run models/fetch-models.sh)", model.display());
+            return;
+        }
+        // Canonical 16 kHz mono PCM16 fixture; skip the 44-byte header.
+        let wav_bytes = std::fs::read(root.join("qa/fixtures/hello.wav")).unwrap();
+        let pcm: Vec<i16> = wav_bytes[44..]
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .collect();
+
+        let (tx, rx) = mpsc::channel::<String>();
+        let tx = Box::new(tx);
+        let ctx = &*tx as *const mpsc::Sender<String> as *mut c_void;
+        let model_c = CString::new(model.to_str().unwrap()).unwrap();
+        let engine = unsafe { cadence_engine_new(model_c.as_ptr(), collect_cb, ctx) };
+        assert!(!engine.is_null(), "whisper engine failed to load");
+        let h = Harness { engine, rx, _tx: tx };
+
+        unsafe { cadence_engine_trigger_down(h.engine, false) };
+        h.expect("start_capture");
+        // Feed ~100 ms chunks like the mic callback, with a small gap so the instant pass runs.
+        for chunk in pcm.chunks(1600) {
+            unsafe { cadence_engine_push_audio(h.engine, chunk.as_ptr(), chunk.len(), 0.5) };
+            std::thread::sleep(Duration::from_millis(3));
+        }
+        // Warmup + first decode can be slow on a cold model → generous window.
+        let partial = h.expect_timeout("show_partial", Duration::from_secs(15));
+        let ptext = partial["text"].as_str().unwrap().to_lowercase();
+        assert!(ptext.contains("hello"), "partial lacked expected words: {ptext}");
+
+        unsafe { cadence_engine_trigger_up(h.engine) };
+        h.expect("stop_capture");
+        unsafe { cadence_engine_capture_stopped(h.engine) };
+        let ins = h.expect_timeout("run_insertion", Duration::from_secs(10));
+        let ftext = ins["text"].as_str().unwrap().to_lowercase();
+        // Reliably-transcribed words on this fixture (base.en garbles "cadence dictation" into
+        // "cade instictation" — see ADR-0006 — so assert on the stable words, not those).
+        assert!(
+            ftext.contains("hello") && ftext.contains("test") && ftext.contains("pipeline"),
+            "refined text unexpected: {ftext}"
         );
     }
 

@@ -64,6 +64,56 @@ fn empty_audio_inserts_nothing() {
 }
 
 #[test]
+fn instant_pass_emits_partials_before_the_refined_insert() {
+    // §12.3 two-pass: partials surface while capturing; the refined/cleaned text still lands.
+    // MockAsr's default transcribe_partial echoes its refined text, so each partial is the raw
+    // (uncleaned) transcript — enough to prove the instant pass fired and was routed.
+    let mut asr = MockAsr {
+        refined: "um so this is uh the phase zero pipeline".into(),
+    };
+    let cleanup = Guarded::new(RuleCleanup::default());
+    let mut sink = CollectSink::default();
+    let mut p = Pipeline::new(16_000 * 30, &mut asr, &cleanup, &mut sink);
+
+    // 2 s of audio → several 0.4 s partial strides.
+    let report = p.run_utterance(&tone(32_000), Mode::Dictation, ProcessingPolicy::LocalOnly);
+
+    assert!(
+        !report.partials.is_empty(),
+        "instant pass produced no partials"
+    );
+    assert!(
+        report
+            .partials
+            .iter()
+            .all(|t| t == "um so this is uh the phase zero pipeline"),
+        "partials carried unexpected text: {:?}",
+        report.partials
+    );
+    // Refined pass is still authoritative and cleaned.
+    assert_eq!(
+        report.final_text.as_deref(),
+        Some("So this is the phase zero pipeline.")
+    );
+    assert!(report.inserted);
+}
+
+#[test]
+fn no_partials_for_a_sub_min_window_utterance() {
+    // Shorter than the instant-pass min window: no partial should fire, refined pass unaffected.
+    let mut asr = MockAsr {
+        refined: "quick".into(),
+    };
+    let cleanup = Guarded::new(RuleCleanup::default());
+    let mut sink = CollectSink::default();
+    let mut p = Pipeline::new(16_000 * 30, &mut asr, &cleanup, &mut sink);
+
+    let report = p.run_utterance(&tone(3_200), Mode::Dictation, ProcessingPolicy::LocalOnly);
+    assert!(report.partials.is_empty(), "unexpected partials: {:?}", report.partials);
+    assert!(report.inserted);
+}
+
+#[test]
 fn ring_capacity_overflow_keeps_freshest_speech_and_reports_drops() {
     // A ring smaller than the utterance: oldest samples drop, freshest survive, drops counted.
     let mut asr = MockAsr {
