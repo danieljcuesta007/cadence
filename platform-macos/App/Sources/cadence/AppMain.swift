@@ -38,6 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 title: "Hold Right-Option to dictate · Esc cancels", action: nil,
                 keyEquivalent: ""))
         menu.addItem(.separator())
+        let dashItem = NSMenuItem(
+            title: "History & Metrics…", action: #selector(showDashboard), keyEquivalent: "d")
+        dashItem.target = self
+        menu.addItem(dashItem)
+        menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit Cadence", action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
@@ -143,6 +148,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.title = state.prefix(1).uppercased()
         }
         stateMenuItem.title = engine == nil ? "Loading model…" : state.capitalized
+    }
+
+    private var dashboard: DashboardWindowController?
+
+    @objc func showDashboard() {
+        if dashboard == nil { dashboard = DashboardWindowController() }
+        dashboard?.showWindow(nil)
     }
 
     @objc func quit() {

@@ -29,6 +29,27 @@ final class EffectRouter {
     private var lastInsertedText: String?
     private var captureStartedAt: Date?
 
+    /// Per-utterance timings, merged into the history record at persist time so the
+    /// dashboard reads real numbers per dictation. Touched from uiQueue, insertionQueue,
+    /// and the core thread — lock-guarded.
+    private let metricsLock = NSLock()
+    private var utteranceMetrics: [String: Any] = [:]
+
+    private func setMetric(_ key: String, _ value: Any) {
+        metricsLock.lock()
+        utteranceMetrics[key] = value
+        metricsLock.unlock()
+    }
+
+    private func takeMetrics() -> [String: Any] {
+        metricsLock.lock()
+        defer {
+            utteranceMetrics = [:]
+            metricsLock.unlock()
+        }
+        return utteranceMetrics
+    }
+
     // Read by the hotkey monitor (main thread) to decide Esc consumption.
     private(set) var activeState = "idle"
 
@@ -80,7 +101,7 @@ final class EffectRouter {
                 self.log("words preserved on clipboard (\(text.count) chars)")
             }
         case "persist_utterance":
-            History.append(record: obj, text: lastInsertedText)
+            History.append(record: obj, text: lastInsertedText, metrics: takeMetrics())
         case "arm_undo":
             break // dedicated undo hotkey lands with per-app rules (§32 Phase 1, later slice)
         case "schedule_fade_to_idle":
@@ -105,6 +126,7 @@ final class EffectRouter {
             try capture.start()
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
             captureStartedAt = t0
+            setMetric("capture_start_ms", ms)
             log("capture started in \(ms) ms") // §28: perceived start ≤ 50 ms — measured here
         } catch {
             log("capture start failed: \(error) — cancelling utterance")
@@ -116,7 +138,9 @@ final class EffectRouter {
         if let capture {
             capture.stop()
             if let t0 = captureStartedAt {
-                log("capture window \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
+                let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                setMetric("capture_window_ms", ms)
+                log("capture window \(ms) ms")
             }
         }
         // Confirm even in selftest (no real capture): the core holds the ASR drain for this.
@@ -139,6 +163,9 @@ final class EffectRouter {
         case .pasteRestore: strategy = "paste_restore"
         case .clipboardNotify: strategy = "clipboard_notify"
         }
+        setMetric("insertion_ms", result.elapsedMs)
+        setMetric("strategy", strategy)
+        setMetric("app", NSWorkspace.shared.frontmostApplication?.localizedName ?? "")
         log(
             "insertion: \(strategy) inserted=\(result.inserted) "
                 + "clipboardRestored=\(result.clipboardRestored) \(result.elapsedMs) ms")
@@ -193,10 +220,11 @@ enum History {
     static let url = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".cadence/history.jsonl")
 
-    static func append(record: [String: Any], text: String?) {
+    static func append(record: [String: Any], text: String?, metrics: [String: Any] = [:]) {
         var rec = record
         rec["text"] = text
         rec["ts"] = ISO8601DateFormatter().string(from: Date())
+        rec.merge(metrics) { current, _ in current }
         guard let data = try? JSONSerialization.data(withJSONObject: rec),
             var line = String(data: data, encoding: .utf8)
         else { return }
