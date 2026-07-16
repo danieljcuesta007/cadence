@@ -149,6 +149,41 @@ final class EffectRouter {
 
     func log(_ msg: String) {
         FileHandle.standardError.write(Data("[cadence] \(msg)\n".utf8))
+        LogFile.append(msg)
+    }
+}
+
+/// Persistent diagnostics at ~/.cadence/logs/cadence.log — the .app is launched by
+/// launchd/Finder, so stderr goes nowhere; without this the capture-latency and insertion
+/// lines are unobservable outside a terminal run. Trimmed at open so it can't grow unbounded.
+enum LogFile {
+    private static let queue = DispatchQueue(label: "cadence.logfile", qos: .utility)
+    private static let handle: FileHandle? = {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cadence/logs")
+        let url = dir.appendingPathComponent("cadence.log")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+            size > 2_000_000 {
+            try? FileManager.default.removeItem(at: url)
+        }
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        let h = try? FileHandle(forWritingTo: url)
+        h?.seekToEndOfFile()
+        return h
+    }()
+    private static let stamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        return f
+    }()
+
+    static func append(_ msg: String) {
+        queue.async {
+            handle?.write(Data("\(stamp.string(from: Date())) \(msg)\n".utf8))
+        }
     }
 }
 
