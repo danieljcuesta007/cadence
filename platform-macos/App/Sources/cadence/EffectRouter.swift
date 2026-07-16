@@ -68,7 +68,8 @@ final class EffectRouter {
             let level = (obj["level"] as? NSNumber)?.floatValue ?? 0
             onUI { self.overlay?.setLevel(level) }
         case "show_partial":
-            break // streaming instant pass is the next spike (§32 step 2)
+            let text = obj["text"] as? String ?? ""
+            onUI { self.overlay?.setPartial(text) }
         case "run_insertion":
             insertionQueue.async { self.runInsertion(obj) }
         case "notify_text_on_clipboard":

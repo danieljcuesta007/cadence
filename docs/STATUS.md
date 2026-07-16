@@ -38,11 +38,25 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 - **AC-5 regression (found live):** ring cleared on `StartCapture` raced instant-start audio —
   first 8 000 of 56 235 samples lost, mangling leading words. Clear now happens synchronously
   in `trigger_down` on the caller thread; regression test pins the full window.
+- **Overlay level bars invisible (found on first live run):** core emitted `update_waveform`
+  correctly (36/utterance, verified via `CADENCE_DEBUG=1` selftest) but the pill's fixed
+  260 pt width over-constrained the stack once the bars appeared — AppKit clipped the level
+  label. Pill now sizes to content; level label holds a constant 10-glyph width while
+  listening so per-chunk updates never relayout.
+- **`show_partial` was a stub in the shell router** (previous STATUS claim "shell already
+  routes show_partial" was wrong — it parsed but dropped it). Now rendered: instant-pass text
+  shows in the pill, head-truncated, and stays up through "thinking" while the refined pass runs.
+- **Emoji purge (design rule: no emojis, professional/clean):** overlay glyphs are now
+  typographic marks, chip is plain "local"/"cloud", menu-bar icon uses template SF Symbols
+  (`mic`/`mic.fill`/…) instead of 🎙/🔴.
 
-### Not yet run
-- **Live mic dictation** — mic TCC is *notDetermined* for the terminal; the first
-  `cadence run` must happen with the user present to grant the prompt. Everything after the
-  mic is the tested path.
+### First live mic run (2026-07-15) — PASSED
+- Mic TCC granted; 4 dictations, ~90 % word accuracy (user-reported), no freezes.
+- Capture start 79–153 ms (85–94 ms warm) — **misses the ≤50 ms perceived target**; needs a
+  look (engine pre-warm / keep AVAudioEngine hot between utterances?).
+- Insertion live: direct 115 ms once, paste_restore 254–270 ms otherwise (targets non-TextEdit
+  apps → cascade fell back as designed); clipboard restored every time.
+- Overlay bars/partials were NOT visible on this run — root-caused and fixed above; re-test pending.
 
 ## What's stubbed / not started
 - Streaming instant pass (§17.1 two-pass) — next spike: whisper.cpp stream vs Parakeet ONNX.
@@ -58,7 +72,7 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 |---|---|---|
 | Local refined-pass pipeline (3.5 s utterance, M4) | ≤ 700 ms p50 | 203–233 ms (WAV-injected, incl. insertion) |
 | Insertion engine call | ≤ 250 ms + fallback | 26–29 ms (direct AX, TextEdit) |
-| Key-down → capture start | ≤ 50 ms perceived | **unmeasured** — needs live mic run (logged by shell) |
+| Key-down → capture start | ≤ 50 ms perceived | 85–94 ms warm, 153 ms first (live mic, 2026-07-15) — **over target** |
 | Active RAM peak | < 1.2 GB | 282 MB (Phase-0 headless; shell unmeasured) |
 | Idle RAM / CPU / network | <150 MB / <1% / 0 | unmeasured — needs resident-app soak |
 
@@ -82,13 +96,14 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 5. TTS fixtures only; WER harness (§30) not started.
 
 ## Next steps (§32 order)
-1. **User at keyboard:** first live `cadence run` — grant mic prompt, dictate into TextEdit;
-   capture-start latency + resource numbers land then. Then remaining interactive matrix
-   targets.
+1. ~~First live `cadence run`~~ ✅ DONE 2026-07-15 (mic granted, ~90 % accuracy). Remaining:
+   re-test overlay bars+partials after the fix; interactive matrix (Spotlight, Messages,
+   Slack, Pages, Word); capture-start latency over target (85–94 ms vs ≤50 ms) — investigate
+   keeping AVAudioEngine hot; resource soak numbers still unmeasured.
 2. ~~Streaming instant-pass ASR spike + wire into live loop~~ ✅ DONE (ADR-0006; shared
-   `PartialScheduler`, warmup, FFI real-whisper test green). Follow-on: sliding/chunked window
-   with context carry for long dictations; confirm partials render in the real overlay on the
-   first live `cadence run` (shell already routes `show_partial`).
+   `PartialScheduler`, warmup, FFI real-whisper test green). Shell now renders `show_partial`
+   in the pill (was a stub until 2026-07-15). Follow-on: sliding/chunked window with context
+   carry for long dictations.
 3. Model registry + integrity ✅ DONE (`core/models`: dependency-free SHA-256 + `ModelRegistry`
    verify/golden-rollback §17.5/§29; FFI `cadence_model_verify` gate; ADR-0007). Remaining:
    **idle model unload (<150 MB)** — designed, deferred (tension w/ ~7 s cold load, ADR-0006);
