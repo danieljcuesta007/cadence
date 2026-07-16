@@ -114,7 +114,11 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    insertion_ms, strategy, frontmost app). Diagnostics tee to `~/.cadence/logs/cadence.log`
    (the .app's stderr is unobservable). **Ad-hoc TCC trap, hit live:** each rebuild's new
    cdhash silently stales the Accessibility grant while the Settings toggle still shows ON —
-   user must toggle OFF→ON. Mic survives rebuilds. Durable fix: stable self-signed cert.
+   toggling does NOT rebind; only `tccutil reset` + fresh grant does. SOLVED (35c1d31):
+   `qa/setup-signing.sh` creates the self-signed "Cadence Dev Signing" identity (dedicated
+   pre-authorized keychain, user-domain codeSign trust); package-app.sh signs with it, DR =
+   identifier + certificate leaf. **Verified live: grants survived a rebuild+reinstall with
+   zero re-prompts (2026-07-16 09:51).**
 2. ~~Streaming instant-pass ASR spike + wire into live loop~~ ✅ DONE (ADR-0006; shared
    `PartialScheduler`, warmup, FFI real-whisper test green). Shell now renders `show_partial`
    in the pill (was a stub until 2026-07-15). Follow-on: sliding/chunked window with context
