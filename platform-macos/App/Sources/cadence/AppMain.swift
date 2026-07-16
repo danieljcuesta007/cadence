@@ -105,11 +105,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func renderState(_ state: String) {
-        let glyphs = [
-            "idle": "🎙", "listening": "🔴", "thinking": "✦", "inserting": "↳",
-            "done": "✓", "cancelled": "🎙", "error": "⚠︎", "disabled": "⏸",
+        // SF Symbols, template-rendered: adapts to menu-bar light/dark, no emoji.
+        let symbols = [
+            "idle": "mic", "listening": "mic.fill", "thinking": "ellipsis",
+            "inserting": "arrow.down.to.line", "done": "checkmark", "cancelled": "mic",
+            "error": "exclamationmark.triangle", "disabled": "pause",
         ]
-        statusItem.button?.title = glyphs[state] ?? "🎙"
+        let name = symbols[state] ?? "mic"
+        if let image = NSImage(systemSymbolName: name, accessibilityDescription: state) {
+            image.isTemplate = true
+            statusItem.button?.image = image
+            statusItem.button?.title = ""
+        } else {
+            statusItem.button?.title = state.prefix(1).uppercased()
+        }
         stateMenuItem.title = engine == nil ? "Loading model…" : state.capitalized
     }
 
