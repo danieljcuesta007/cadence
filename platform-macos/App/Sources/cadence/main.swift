@@ -20,8 +20,11 @@ import Foundation
 struct Config {
     var mode = "run"
     var wav: String?
+    // Resolution order: explicit env → bundled resource (Cadence.app ships its model,
+    // self-contained) → dev-checkout path (bare binary run from the repo).
     var model =
         ProcessInfo.processInfo.environment["CADENCE_MODEL"]
+        ?? Bundle.main.path(forResource: "ggml-base.en", ofType: "bin", inDirectory: "models")
         ?? NSString(string: "~/cadence/models/artifacts/ggml-base.en.bin").expandingTildeInPath
     var mock: String?
     var expectApp: String?
