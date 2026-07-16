@@ -96,10 +96,18 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 5. TTS fixtures only; WER harness (§30) not started.
 
 ## Next steps (§32 order)
-1. ~~First live `cadence run`~~ ✅ DONE 2026-07-15 (mic granted, ~90 % accuracy). Remaining:
-   re-test overlay bars+partials after the fix; interactive matrix (Spotlight, Messages,
-   Slack, Pages, Word); capture-start latency over target (85–94 ms vs ≤50 ms) — investigate
-   keeping AVAudioEngine hot; resource soak numbers still unmeasured.
+1. ~~First live `cadence run`~~ ✅ DONE 2026-07-15 (mic granted, ~90 % accuracy). Overlay
+   bars+partials fix CONFIRMED live 2026-07-16. Remaining: interactive matrix (Spotlight,
+   Messages, Slack, Pages, Word); resource soak numbers still unmeasured.
+1b. **Cadence.app shipped (2026-07-16, e843c18):** real menu-bar app at `~/Applications/Cadence.app`
+   (built by `qa/package-app.sh --install`): LSUIElement agent, bundled model (resolution:
+   env → bundle → dev path), ad-hoc signed, Accessibility onboarding (prompt + poll, no
+   fatalError), mic usage string. New TCC identity ⇒ user must re-grant mic + Accessibility
+   to "Cadence" on first launch. Warm capture path landed same commit: tap+converter built
+   once (rebuilt on route change), prepare() re-armed after stop, prewarm() at launch —
+   expected to cut the 85–94 ms capture start toward ≤50 ms; **needs live re-measure**.
+   Engine still fully stops between utterances (mic indicator = actual listening); if still
+   over target, next lever is engine.pause() (verify orange dot goes off first).
 2. ~~Streaming instant-pass ASR spike + wire into live loop~~ ✅ DONE (ADR-0006; shared
    `PartialScheduler`, warmup, FFI real-whisper test green). Shell now renders `show_partial`
    in the pill (was a stub until 2026-07-15). Follow-on: sliding/chunked window with context
