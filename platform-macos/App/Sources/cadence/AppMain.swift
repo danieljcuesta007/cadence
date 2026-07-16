@@ -6,6 +6,7 @@ import CadenceHotkeys
 import CadenceInsertion
 import CadenceOverlay
 import Foundation
+import IOKit.hid
 
 // MARK: - Menu-bar agent
 
@@ -111,6 +112,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// First launch of the .app has no Accessibility grant (new TCC identity): trigger the
     /// system prompt (which also adds Cadence to the Settings list), then poll until the
     /// grant lands and the tap can start — never crash, never require a relaunch (§10.1).
+    /// A keyDown event tap can ALSO require Input Monitoring (separate TCC service) on
+    /// modern macOS: if AX reports trusted but the tap still fails, request that too and
+    /// log the distinction — otherwise the two failure modes are indistinguishable live.
+    private var requestedInputMonitoring = false
+    private var lastAXTrusted: Bool?
+
     private func startHotkeysOrOnboard() {
         if hotkeys.start() { return }
         let opts = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
@@ -126,8 +133,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if self.hotkeys.start() {
                 timer.invalidate()
-                self.router.log("Accessibility granted — hotkeys live")
+                self.router.log("permissions granted — hotkeys live")
                 self.renderState("idle")
+                return
+            }
+            let trusted = AXIsProcessTrusted()
+            if trusted != self.lastAXTrusted {
+                self.lastAXTrusted = trusted
+                self.router.log(
+                    "event tap unavailable (AXIsProcessTrusted=\(trusted)) — "
+                        + (trusted
+                            ? "Accessibility OK, likely Input Monitoring"
+                            : "Accessibility not granted to THIS binary"))
+            }
+            if trusted, !self.requestedInputMonitoring {
+                self.requestedInputMonitoring = true
+                self.router.log("requesting Input Monitoring (kIOHIDRequestTypeListenEvent)")
+                _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+                self.stateMenuItem.title = "Grant Input Monitoring to enable dictation"
             }
         }
     }
