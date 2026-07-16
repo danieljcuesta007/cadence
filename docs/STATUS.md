@@ -72,7 +72,7 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 |---|---|---|
 | Local refined-pass pipeline (3.5 s utterance, M4) | ≤ 700 ms p50 | 203–233 ms (WAV-injected, incl. insertion) |
 | Insertion engine call | ≤ 250 ms + fallback | 26–29 ms (direct AX, TextEdit) |
-| Key-down → capture start | ≤ 50 ms perceived | 85–94 ms warm, 153 ms first (live mic, 2026-07-15) — **over target** |
+| Key-down → capture start | ≤ 50 ms perceived | **47 / 36 ms live (2026-07-16, warm path) — target MET** (was 85–94 ms) |
 | Active RAM peak | < 1.2 GB | 282 MB (Phase-0 headless; shell unmeasured) |
 | Idle RAM / CPU / network | <150 MB / <1% / 0 | unmeasured — needs resident-app soak |
 
