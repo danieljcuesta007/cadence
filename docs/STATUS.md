@@ -108,6 +108,13 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    expected to cut the 85–94 ms capture start toward ≤50 ms; **needs live re-measure**.
    Engine still fully stops between utterances (mic indicator = actual listening); if still
    over target, next lever is engine.pause() (verify orange dot goes off first).
+1c. **Dashboard + observability (2026-07-16, 7424305 + 9ee75dd):** menu → "History &
+   Metrics…" — KPI tiles (dictations, words, avg capture start, avg insertion) + history
+   table; history.jsonl enriched per utterance (capture_start_ms, capture_window_ms,
+   insertion_ms, strategy, frontmost app). Diagnostics tee to `~/.cadence/logs/cadence.log`
+   (the .app's stderr is unobservable). **Ad-hoc TCC trap, hit live:** each rebuild's new
+   cdhash silently stales the Accessibility grant while the Settings toggle still shows ON —
+   user must toggle OFF→ON. Mic survives rebuilds. Durable fix: stable self-signed cert.
 2. ~~Streaming instant-pass ASR spike + wire into live loop~~ ✅ DONE (ADR-0006; shared
    `PartialScheduler`, warmup, FFI real-whisper test green). Shell now renders `show_partial`
    in the pill (was a stub until 2026-07-15). Follow-on: sliding/chunked window with context
