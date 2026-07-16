@@ -10,3 +10,4 @@ Cargo.lock.orig
 /qa/fixtures/*.wav
 *.log
 .env
+/dist

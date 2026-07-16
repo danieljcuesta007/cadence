@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "🎙"
+        renderState("idle")
         let menu = NSMenu()
         stateMenuItem.isEnabled = false
         menu.addItem(stateMenuItem)
@@ -68,10 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotkeys.onPTTUp = { [weak self] in self?.engine?.triggerUp() }
         hotkeys.onCancel = { [weak self] in self?.engine?.cancel() }
-        guard hotkeys.start() else {
-            fatalError(
-                "CGEvent tap failed — grant Accessibility to this binary/terminal and rerun")
-        }
+        startHotkeysOrOnboard()
 
         capture.onChunk = { [weak self] samples, level in
             self?.engine?.pushAudio(samples, level: level)
@@ -86,6 +83,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     "mic access denied — System Settings → Privacy & Security → Microphone")
                 exit(1)
             }
+            // Pay tap-install/converter/prepare costs now, not on the first key-down (§28).
+            self.capture.prewarm()
             DispatchQueue.global(qos: .userInitiated).async {
                 let t0 = Date()
                 let engine = CoreEngine(backend: makeBackend(self.config)) { [weak self] json in
@@ -100,6 +99,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             + "hold Right-Option to dictate")
                     self.renderState("idle")
                 }
+            }
+        }
+    }
+
+    /// First launch of the .app has no Accessibility grant (new TCC identity): trigger the
+    /// system prompt (which also adds Cadence to the Settings list), then poll until the
+    /// grant lands and the tap can start — never crash, never require a relaunch (§10.1).
+    private func startHotkeysOrOnboard() {
+        if hotkeys.start() { return }
+        let opts = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(opts)
+        router.log(
+            "waiting for Accessibility — System Settings → Privacy & Security → "
+                + "Accessibility → enable Cadence")
+        stateMenuItem.title = "Grant Accessibility to enable dictation"
+        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            if self.hotkeys.start() {
+                timer.invalidate()
+                self.router.log("Accessibility granted — hotkeys live")
+                self.renderState("idle")
             }
         }
     }
