@@ -44,12 +44,22 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc signature (no Developer ID yet). Stable adhoc identity keeps TCC grants across
-# repackages as long as the binary's designated requirement doesn't change.
-codesign --force --sign - --identifier dev.cadence.app "$APP"
+# Prefer the stable self-signed identity (qa/setup-signing.sh): its designated
+# requirement pins the certificate, so TCC grants survive rebuilds. Ad-hoc fallback
+# resets grants on every build — dev convenience only.
+IDENTITY="Cadence Dev Signing"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+    codesign --force --sign "$IDENTITY" --identifier dev.cadence.app "$APP"
+    SIGNED="$IDENTITY"
+else
+    echo "note: stable identity missing (run qa/setup-signing.sh) — ad-hoc signing," >&2
+    echo "      TCC grants will reset on every rebuild" >&2
+    codesign --force --sign - --identifier dev.cadence.app "$APP"
+    SIGNED="ad-hoc"
+fi
 
 echo "packaged: $APP"
-codesign --verify --deep --strict "$APP" && echo "signature: OK (ad-hoc)"
+codesign --verify --deep --strict "$APP" && echo "signature: OK ($SIGNED)"
 
 if [[ "${1:-}" == "--install" ]]; then
     mkdir -p ~/Applications
