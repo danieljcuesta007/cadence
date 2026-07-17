@@ -7,7 +7,7 @@ Updated: 2026-07-16 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEP
 | Criterion (§32) | Status |
 |---|---|
 | Headless core transcribes WAV → cleaned text | ✅ 144 ms warm / 553 ms cold, 282 MB peak (M4, base.en, Metal) |
-| Insertion prototype, 0 freezes / 0 corruption | ✅ automated 9/9, 0 freezes, 0 corruption (full table: `qa/matrix-results.jsonl` + git history of this file). Interactive pass 2026-07-16: Spotlight, Pages, Word, VS Code, Messages (draft-to-self) all PASS — see below. Slack draft-to-self still pending (no idle window during the run). Still uncovered: not-installed apps (iTerm2, Cursor, Discord, JetBrains) |
+| Insertion prototype, 0 freezes / 0 corruption | ✅ automated 9/9, 0 freezes, 0 corruption (full table: `qa/matrix-results.jsonl` + git history of this file). Interactive pass 2026-07-16: Spotlight, Pages, Word, VS Code, Messages + Slack (both draft-to-self, never sent, drafts cleared) — 6/6 PASS. Still uncovered: not-installed apps (iTerm2, Cursor, Discord, JetBrains) |
 | Windows insertion spike | 🔴 Deferred — no Windows env (ADR-0004); first task when one exists |
 | Orchestrator + IPC schema, headless, fully tested | ✅ |
 | Golden local model chosen + verified fetch | 🟡 base.en working candidate; final selection needs §30 eval harness |
@@ -99,9 +99,9 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 1. ~~First live `cadence run`~~ ✅ DONE 2026-07-15 (mic granted, ~90 % accuracy). Overlay
    bars+partials fix CONFIRMED live 2026-07-16. ~~Interactive matrix~~ ✅ DONE 2026-07-16
    (agent-driven, idle-gated, focus-guarded): Spotlight, Pages, Word, VS Code, Messages
-   (draft-to-self, never sent, draft cleared) — 5/5 PASS, pasteRestore 297–343 ms, 0 freezes,
-   0 clipboard corruption, undo verified in Pages/Word/VS Code. Slack draft-to-self armed but
-   not run (user never idle ≥15 s); safe to re-run via the idle-gated harness. Findings:
+   + Slack (both draft-to-self, never sent, drafts cleared) — 6/6 PASS, pasteRestore
+   297–343 ms, 0 freezes, 0 clipboard corruption, undo verified in Pages/Word/VS Code.
+   Slack: deep link to own-user DM + window-title allowlist before pasting. Findings:
    - **Blind-paste gap (release-gate relevant, §30/AC-20):** in Pages with page-layout focus
      (Book template), pasteRestore returned `inserted: true` but the text landed nowhere.
      The engine cannot distinguish "pasted into a text field" from "paste swallowed". Consider
