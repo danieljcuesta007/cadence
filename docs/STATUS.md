@@ -1,13 +1,13 @@
 # STATUS — Cadence build progress
 
-Updated: 2026-07-15 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+Updated: 2026-07-16 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
 ## Phase-0 exit criteria (closed 2026-07-14, except the deferred Windows gate)
 
 | Criterion (§32) | Status |
 |---|---|
 | Headless core transcribes WAV → cleaned text | ✅ 144 ms warm / 553 ms cold, 282 MB peak (M4, base.en, Metal) |
-| Insertion prototype, 0 freezes / 0 corruption | ✅ automated 9/9, 0 freezes, 0 corruption (full table: `qa/matrix-results.jsonl` + git history of this file). Interactive leftovers for a user-at-keyboard pass: Spotlight, Messages, Slack, Pages, Word + not-installed apps |
+| Insertion prototype, 0 freezes / 0 corruption | ✅ automated 9/9, 0 freezes, 0 corruption (full table: `qa/matrix-results.jsonl` + git history of this file). Interactive pass 2026-07-16: Spotlight, Pages, Word, VS Code, Messages (draft-to-self) all PASS — see below. Slack draft-to-self still pending (no idle window during the run). Still uncovered: not-installed apps (iTerm2, Cursor, Discord, JetBrains) |
 | Windows insertion spike | 🔴 Deferred — no Windows env (ADR-0004); first task when one exists |
 | Orchestrator + IPC schema, headless, fully tested | ✅ |
 | Golden local model chosen + verified fetch | 🟡 base.en working candidate; final selection needs §30 eval harness |
@@ -97,8 +97,24 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 
 ## Next steps (§32 order)
 1. ~~First live `cadence run`~~ ✅ DONE 2026-07-15 (mic granted, ~90 % accuracy). Overlay
-   bars+partials fix CONFIRMED live 2026-07-16. Remaining: interactive matrix (Spotlight,
-   Messages, Slack, Pages, Word); resource soak numbers still unmeasured.
+   bars+partials fix CONFIRMED live 2026-07-16. ~~Interactive matrix~~ ✅ DONE 2026-07-16
+   (agent-driven, idle-gated, focus-guarded): Spotlight, Pages, Word, VS Code, Messages
+   (draft-to-self, never sent, draft cleared) — 5/5 PASS, pasteRestore 297–343 ms, 0 freezes,
+   0 clipboard corruption, undo verified in Pages/Word/VS Code. Slack draft-to-self armed but
+   not run (user never idle ≥15 s); safe to re-run via the idle-gated harness. Findings:
+   - **Blind-paste gap (release-gate relevant, §30/AC-20):** in Pages with page-layout focus
+     (Book template), pasteRestore returned `inserted: true` but the text landed nowhere.
+     The engine cannot distinguish "pasted into a text field" from "paste swallowed". Consider
+     post-insert verification (AX readback where possible) before reporting success / arming undo.
+   - AX-opaque surfaces are common: Spotlight panel, Pages body/template-chooser/save-sheet,
+     VS Code editor (role None) — direct AX impossible there; cascade correctly fell back.
+   - Spotlight: systemwide AX focus stays on the previous app while the panel is key, so
+     insertion works only because synthetic ⌘V routes to the key window.
+   - Electron cold start: first paste into a just-launched VS Code fired before the editor had
+     keyboard focus (buffer preserved it via hot exit, but timing matters for real dictation).
+   - This machine has ⌘Space disabled (symbolic hotkey 64 off) — Spotlight was opened via a
+     CGEvent click on the menu-bar icon.
+   Resource soak numbers still unmeasured.
 1b. **Cadence.app shipped (2026-07-16, e843c18):** real menu-bar app at `~/Applications/Cadence.app`
    (built by `qa/package-app.sh --install`): LSUIElement agent, bundled model (resolution:
    env → bundle → dev path), ad-hoc signed, Accessibility onboarding (prompt + poll, no
