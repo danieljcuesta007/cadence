@@ -5,8 +5,11 @@ edition.workspace = true
 
 [lib]
 name = "cadence_ffi"
-# staticlib/cdylib for the native shells; rlib so the FFI surface stays testable from Rust.
-crate-type = ["staticlib", "cdylib", "rlib"]
+# staticlib for the native shells; rlib so the FFI surface stays testable from Rust.
+# No cdylib: with both in target/release the Swift linker preferred the dylib and bound
+# Cadence.app to an ABSOLUTE dev-tree path — any cargo build silently swapped the
+# installed app's core (bit us live 7/19: a featureless rebuild broke dictation).
+crate-type = ["staticlib", "rlib"]
 
 [features]
 default = []

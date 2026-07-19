@@ -9,7 +9,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BIN=platform-macos/.build/release/cadence
-MODEL=models/artifacts/ggml-base.en.bin
+# Bundled model — override with CADENCE_BUNDLE_MODEL to ship a different tier (§30 WER
+# harness decides; base.en stays in models/artifacts as the golden rollback).
+MODEL=${CADENCE_BUNDLE_MODEL:-models/artifacts/ggml-base.en.bin}
 APP=dist/Cadence.app
 
 [[ -x "$BIN" ]] || { echo "build first: qa/build-shell.sh" >&2; exit 1; }
