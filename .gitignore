@@ -8,6 +8,7 @@ Cargo.lock.orig
 /models/artifacts/*.gguf
 /tools/cmake-local/
 /qa/fixtures/*.wav
+/qa/fixtures/wer/*.wav
 *.log
 .env
 /dist
