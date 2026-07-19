@@ -85,7 +85,7 @@ pub fn normalize_ws(s: &str) -> String {
 }
 
 /// Capitalize sentence starts, standalone "i", tidy space-before-punctuation, ensure terminal
-/// punctuation.
+/// punctuation, repair question marks on interrogative-worded sentences.
 fn finish_sentences(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 1);
     let mut cap_next = true;
@@ -100,7 +100,9 @@ fn finish_sentences(s: &str) -> String {
         } else {
             out.push(c);
         }
-        if matches!(c, '.' | '!' | '?') {
+        // Sentence boundary only when followed by space/end — a '.' inside "3.30" is not
+        // one (was capitalizing the word after a decimal).
+        if matches!(c, '.' | '!' | '?') && matches!(chars.peek(), None | Some(' ')) {
             cap_next = true;
         }
     }
@@ -110,7 +112,79 @@ fn finish_sentences(s: &str) -> String {
             text.push('.');
         }
     }
-    text
+    repair_question_marks(&text)
+}
+
+/// ASR punctuates from wording, not intonation, so questions phrased as questions still
+/// arrive with a terminal '.' surprisingly often. Flip '.' → '?' ONLY for sentences whose
+/// wording is unambiguously interrogative: a wh-word lead, an auxiliary+pronoun inversion
+/// ("can we…", "is it…"), or a tag question (", right"). Intonation-only questions
+/// ("this works.") are left alone — a wrong '?' on a statement is worse than a wrong '.'
+/// on a question.
+fn repair_question_marks(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut start = 0;
+    for i in 0..chars.len() {
+        let c = chars[i];
+        let boundary = matches!(c, '.' | '!' | '?')
+            && (i + 1 == chars.len() || chars[i + 1] == ' ');
+        if boundary {
+            let sentence: String = chars[start..i].iter().collect();
+            out.push_str(&sentence);
+            out.push(if c == '.' && is_interrogative(&sentence) { '?' } else { c });
+            start = i + 1;
+        }
+    }
+    if start < chars.len() {
+        out.extend(&chars[start..]);
+    }
+    out
+}
+
+fn is_interrogative(sentence: &str) -> bool {
+    const LEADS: &[&str] = &["okay", "ok", "so", "well", "now", "but", "and", "hey", "then", "also"];
+    const WH: &[&str] = &["what", "why", "how", "where", "when", "who", "whose", "whom", "which"];
+    const AUX: &[&str] = &[
+        "am", "is", "are", "was", "were", "do", "does", "did", "can", "could", "will",
+        "would", "shall", "should", "may", "might", "must", "have", "has", "had", "isn't",
+        "aren't", "wasn't", "weren't", "don't", "doesn't", "didn't", "can't", "couldn't",
+        "won't", "wouldn't", "shouldn't", "haven't", "hasn't", "hadn't",
+    ];
+    const PRONOUNS: &[&str] = &[
+        "i", "you", "we", "they", "he", "she", "it", "this", "that", "these", "those",
+        "there", "anyone", "anybody", "someone", "somebody", "everyone", "everybody",
+        "anything", "something",
+    ];
+    // Tag question: "…, right" (comma required — "the answer is no" is not one).
+    let lower = sentence.trim_end().to_lowercase();
+    for tag in ["right", "no", "correct", "yeah"] {
+        if lower.ends_with(&format!(", {tag}")) {
+            return true;
+        }
+    }
+    let words: Vec<String> = sentence
+        .split_whitespace()
+        .map(|w| {
+            w.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'')
+                .to_lowercase()
+        })
+        .collect();
+    let mut i = 0;
+    while i < words.len() && LEADS.contains(&words[i].as_str()) {
+        i += 1;
+    }
+    let (Some(first), second) = (words.get(i), words.get(i + 1)) else {
+        return false;
+    };
+    if WH.contains(&first.as_str()) {
+        // "how to reset…", "what a mess" — instructional/exclamatory, not questions.
+        return !matches!(second.map(String::as_str), Some("to") | Some("a") | Some("an"));
+    }
+    // Auxiliary + pronoun inversion ("can we", "is it") — but not imperatives ("do the
+    // dishes"), whose next word is not a pronoun.
+    AUX.contains(&first.as_str())
+        && second.map(|w| PRONOUNS.contains(&w.as_str())).unwrap_or(false)
 }
 
 fn fix_standalone_i(s: &str) -> String {
@@ -221,8 +295,41 @@ mod tests {
     fn capitalizes_after_terminal_punctuation() {
         assert_eq!(
             clean("hello there. how are you"),
-            "Hello there. How are you."
+            "Hello there. How are you?"
         );
+    }
+
+    #[test]
+    fn decimal_points_are_not_sentence_boundaries() {
+        assert_eq!(
+            clean("push the meeting to 3.30 instead"),
+            "Push the meeting to 3.30 instead."
+        );
+    }
+
+    #[test]
+    fn interrogative_wording_gets_a_question_mark() {
+        // Auxiliary + pronoun inversion.
+        assert_eq!(clean("can we ship this on friday."), "Can we ship this on friday?");
+        assert_eq!(clean("is it ready yet"), "Is it ready yet?");
+        // Wh-lead, including through discourse markers.
+        assert_eq!(clean("okay so what time is the demo."), "Okay so what time is the demo?");
+        // Tag question (the ", right/no" dictation pattern).
+        assert_eq!(
+            clean("so you're telling me it works, right."),
+            "So you're telling me it works, right?"
+        );
+    }
+
+    #[test]
+    fn declaratives_and_imperatives_keep_their_period() {
+        assert_eq!(clean("do the dishes before you leave"), "Do the dishes before you leave.");
+        assert_eq!(clean("how to reset the router."), "How to reset the router.");
+        assert_eq!(clean("the answer is no"), "The answer is no.");
+        // Intonation-only questions stay untouched by design (wrong '?' is worse).
+        assert_eq!(clean("this actually works."), "This actually works.");
+        // Existing '?' and '!' are never rewritten.
+        assert_eq!(clean("we shipped it!"), "We shipped it!");
     }
 
     #[test]
