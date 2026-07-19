@@ -1,6 +1,33 @@
 # STATUS — Cadence build progress
 
-Updated: 2026-07-16 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+Updated: 2026-07-18 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+
+## Resource soak + stall hunt (2026-07-18)
+
+**Idle soak found a real crash.** The resident app had idled 8 h 42 m (natural soak: avg CPU
+≈0.008 %, 0 sockets, phys footprint 176–218 MB — CMPRS shows nearly all of it is the
+OS-compressed whisper model; RSS settles ~25 MB). Then, ~20 min after a successful live
+dictation, the app **aborted on an audio route change**: `AVAudioEngineConfigurationChange` →
+observer (on the posting thread, un-debounced) → `teardownTap`+`prewarm` → `installTapOnNode`
+raised an ObjC `NSException` mid-reconfiguration → uncatchable in Swift → SIGABRT
+(`Cadence-2026-07-18-200950.ips`). Fix (same day):
+- `CObjCCatch` target: `CadenceCatchNSException` fences the install; a raise now degrades to
+  `CaptureError.tapInstall` (prewarm swallows it; next `start()` rebuilds cold — that
+  recovery path already existed). Fence unit-proven (raise caught, clean path nil).
+- Route-change rebuild now debounced 150 ms onto the main queue (changes burst on arbitrary
+  threads; re-tapping while the engine reconfigures is what raised).
+- `ensureTap` also guards `channelCount > 0` (transitional formats can be 48 kHz / 0 ch).
+- Not yet re-proven against a real route change — plug/unplug AirPods while idle to confirm.
+
+**Metal stall hunt: 10/10 clean.** ~380 headless whisper+Metal decodes (stream_spike partials
+×3 audio_ctx + refined, 120 s watchdog, launched non-foreground): zero stalls, refined decode
+~113 ms. The one-off 30 s stall did not reproduce headlessly; App Nap on the .app process
+remains prime suspect and the activity-assertion mitigation stands.
+
+**Budget verdict (§28 idle):** CPU <1 % PASS (≈0.008 %), network 0 PASS, RAM <150 MB **MISS
+by ~26–68 MB**, entirely the resident model (compressed while idle). Confirms the idle
+model-unload lever (ADR-0006) is what closes it. Sampler: `qa/soak.sh` →
+`qa/soak-results.jsonl` (30 s interval; footprint/CMPRS/RSS/cputime/threads/sockets).
 
 ## Phase-0 exit criteria (closed 2026-07-14, except the deferred Windows gate)
 
@@ -74,7 +101,7 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 | Insertion engine call | ≤ 250 ms + fallback | 26–29 ms (direct AX, TextEdit) |
 | Key-down → capture start | ≤ 50 ms perceived | **47 / 36 ms live (2026-07-16, warm path) — target MET** (was 85–94 ms) |
 | Active RAM peak | < 1.2 GB | 282 MB (Phase-0 headless; shell unmeasured) |
-| Idle RAM / CPU / network | <150 MB / <1% / 0 | unmeasured — needs resident-app soak |
+| Idle RAM / CPU / network | <150 MB / <1% / 0 | 176–218 MB footprint (≈all compressed model; RSS ~25 MB) / ≈0.008 % / 0 sockets — RAM misses until idle model unload (2026-07-18 soak) |
 
 ## Open risks (watchlist)
 1. **Windows spike unproven** (ADR-0004).

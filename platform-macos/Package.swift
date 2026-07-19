@@ -26,9 +26,16 @@ let package = Package(
             name: "CCadenceFFI",
             path: "Core/CCadenceFFI"
         ),
+        // ObjC exception fence: AVFAudio raises NSException on bad tap installs (route
+        // changes); Swift can't catch those, so this wraps them into a returnable error.
+        .target(
+            name: "CObjCCatch",
+            path: "Capture/Sources/CObjCCatch"
+        ),
         // AVAudioEngine (CoreAudio) capture → 16 kHz mono i16 chunks (§16.1, §18 step 2).
         .target(
             name: "CadenceCapture",
+            dependencies: ["CObjCCatch"],
             path: "Capture/Sources/CadenceCapture"
         ),
         // Global PTT + cancel via a CGEvent tap (§12.4). Requires Accessibility.

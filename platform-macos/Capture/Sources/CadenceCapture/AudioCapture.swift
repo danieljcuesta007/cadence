@@ -12,10 +12,12 @@
 // next lever is engine.pause() — verify the orange dot goes off before shipping that.
 
 import AVFoundation
+import CObjCCatch
 
 public enum CaptureError: Error, CustomStringConvertible {
     case formatUnavailable
     case engineStart(Error)
+    case tapInstall(String)
 
     public var description: String {
         switch self {
@@ -23,6 +25,8 @@ public enum CaptureError: Error, CustomStringConvertible {
             return "no usable input format (mic permission missing or no input device?)"
         case .engineStart(let e):
             return "audio engine start failed: \(e.localizedDescription)"
+        case .tapInstall(let reason):
+            return "tap install rejected by AVFAudio: \(reason)"
         }
     }
 }
@@ -33,6 +37,7 @@ public final class AudioCapture {
     private var tapInstalled = false
     private var tapFormat: AVAudioFormat?
     private var routeChangeObserver: NSObjectProtocol?
+    private var rebuildWork: DispatchWorkItem?
 
     /// (samples16k, level 0…1) — called on the audio tap thread. Only fires while running:
     /// the tap checks this flag so a buffer straggling in after stop() is still delivered
@@ -96,7 +101,9 @@ public final class AudioCapture {
         if tapInstalled { return }
         let input = engine.inputNode
         let inFormat = input.outputFormat(forBus: 0)
-        guard inFormat.sampleRate > 0,
+        // channelCount too: mid-route-change the node can report 48 kHz / 0 ch, and
+        // installTap raises on it.
+        guard inFormat.sampleRate > 0, inFormat.channelCount > 0,
             let outFormat = AVAudioFormat(
                 commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1,
                 interleaved: true),
@@ -105,7 +112,7 @@ public final class AudioCapture {
 
         // ~43 ms buffers at 48 kHz: small enough that the ring is near-live, big enough to
         // keep the tap cheap.
-        input.installTap(onBus: 0, bufferSize: 2048, format: inFormat) { [weak self] buffer, _ in
+        let install = { input.installTap(onBus: 0, bufferSize: 2048, format: inFormat) { [weak self] buffer, _ in
             guard let self, let onChunk = self.onChunk else { return }
             let ratio = outFormat.sampleRate / inFormat.sampleRate
             let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
@@ -133,6 +140,13 @@ public final class AudioCapture {
             }
             let rms = (acc / Float(max(n, 1))).squareRoot()
             onChunk(samples, min(1.0, rms * 6)) // speech RMS ~0.05–0.15 → usable 0…1 level
+        } }
+        // AVFAudio raises NSException (not a throw) if the format goes stale between the
+        // query above and the install — fatal if unfenced (crashed the resident app
+        // 2026-07-18 on a route change). Fenced, it degrades to a throw; the next start()
+        // rebuilds cold.
+        if let reason = CadenceCatchNSException(install) {
+            throw CaptureError.tapInstall(reason)
         }
         tapInstalled = true
         tapFormat = inFormat
@@ -140,13 +154,21 @@ public final class AudioCapture {
 
         // Device/route changes (AirPods connect, display mic, …) invalidate the tap's
         // format and converter: tear down so the next start() rebuilds against the new route.
+        // Rebuild on the main queue, debounced: changes arrive in bursts on arbitrary
+        // threads, and re-tapping while the engine is still reconfiguring is what raised.
         if routeChangeObserver == nil {
             routeChangeObserver = NotificationCenter.default.addObserver(
-                forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+                forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
             ) { [weak self] _ in
-                guard let self, !self.running else { return }  // mid-capture: finish, rebuild after
-                self.teardownTap()
-                self.prewarm()
+                guard let self else { return }
+                self.rebuildWork?.cancel()
+                let work = DispatchWorkItem { [weak self] in
+                    guard let self, !self.running else { return }  // mid-capture: start() rebuilds after
+                    self.teardownTap()
+                    self.prewarm()
+                }
+                self.rebuildWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
             }
         }
     }
