@@ -82,8 +82,14 @@ final class EffectRouter {
             let chip = obj["location_chip"] as? String
             onUI {
                 self.activeState = state
-                self.overlay?.show(state: state, chip: chip)
                 self.statusUpdate?(state)
+                // Idle is a return-to-rest transition (cancel, re-enable, error recovery),
+                // not a pill to display — showing it left a permanent "idle local" pill.
+                if state == "idle" {
+                    self.overlay?.scheduleFade(after: 0)
+                } else {
+                    self.overlay?.show(state: state, chip: chip)
+                }
             }
         case "update_waveform":
             let level = (obj["level"] as? NSNumber)?.floatValue ?? 0
