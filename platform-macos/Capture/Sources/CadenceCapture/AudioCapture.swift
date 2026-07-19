@@ -73,14 +73,24 @@ public final class AudioCapture {
 
     public func start() throws {
         guard !running else { return }
-        try ensureTap()
-        do { try engine.start() } catch {
-            // Route may have changed under a stale tap: rebuild once and retry.
+        do {
+            try startOnce()
+        } catch {
+            // Route may have changed under a stale tap. A plain rebuild is NOT enough:
+            // inputNode.outputFormat(forBus:) can keep serving the old sample rate until
+            // the engine is reset, so the re-installed tap raises the same
+            // format.sampleRate mismatch (bit us live 2026-07-19 10:43). Hard-reset to
+            // force a re-query of the true hardware format, then rebuild and retry once.
             teardownTap()
-            try ensureTap()
-            do { try engine.start() } catch { throw CaptureError.engineStart(error) }
+            engine.reset()
+            try startOnce()
         }
         running = true
+    }
+
+    private func startOnce() throws {
+        try ensureTap()
+        do { try engine.start() } catch { throw CaptureError.engineStart(error) }
     }
 
     /// Synchronous stop. After return, in-flight tap callbacks have had time to land their
@@ -98,7 +108,16 @@ public final class AudioCapture {
     // MARK: - warm tap
 
     private func ensureTap() throws {
-        if tapInstalled { return }
+        if tapInstalled {
+            // Trust the format, not the flag: a route change the observer missed (or one
+            // that landed mid-debounce) leaves a tap bound to the old sample rate.
+            let current = engine.inputNode.outputFormat(forBus: 0)
+            if let f = tapFormat, f.sampleRate == current.sampleRate,
+                f.channelCount == current.channelCount {
+                return
+            }
+            teardownTap()
+        }
         let input = engine.inputNode
         let inFormat = input.outputFormat(forBus: 0)
         // channelCount too: mid-route-change the node can report 48 kHz / 0 ch, and

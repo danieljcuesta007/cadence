@@ -21,10 +21,14 @@ struct Config {
     var mode = "run"
     var wav: String?
     // Resolution order: explicit env → bundled resource (Cadence.app ships its model,
-    // self-contained) → dev-checkout path (bare binary run from the repo).
+    // self-contained; any ggml-*.bin — the tier is a packaging decision, §30) →
+    // dev-checkout path (bare binary run from the repo).
     var model =
         ProcessInfo.processInfo.environment["CADENCE_MODEL"]
-        ?? Bundle.main.path(forResource: "ggml-base.en", ofType: "bin", inDirectory: "models")
+        ?? Bundle.main.paths(forResourcesOfType: "bin", inDirectory: "models")
+            .filter { ($0 as NSString).lastPathComponent.hasPrefix("ggml-") }
+            .sorted()
+            .first
         ?? NSString(string: "~/cadence/models/artifacts/ggml-base.en.bin").expandingTildeInPath
     var mock: String?
     var expectApp: String?

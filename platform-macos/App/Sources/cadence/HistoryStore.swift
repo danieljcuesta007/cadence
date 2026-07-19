@@ -150,6 +150,32 @@ final class HistoryStore {
         }
     }
 
+    // MARK: retention window (§24; menu-surfaced until a full Settings UI exists)
+
+    /// `retention_days` setting; 0/unset = keep forever. The purge itself runs at launch
+    /// (`applyRetention`) and immediately on shortening the window.
+    var retentionDays: Int64 {
+        guard let handle, let c = cadence_store_setting_get(handle, "retention_days")
+        else { return 0 }
+        defer { cadence_string_free(c) }
+        return Int64(String(cString: c)) ?? 0
+    }
+
+    func setRetentionDays(_ days: Int64) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, "retention_days", String(days)) {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("retention_days save failed: \(msg)")
+            return
+        }
+        if days > 0 {
+            let purged = cadence_store_purge_utterances(handle, days)
+            if purged > 0 {
+                LogFile.append("store: retention now \(days)d — purged \(purged) utterances")
+            }
+        }
+    }
+
     // MARK: retained audio (§24, opt-in; off by default)
 
     private static let retainAudioKey = "retain_audio"

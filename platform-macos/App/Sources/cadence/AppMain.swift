@@ -7,6 +7,7 @@ import CadenceInsertion
 import CadenceOverlay
 import Foundation
 import IOKit.hid
+import ServiceManagement
 
 // MARK: - Menu-bar agent
 
@@ -32,12 +33,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var retainAudio = false
     let retainAudioItem = NSMenuItem(
         title: "Keep Audio Recordings", action: nil, keyEquivalent: "")
+    let loginItem = NSMenuItem(title: "Start at Login", action: nil, keyEquivalent: "")
+    let retentionItem = NSMenuItem(title: "Keep History", action: nil, keyEquivalent: "")
+    /// §24 retention choices surfaced in the menu (days; 0 = forever).
+    static let retentionChoices: [(String, Int64)] = [
+        ("Forever", 0), ("90 Days", 90), ("30 Days", 30), ("7 Days", 7),
+    ]
     // Held during an utterance: App Nap must never throttle a decode mid-dictation
     // (§28 latency budgets; suspected cause of a one-off 30 s Metal stall in testing).
     var activity: NSObjectProtocol?
 
     init(config: Config) {
         self.config = config
+    }
+
+    /// AppleScript/⌘Q quits bypass our menu action — free the engine here too, or ggml's
+    /// Metal atexit teardown aborts (see quit()).
+    func applicationWillTerminate(_ notification: Notification) {
+        engine = nil
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -73,6 +86,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         retainAudioItem.action = #selector(toggleRetainAudio)
         retainAudioItem.target = self
         menu.addItem(retainAudioItem)
+        // §24 retention window as a submenu (Forever/90/30/7) — the interim Settings UI.
+        let retentionMenu = NSMenu()
+        for (label, days) in Self.retentionChoices {
+            let item = NSMenuItem(
+                title: label, action: #selector(pickRetention(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = Int(days)
+            retentionMenu.addItem(item)
+        }
+        retentionItem.submenu = retentionMenu
+        menu.addItem(retentionItem)
+        // Daily-driver basics: the app should survive a reboot without being remembered.
+        loginItem.action = #selector(toggleStartAtLogin)
+        loginItem.target = self
+        menu.addItem(loginItem)
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit Cadence", action: #selector(quit), keyEquivalent: "q"))
@@ -251,6 +279,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         retainAudioItem.state = retainAudio ? .on : .off
         retainAudioItem.isEnabled = historyStore != nil
+        retentionItem.isEnabled = historyStore != nil
+        let current = historyStore?.retentionDays ?? 0
+        for item in retentionItem.submenu?.items ?? [] {
+            item.state = Int64(item.tag) == current ? .on : .off
+        }
+        // SMAppService only manages a real .app bundle; dev `cadence run` can't register.
+        loginItem.isEnabled = Bundle.main.bundlePath.hasSuffix(".app")
+        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+    }
+
+    @objc func pickRetention(_ sender: NSMenuItem) {
+        guard let store = historyStore else { return }
+        store.setRetentionDays(Int64(sender.tag))
+        router.log("history retention → \(sender.tag == 0 ? "forever" : "\(sender.tag) days")")
+    }
+
+    @objc func toggleStartAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+                router.log("start at login → off")
+            } else {
+                try SMAppService.mainApp.register()
+                router.log("start at login → on")
+            }
+        } catch {
+            router.log("start-at-login toggle failed: \(error)")
+        }
     }
 
     @objc func toggleRetainAudio() {
@@ -280,6 +336,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func quit() {
         hotkeys.stop()
         capture.stop()
+        // Free the engine BEFORE terminate: ggml's Metal teardown asserts in atexit
+        // (__cxa_finalize) when the device is still alive — every quit wrote a SIGABRT
+        // .ips to DiagnosticReports. cadence_engine_free joins the core threads and
+        // drops whisper cleanly first.
+        engine = nil
         NSApp.terminate(nil)
     }
 }
