@@ -232,7 +232,9 @@ final class EffectRouter {
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
             captureStartedAt = t0
             setMetric("capture_start_ms", ms)
-            log("capture started in \(ms) ms") // §28: perceived start ≤ 50 ms — measured here
+            // §28: perceived start ≤ 50 ms — measured here. Device named so audio-quality
+            // reports are diagnosable from the log (HFP headset mic vs built-in).
+            log("capture started in \(ms) ms via \(capture.inputDescription)")
         } catch {
             log("capture start failed: \(error) — cancelling utterance")
             engine()?.cancel()

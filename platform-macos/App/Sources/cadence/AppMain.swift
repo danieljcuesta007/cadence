@@ -34,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let retainAudioItem = NSMenuItem(
         title: "Keep Audio Recordings", action: nil, keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Start at Login", action: nil, keyEquivalent: "")
+    let builtInMicItem = NSMenuItem(
+        title: "Use Built-in Microphone", action: nil, keyEquivalent: "")
     let retentionItem = NSMenuItem(title: "Keep History", action: nil, keyEquivalent: "")
     /// §24 retention choices surfaced in the menu (days; 0 = forever).
     static let retentionChoices: [(String, Int64)] = [
@@ -97,6 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         retentionItem.submenu = retentionMenu
         menu.addItem(retentionItem)
+        // Bluetooth mics mean HFP telephony audio (ASR-hostile, music-degrading): the
+        // built-in mic is preferred by default; this is the escape hatch.
+        builtInMicItem.action = #selector(toggleBuiltInMic)
+        builtInMicItem.target = self
+        menu.addItem(builtInMicItem)
         // Daily-driver basics: the app should survive a reboot without being remembered.
         loginItem.action = #selector(toggleStartAtLogin)
         loginItem.target = self
@@ -119,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         disabledApps = store?.disabledApps() ?? []
         retainAudio = store?.retainAudioEnabled ?? false
         router.retainAudioEnabled = { [weak self] in self?.retainAudio ?? false }
+        capture.preferBuiltInMic = store?.preferBuiltInMic ?? true
         router.engine = { [weak self] in self?.engine }
         router.statusUpdate = { [weak self] state in
             guard let self else { return }
@@ -287,6 +295,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // SMAppService only manages a real .app bundle; dev `cadence run` can't register.
         loginItem.isEnabled = Bundle.main.bundlePath.hasSuffix(".app")
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        builtInMicItem.state = capture.preferBuiltInMic ? .on : .off
+    }
+
+    @objc func toggleBuiltInMic() {
+        let on = !capture.preferBuiltInMic
+        capture.setPreferBuiltInMic(on)
+        historyStore?.setPreferBuiltInMic(on)
+        router.log("built-in mic preference → \(on ? "on" : "off (system default input)")")
     }
 
     @objc func pickRetention(_ sender: NSMenuItem) {
