@@ -288,4 +288,29 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    `audio_blob_id` in history; playback UI is future work (dashboard doesn't surface
    audio yet). §24 remainder: dictionary/corrections/style/redaction/sync tables; a
    Settings UI for retention windows.
+9. **Daily-driver hardening (2026-07-19, b5439a7):** push toward "casual daily use".
+   - **Model tier decision (§30):** WER harness re-run — small.en 3.11% vs base.en 5.78%
+     (225 ref words), refined ~350-450 ms / partials ~270-420 ms on M4 (vs base's ~115 ms
+     refined). Accuracy is the daily-use bottleneck (~90% felt), so **small.en is now the
+     bundled model**; base.en remains the §17.5 golden rollback. Both sha256-pinned in
+     fetch-models.sh. Idle unload caps the RAM cost (bigger model only resident while
+     dictating + 5 min).
+   - **Static-link fix (shipped-app integrity):** cadence-ffi built cdylib+staticlib; the
+     Swift linker preferred the dylib and bound the installed app to the ABSOLUTE dev-tree
+     path — any `cargo build` without `--features whisper` silently broke the installed
+     app ("built without the whisper feature", hit live). crate-type is now staticlib+rlib
+     only; verified 0 dylib refs, whisper symbols in-binary.
+   - **Quit SIGABRT fixed (every quit crashed):** ggml Metal teardown asserts in atexit if
+     the device is alive at exit; engine freed before NSApp.terminate (menu quit +
+     applicationWillTerminate for ⌘Q/AppleScript). Verified live: clean quit, no new .ips.
+   - **Route-change capture failure fixed (hit live 7/19 10:43):** after a route change
+     the retry used inputNode's stale sample rate. start() hard-resets the engine before
+     retrying; ensureTap re-validates the installed tap's format against hardware.
+     AirPods plug/unplug while idle remains the live confirmation.
+   - **Menu:** "Start at Login" (SMAppService.mainApp) + "Keep History" retention submenu
+     (Forever/90/30/7; purge applies immediately on shortening).
+   86/86 + 11/11 whisper-FFI. Repackaged + reinstalled with small.en; launch "core ready"
+   221-376 ms. LIVE CHECKS PENDING (Daniel): dictation accuracy feel on small.en; latency
+   feel (thinking is ~250-450 ms now); AirPods route change; Keep Audio Recordings blob
+   write; Start at Login across a reboot.
 5. Windows environment → port insertion spike + this FFI (header already C-clean).
