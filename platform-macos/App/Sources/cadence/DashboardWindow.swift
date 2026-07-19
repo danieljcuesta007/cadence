@@ -21,25 +21,36 @@ struct HistoryEntry {
 }
 
 enum HistoryReader {
+    /// Wired by the composition root; when present the dashboard reads the encrypted
+    /// store (§24), else the JSONL stand-in.
+    static var store: HistoryStore?
+
     static func load() -> [HistoryEntry] {
+        if let store {
+            return store.recent(limit: 500).map(entry(from:))
+        }
         guard let data = try? Data(contentsOf: History.url),
             let content = String(data: data, encoding: .utf8)
         else { return [] }
-        let iso = ISO8601DateFormatter()
         return content.split(separator: "\n").compactMap { line in
             guard let d = line.data(using: .utf8),
                 let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
             else { return nil }
-            return HistoryEntry(
-                ts: (obj["ts"] as? String).flatMap { iso.date(from: $0) },
-                text: obj["text"] as? String ?? "",
-                inserted: obj["inserted"] as? Bool ?? false,
-                app: obj["app"] as? String ?? "",
-                strategy: obj["strategy"] as? String ?? "",
-                captureStartMs: (obj["capture_start_ms"] as? NSNumber)?.intValue,
-                captureWindowMs: (obj["capture_window_ms"] as? NSNumber)?.intValue,
-                insertionMs: (obj["insertion_ms"] as? NSNumber)?.intValue)
-        }.reversed()  // newest first
+            return entry(from: obj)
+        }.reversed()  // newest first (store rows already arrive newest-first)
+    }
+
+    private static func entry(from obj: [String: Any]) -> HistoryEntry {
+        let iso = ISO8601DateFormatter()
+        return HistoryEntry(
+            ts: (obj["ts"] as? String).flatMap { iso.date(from: $0) },
+            text: obj["text"] as? String ?? "",
+            inserted: obj["inserted"] as? Bool ?? false,
+            app: obj["app"] as? String ?? "",
+            strategy: obj["strategy"] as? String ?? "",
+            captureStartMs: (obj["capture_start_ms"] as? NSNumber)?.intValue,
+            captureWindowMs: (obj["capture_window_ms"] as? NSNumber)?.intValue,
+            insertionMs: (obj["insertion_ms"] as? NSNumber)?.intValue)
     }
 }
 
