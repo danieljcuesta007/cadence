@@ -36,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let loginItem = NSMenuItem(title: "Start at Login", action: nil, keyEquivalent: "")
     let builtInMicItem = NSMenuItem(
         title: "Use Built-in Microphone", action: nil, keyEquivalent: "")
+    let voiceIsolationItem = NSMenuItem(
+        title: "Voice Isolation", action: nil, keyEquivalent: "")
     let retentionItem = NSMenuItem(title: "Keep History", action: nil, keyEquivalent: "")
     /// §24 retention choices surfaced in the menu (days; 0 = forever).
     static let retentionChoices: [(String, Int64)] = [
@@ -104,6 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         builtInMicItem.action = #selector(toggleBuiltInMic)
         builtInMicItem.target = self
         menu.addItem(builtInMicItem)
+        // Apple AEC + noise suppression on capture (café/office ambience otherwise leaks
+        // into transcripts). Fallback logic in AudioCapture keeps it from ever blocking.
+        voiceIsolationItem.action = #selector(toggleVoiceIsolation)
+        voiceIsolationItem.target = self
+        menu.addItem(voiceIsolationItem)
         // Daily-driver basics: the app should survive a reboot without being remembered.
         loginItem.action = #selector(toggleStartAtLogin)
         loginItem.target = self
@@ -127,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         retainAudio = store?.retainAudioEnabled ?? false
         router.retainAudioEnabled = { [weak self] in self?.retainAudio ?? false }
         capture.preferBuiltInMic = store?.preferBuiltInMic ?? true
+        capture.voiceIsolation = store?.voiceIsolation ?? true
         router.engine = { [weak self] in self?.engine }
         router.statusUpdate = { [weak self] state in
             guard let self else { return }
@@ -296,6 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loginItem.isEnabled = Bundle.main.bundlePath.hasSuffix(".app")
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         builtInMicItem.state = capture.preferBuiltInMic ? .on : .off
+        voiceIsolationItem.state = capture.voiceIsolation ? .on : .off
     }
 
     @objc func toggleBuiltInMic() {
@@ -303,6 +312,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         capture.setPreferBuiltInMic(on)
         historyStore?.setPreferBuiltInMic(on)
         router.log("built-in mic preference → \(on ? "on" : "off (system default input)")")
+    }
+
+    @objc func toggleVoiceIsolation() {
+        let on = !capture.voiceIsolation
+        capture.setVoiceIsolation(on)
+        historyStore?.setVoiceIsolation(on)
+        router.log("voice isolation → \(on ? "on" : "off")")
     }
 
     @objc func pickRetention(_ sender: NSMenuItem) {

@@ -53,9 +53,27 @@ public final class AudioCapture {
     /// both; in-ear playback can't leak into it either.
     public var preferBuiltInMic = true
 
+    /// Apple voice processing on the input (AEC + noise suppression — the "Voice
+    /// Isolation" machinery; default ON). Cafés and open offices otherwise leak ambient
+    /// chatter into the transcript. If enabling it makes capture fail, start() drops it
+    /// for the session rather than cancel dictations (see vpDisabledFallback).
+    public var voiceIsolation = true
+    private var vpDisabledFallback = false
+
     public func setPreferBuiltInMic(_ on: Bool) {
         guard on != preferBuiltInMic else { return }
         preferBuiltInMic = on
+        applyConfigChange()
+    }
+
+    public func setVoiceIsolation(_ on: Bool) {
+        guard on != voiceIsolation else { return }
+        voiceIsolation = on
+        vpDisabledFallback = false
+        applyConfigChange()
+    }
+
+    private func applyConfigChange() {
         guard !running else { return } // mid-capture: applies at the next start
         recreateEngine()
         prewarm()
@@ -74,7 +92,8 @@ public final class AudioCapture {
                 name = n
             }
         }
-        return "\(name) @ \(Int(fmt.sampleRate)) Hz"
+        let vp = engine.inputNode.isVoiceProcessingEnabled ? " +vp" : ""
+        return "\(name) @ \(Int(fmt.sampleRate)) Hz\(vp)"
     }
 
     // MARK: - CoreAudio device selection
@@ -169,7 +188,17 @@ public final class AudioCapture {
             // cancelling) — an AVAudioEngine can keep serving stale formats for the life
             // of the object. Recreate it outright and retry once.
             recreateEngine()
-            try startOnce()
+            do {
+                try startOnce()
+            } catch {
+                // Voice processing itself may be what's failing (AUVoiceIO is the
+                // newest, quirkiest piece). Never let a nicety cancel dictations:
+                // drop it for the session and go bare before giving up.
+                guard voiceIsolation, !vpDisabledFallback else { throw error }
+                vpDisabledFallback = true
+                recreateEngine()
+                try startOnce()
+            }
         }
         running = true
     }
@@ -220,6 +249,18 @@ public final class AudioCapture {
             teardownTap()
         }
         let input = engine.inputNode
+        // Voice processing before anything reads formats — enabling it swaps the
+        // underlying unit (AUHAL → AUVoiceIO) and changes the served formats. NSException-
+        // fenced like the tap install; a refusal here degrades to bare capture.
+        let wantVP = voiceIsolation && !vpDisabledFallback
+        if input.isVoiceProcessingEnabled != wantVP {
+            let vpFail = CadenceCatchNSException {
+                try? input.setVoiceProcessingEnabled(wantVP)
+            }
+            if vpFail != nil, wantVP {
+                vpDisabledFallback = true
+            }
+        }
         // Pin the built-in mic (when preferred and present) BEFORE reading the format:
         // the AUHAL otherwise follows the system default input, i.e. whatever Bluetooth
         // headset connected last. Failure to pin falls through to the default silently.
