@@ -19,6 +19,19 @@ raised an ObjC `NSException` mid-reconfiguration → uncatchable in Swift → SI
 - `ensureTap` also guards `channelCount > 0` (transitional formats can be 48 kHz / 0 ch).
 - Not yet re-proven against a real route change — plug/unplug AirPods while idle to confirm.
 
+**Stuck "idle local" pill (user-reported 2026-07-18, screenshot):** core emits
+`show_overlay {state: idle}` on return-to-rest paths (cancel, re-enable, error recovery);
+the router rendered it as a pill with literal "idle" text and never faded it. Fixed both
+layers: router maps idle → immediate fade; `OverlayHUD.show` treats "idle" as dismiss
+(belt-and-braces). Needs a live dictation + Esc-cancel to confirm.
+
+**App identity (2026-07-18):** designed app icon — warm ivory squircle (true Apple
+continuous-corner via CALayer `cornerCurve`), five-bar cadence mark in warm ink, gold peak
+bar. Source `platform-macos/App/AppIcon/render-icon.swift` (CoreAnimation → 1024 PNG),
+`make-icns.sh` → `AppIcon.icns`; package-app.sh bundles it (`CFBundleIconFile`). App pinned
+to the Dock (persistent-apps; app stays LSUIElement — Dock tile is a launcher, no running
+entry, menu-bar-agent design unchanged). Verified: NSWorkspace resolves the custom icon.
+
 **Metal stall hunt: 10/10 clean.** ~380 headless whisper+Metal decodes (stream_spike partials
 ×3 audio_ctx + refined, 120 s watchdog, launched non-foreground): zero stalls, refined decode
 ~113 ms. The one-off 30 s stall did not reproduce headlessly; App Nap on the .app process

@@ -78,7 +78,12 @@ public final class OverlayHUD {
     }
 
     /// Main thread only. state = ipc State snake_case; chip = "local"/"cloud" or nil.
+    /// "idle" never renders — it dismisses (belt-and-braces; the router also maps it to a fade).
     public func show(state: String, chip: String?) {
+        if state == "idle" {
+            scheduleFade(after: 0)
+            return
+        }
         fadeWork?.cancel()
         fadeWork = nil
         let glyph: String
