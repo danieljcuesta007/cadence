@@ -147,7 +147,9 @@ impl<'a> Pipeline<'a> {
             if let (Some(samples), Some(utt)) = (audio_samples, listening_utt.clone()) {
                 if self.machine.state() == State::Listening && scheduler.on_audio(samples) {
                     let window = self.ring.snapshot();
-                    if let Ok(t) = self.asr.transcribe_partial(&pcm_i16_to_f32(&window)) {
+                    // Sliding tail (§12.3): long dictations decode only the recent window.
+                    let window = &window[scheduler.window_start(window.len())..];
+                    if let Ok(t) = self.asr.transcribe_partial(&pcm_i16_to_f32(window)) {
                         if let Some(text) = t.instant {
                             // Synchronous here: feed the partial through the machine now, while
                             // still Listening, so its ShowPartial isn't stranded behind the

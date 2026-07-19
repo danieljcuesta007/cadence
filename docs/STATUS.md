@@ -25,6 +25,12 @@ the router rendered it as a pill with literal "idle" text and never faded it. Fi
 layers: router maps idle → immediate fade; `OverlayHUD.show` treats "idle" as dismiss
 (belt-and-braces). Needs a live dictation + Esc-cancel to confirm.
 
+**Build-system trap (2026-07-18, found live):** SwiftPM does not track the external
+`libcadence_ffi.a` — a rebuilt core with unchanged Swift sources did NOT relink, and
+`package-app.sh` shipped a 26-minute-old binary as if new. `build-shell.sh` now deletes the
+shell binary when the staticlib is newer, forcing the link. If a core change ever seems to
+"not take", check `ls -l target/release/libcadence_ffi.a platform-macos/.build/release/cadence`.
+
 **App identity (2026-07-18):** designed app icon — warm ivory squircle (true Apple
 continuous-corner via CALayer `cornerCurve`), five-bar cadence mark in warm ink, gold peak
 bar. Source `platform-macos/App/AppIcon/render-icon.swift` (CoreAnimation → 1024 PNG),
@@ -118,12 +124,19 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
 
 ## Open risks (watchlist)
 1. **Windows spike unproven** (ADR-0004).
-2. **Streaming/instant pass** — DONE for push-to-talk: `transcribe_partial` is wired into both
-   interpreters (headless `Pipeline` + FFI core loop) via a shared `PartialScheduler`, with a
-   load-time warmup decode; verified end-to-end over real whisper (partial "hello" + refined
-   insert) by an FFI integration test — no mic needed (ADR-0006). Still open: a sliding/chunked
-   window with context carry for *long* dictations — the current re-decode is O(window)/step,
-   fine for short PTT (~4 s tested) but grows on multi-tens-of-seconds utterances.
+2. **Streaming/instant pass** — DONE for push-to-talk (shared `PartialScheduler`, warmup,
+   FFI real-whisper test green, ADR-0006). **Sliding tail window DONE 2026-07-18:** partials
+   now decode only the most recent 8 s (`DEFAULT_TAIL_WINDOW_SAMPLES`, `window_start()` in
+   both interpreters), and the FFI engine caps the fast-path encoder to match
+   (`PARTIAL_AUDIO_CTX_FRAMES` = 512 ≈ 10.2 s coverage). Measured motivation (stream_spike,
+   31.6 s WAV): the old growing window collapsed at ~10 s — the capped encoder saw truncated
+   mel and produced garbage ("Hello Hello This ThisN also this") at 1.5–2.7 s/partial; the
+   pill would have shown nonsense while costs ballooned. With the tail, each partial is
+   ≤ 8 s of audio (~100–125 ms observed at that size). Pinned by
+   `long_dictation_partials_decode_only_the_tail` (30 s utterance: every partial ≤ tail cap,
+   early windows untruncated, refined pass still sees the full utterance exactly once).
+   Context carry across the tail boundary deliberately NOT added: partials are display-only
+   and head-truncated in the pill; the refined pass is authoritative (§12.3).
 3. **One-off 30 s whisper Metal stall** in a backgrounded selftest (1 of ~6 runs, never
    reproduced). Model loaded fine; the *decode* (audio→text) never returned, and the Metal
    crash fired during process-exit cleanup — confirming a decode was still in flight, not a

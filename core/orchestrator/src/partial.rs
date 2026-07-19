@@ -11,10 +11,24 @@
 pub const DEFAULT_STRIDE_SAMPLES: usize = 16_000 * 2 / 5; // 6_400
 pub const DEFAULT_MIN_WINDOW_SAMPLES: usize = 16_000 * 3 / 10; // 4_800
 
+/// Sliding tail window for the instant pass (long dictations): decode only the most recent
+/// N samples instead of the whole utterance-so-far. The pill is head-truncated (recent words
+/// are the signal) and the refined pass is authoritative over the full audio; meanwhile the
+/// capped encoder (audio_ctx below) would silently drop everything past ~10 s anyway — an
+/// uncapped growing window freezes partials on the utterance's opening words while paying
+/// O(window) mel cost per step.
+pub const DEFAULT_TAIL_WINDOW_SAMPLES: usize = 16_000 * 8; // 8 s
+
+/// Encoder length cap for the instant pass, in whisper encoder frames (~50 per second):
+/// 512 ≈ 10.24 s of coverage, margin over the 8 s tail. Engines size their fast path to
+/// this so partial encode cost is O(tail), not O(30 s model window).
+pub const PARTIAL_AUDIO_CTX_FRAMES: i32 = 512;
+
 #[derive(Debug, Clone)]
 pub struct PartialScheduler {
     stride: usize,
     min_window: usize,
+    tail_window: usize,
     total: usize,
     since_last: usize,
     inflight: bool,
@@ -31,10 +45,23 @@ impl PartialScheduler {
         Self {
             stride: stride.max(1),
             min_window,
+            tail_window: DEFAULT_TAIL_WINDOW_SAMPLES,
             total: 0,
             since_last: 0,
             inflight: false,
         }
+    }
+
+    /// Override the sliding tail length (tests / tuning).
+    pub fn with_tail_window(mut self, samples: usize) -> Self {
+        self.tail_window = samples.max(1);
+        self
+    }
+
+    /// Where the instant-pass decode window starts inside a snapshot of `window_len` samples:
+    /// callers slice `snapshot[start..]` so every partial decodes at most the tail window.
+    pub fn window_start(&self, window_len: usize) -> usize {
+        window_len.saturating_sub(self.tail_window)
     }
 
     /// New utterance boundary: forget all accumulated audio and any in-flight partial.
@@ -103,6 +130,22 @@ mod tests {
         s.on_complete();
         // Fresh audio since the last fire has piled up → next call fires immediately.
         assert!(s.on_audio(1));
+    }
+
+    #[test]
+    fn window_start_slides_only_past_the_tail() {
+        let s = PartialScheduler::new(4, 4).with_tail_window(100);
+        assert_eq!(s.window_start(40), 0, "short window: decode everything");
+        assert_eq!(s.window_start(100), 0, "exactly the tail: decode everything");
+        assert_eq!(s.window_start(260), 160, "long window: only the last 100");
+    }
+
+    #[test]
+    fn default_tail_matches_encoder_coverage() {
+        // The audio_ctx cap must cover the whole tail window, else the encoder drops audio
+        // we meant to decode: frames ≈ 50/s of audio.
+        let tail_secs = DEFAULT_TAIL_WINDOW_SAMPLES / 16_000;
+        assert!(PARTIAL_AUDIO_CTX_FRAMES as usize >= tail_secs * 50);
     }
 
     #[test]
