@@ -51,6 +51,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         router.overlay = overlay
         router.capture = capture
         router.uiQueue = .main
+        // Encrypted store (§24): key from the login keychain, DB at ~/.cadence/store.db.
+        // Nil (keychain refused / bad open) keeps the JSONL stand-in — never a gate.
+        let store = HistoryStore()
+        router.historyStore = store
+        HistoryReader.store = store
         router.engine = { [weak self] in self?.engine }
         router.statusUpdate = { [weak self] state in
             guard let self else { return }

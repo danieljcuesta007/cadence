@@ -197,6 +197,24 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    **idle model unload (<150 MB)** — designed, deferred (tension w/ ~7 s cold load, ADR-0006);
    asymmetric signature verify (needs signing key); full registry-resolve over FFI + a manifest
    in the shell.
-4. Real store (encrypted SQLite §24) + undo + per-app rules on the live spine (registry's
-   `ModelStore` trait already plugs in here).
+4. **Encrypted store SHIPPED (2026-07-18): first §24 slice live.** `core/store`
+   (`cadence-store`): SQLCipher via rusqlite `bundled-sqlcipher-vendored-openssl` (no system
+   deps, no admin), schema v1 = utterances (full §24 shape + `extra_json` for shell metrics)
+   + settings KV + app_rules + models tables, forward-only migrations via `user_version`.
+   Key custody: 32-byte random key in the login keychain (`dev.cadence.app`/`store-key`,
+   non-synchronizable — local-first), created on first launch by the shell; core sees raw
+   bytes only at open (SQLCipher raw-key pragma, no KDF latency). FFI: `cadence_store_open/
+   free/persist_json/recent_json/import_jsonl/string_free` (header updated). Shell:
+   `HistoryStore.swift`; router persists via store with **JSONL fallback on any failure
+   (AC-22 — store is an upgrade, never a gate)**; dashboard reads store-first. One-time
+   JSONL import on first launch: **verified live — 19 records imported, JSONL renamed
+   `.imported` (kept, not deleted)**. Encryption verified on the live files: 0 plaintext
+   hits in db+WAL (plaintext JSONL: 9), header is ciphertext. Wrong key fails closed
+   (BadKey), pinned by tests at both the crate and C-ABI layers. Tests 79/79.
+   Still §24-open: audio_blobs (audio retention off), dictionary/corrections/style/
+   redaction/sync tables, registry `ModelStore` impl over the models table, retention/purge.
+   E2E persist of a *new* dictation not yet observed live (user was active; next real
+   dictation is the check — `History & Metrics` should show it, and history.jsonl must NOT
+   reappear).
+5. Undo + per-app rules on the live spine (app_rules table ready).
 5. Windows environment → port insertion spike + this FFI (header already C-clean).

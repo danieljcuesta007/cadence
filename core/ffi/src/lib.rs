@@ -626,6 +626,163 @@ pub unsafe extern "C" fn cadence_engine_insertion_failed(
     });
 }
 
+// ---- encrypted store (§24) ----------------------------------------------------------
+//
+// Opaque handle over cadence-store. The shell owns the key (macOS Keychain) and passes raw
+// bytes; key material is never persisted here. All calls are panic-fenced like the engine's.
+
+/// Opaque store handle (a `cadence_store::Store` behind a mutex — the shell calls from
+/// its main thread and the effect router's queues).
+pub struct StoreHandle {
+    store: Mutex<cadence_store::Store>,
+}
+
+/// Open (or create) the encrypted store. `key` must be 32 bytes from the OS keychain.
+/// NULL on failure — see `cadence_last_error` (wrong key reports as such).
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_open(
+    db_path: *const c_char,
+    key: *const u8,
+    key_len: usize,
+) -> *mut StoreHandle {
+    guarded("cadence_store_open", || {
+        let Some(path) = cstr_arg(db_path) else {
+            set_last_error("db_path is NULL or not UTF-8".into());
+            return std::ptr::null_mut();
+        };
+        if key.is_null() {
+            set_last_error("key is NULL".into());
+            return std::ptr::null_mut();
+        }
+        let key = std::slice::from_raw_parts(key, key_len);
+        match cadence_store::Store::open(&path, key) {
+            Ok(store) => Box::into_raw(Box::new(StoreHandle {
+                store: Mutex::new(store),
+            })),
+            Err(e) => {
+                set_last_error(format!("store open ({path}): {e}"));
+                std::ptr::null_mut()
+            }
+        }
+    })
+    .unwrap_or(std::ptr::null_mut())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_free(store: *mut StoreHandle) {
+    if store.is_null() {
+        return;
+    }
+    guarded("cadence_store_free", || {
+        drop(Box::from_raw(store));
+    });
+}
+
+/// Persist one utterance from the shell's enriched history JSON (the same record the JSONL
+/// stand-in received). Returns false on failure — the caller MUST then fall back to JSONL
+/// so no words are ever lost (AC-22).
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_persist_json(
+    store: *mut StoreHandle,
+    record_json: *const c_char,
+) -> bool {
+    if store.is_null() {
+        set_last_error("cadence_store_persist_json: store is NULL".into());
+        return false;
+    }
+    guarded("cadence_store_persist_json", || {
+        let Some(json) = cstr_arg(record_json) else {
+            set_last_error("record_json is NULL or not UTF-8".into());
+            return false;
+        };
+        let store = &*store;
+        let result = cadence_store::UtteranceRecord::from_json(&json).and_then(|mut rec| {
+            // Session-scoped ids (utt-1, utt-2 …) repeat across launches: qualify by
+            // timestamp, same scheme as the JSONL import, so history never collides.
+            rec.id = format!("{}-{}", rec.id, rec.created_at_ms);
+            store.store.lock().unwrap().insert_utterance(&rec)
+        });
+        match result {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(format!("store persist: {e}"));
+                false
+            }
+        }
+    })
+    .unwrap_or(false)
+}
+
+/// Most recent utterances as a JSON array (dashboard feed), newest first. Caller frees the
+/// returned string with `cadence_string_free`. NULL on failure.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_recent_json(
+    store: *mut StoreHandle,
+    limit: usize,
+) -> *mut c_char {
+    if store.is_null() {
+        set_last_error("cadence_store_recent_json: store is NULL".into());
+        return std::ptr::null_mut();
+    }
+    guarded("cadence_store_recent_json", || {
+        let store = &*store;
+        match store.store.lock().unwrap().recent_utterances(limit) {
+            Ok(rows) => {
+                let arr: Vec<serde_json::Value> =
+                    rows.iter().map(cadence_store::UtteranceRecord::to_json).collect();
+                match CString::new(serde_json::Value::Array(arr).to_string()) {
+                    Ok(c) => c.into_raw(),
+                    Err(_) => std::ptr::null_mut(),
+                }
+            }
+            Err(e) => {
+                set_last_error(format!("store recent: {e}"));
+                std::ptr::null_mut()
+            }
+        }
+    })
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// One-time JSONL → store migration. Returns the number of records imported, or -1 on
+/// failure. Idempotent; the caller renames the JSONL aside only after a non-negative return.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_import_jsonl(
+    store: *mut StoreHandle,
+    jsonl_path: *const c_char,
+) -> i64 {
+    if store.is_null() {
+        set_last_error("cadence_store_import_jsonl: store is NULL".into());
+        return -1;
+    }
+    guarded("cadence_store_import_jsonl", || {
+        let Some(path) = cstr_arg(jsonl_path) else {
+            set_last_error("jsonl_path is NULL or not UTF-8".into());
+            return -1;
+        };
+        let store = &*store;
+        match store.store.lock().unwrap().import_jsonl(&path) {
+            Ok((imported, _skipped)) => imported as i64,
+            Err(e) => {
+                set_last_error(format!("store import ({path}): {e}"));
+                -1
+            }
+        }
+    })
+    .unwrap_or(-1)
+}
+
+/// Free a string returned by this library (currently `cadence_store_recent_json`).
+#[no_mangle]
+pub unsafe extern "C" fn cadence_string_free(s: *mut c_char) {
+    if s.is_null() {
+        return;
+    }
+    guarded("cadence_string_free", || {
+        drop(CString::from_raw(s));
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -925,5 +1082,48 @@ mod tests {
     fn new_engine_reports_version() {
         let v = unsafe { CStr::from_ptr(cadence_version()) };
         assert!(!v.to_str().unwrap().is_empty());
+    }
+
+    #[test]
+    fn store_roundtrip_over_c_abi() {
+        let mut db = std::env::temp_dir();
+        db.push(format!("cadence-ffi-store-{}.db", std::process::id()));
+        std::fs::remove_file(&db).ok();
+        let db_c = CString::new(db.to_str().unwrap()).unwrap();
+        let key = [7u8; 32];
+
+        let store = unsafe { cadence_store_open(db_c.as_ptr(), key.as_ptr(), key.len()) };
+        assert!(!store.is_null(), "open failed: {}", last_err());
+
+        let rec = CString::new(
+            r#"{"utterance":"utt-1","ts":"2026-07-18T23:00:00Z","app":"Notes","text":"over the c abi","inserted":true,"strategy":"direct","insertion_ms":40,"capture_start_ms":36}"#,
+        )
+        .unwrap();
+        assert!(unsafe { cadence_store_persist_json(store, rec.as_ptr()) }, "{}", last_err());
+
+        let json = unsafe { cadence_store_recent_json(store, 10) };
+        assert!(!json.is_null(), "{}", last_err());
+        let s = unsafe { CStr::from_ptr(json) }.to_str().unwrap().to_owned();
+        unsafe { cadence_string_free(json) };
+        let arr: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(arr[0]["text"], "over the c abi");
+        assert_eq!(arr[0]["capture_start_ms"], 36, "extra metric survived");
+
+        // Wrong key fails closed with a diagnostic, not a crash.
+        unsafe { cadence_store_free(store) };
+        let wrong = [8u8; 32];
+        let bad = unsafe { cadence_store_open(db_c.as_ptr(), wrong.as_ptr(), wrong.len()) };
+        assert!(bad.is_null());
+        assert!(last_err().contains("store open"), "unexpected: {}", last_err());
+
+        std::fs::remove_file(&db).ok();
+    }
+
+    fn last_err() -> String {
+        let p = cadence_last_error();
+        if p.is_null() {
+            return String::new();
+        }
+        unsafe { CStr::from_ptr(p) }.to_str().unwrap_or("").to_owned()
     }
 }

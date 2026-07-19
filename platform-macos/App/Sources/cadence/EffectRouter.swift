@@ -23,6 +23,8 @@ final class EffectRouter {
     var earconsEnabled = true
     /// Selftest hook: fires on fade-to-idle with the last inserted text (nil = none).
     var onIdle: ((String?) -> Void)?
+    /// Encrypted store (§24); nil (keychain/open failure) keeps the JSONL stand-in.
+    var historyStore: HistoryStore?
 
     private let insertionEngine = InsertionEngine()
     private let insertionQueue = DispatchQueue(label: "cadence.insertion", qos: .userInteractive)
@@ -107,7 +109,11 @@ final class EffectRouter {
                 self.log("words preserved on clipboard (\(text.count) chars)")
             }
         case "persist_utterance":
-            History.append(record: obj, text: lastInsertedText, metrics: takeMetrics())
+            if let store = historyStore {
+                store.persist(record: obj, text: lastInsertedText, metrics: takeMetrics())
+            } else {
+                History.append(record: obj, text: lastInsertedText, metrics: takeMetrics())
+            }
         case "arm_undo":
             break // dedicated undo hotkey lands with per-app rules (§32 Phase 1, later slice)
         case "schedule_fade_to_idle":

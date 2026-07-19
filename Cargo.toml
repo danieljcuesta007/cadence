@@ -6,6 +6,7 @@ members = [
     "core/asr",
     "core/cleanup",
     "core/models",
+    "core/store",
     "core/ffi",
     "tools/headless",
 ]

@@ -58,6 +58,27 @@ void cadence_engine_insertion_failed(CadenceEngine *engine, const char *utteranc
  * on this before cadence_engine_new (model integrity, §17.5). Streams the file. */
 bool cadence_model_verify(const char *model_path, const char *expected_sha256_hex);
 
+/* ---- encrypted store (§24) ----------------------------------------------------------
+ * SQLCipher-encrypted local history. The shell owns the 32-byte key (OS keychain) and
+ * passes raw bytes at open; key material never persists in the core. */
+typedef struct CadenceStore CadenceStore;
+
+/* NULL on failure (wrong key included) — see cadence_last_error(). */
+CadenceStore *cadence_store_open(const char *db_path, const uint8_t *key, size_t key_len);
+void cadence_store_free(CadenceStore *store);
+
+/* Persist one enriched history record (same JSON the JSONL stand-in received). On false,
+ * the caller MUST fall back to JSONL so no words are lost (AC-22). */
+bool cadence_store_persist_json(CadenceStore *store, const char *record_json);
+
+/* Newest-first JSON array for the dashboard. Free with cadence_string_free. NULL on error. */
+char *cadence_store_recent_json(CadenceStore *store, size_t limit);
+
+/* One-time JSONL import; idempotent. Returns records imported, or -1 on failure. */
+int64_t cadence_store_import_jsonl(CadenceStore *store, const char *jsonl_path);
+
+void cadence_string_free(char *s);
+
 /* Last error on the calling thread, or NULL. Valid until the next failing call. */
 const char *cadence_last_error(void);
 const char *cadence_version(void);
