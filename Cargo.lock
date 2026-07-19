@@ -121,6 +121,7 @@ dependencies = [
 name = "cadence-store"
 version = "0.0.1"
 dependencies = [
+ "cadence-models",
  "rusqlite",
  "serde",
  "serde_json",

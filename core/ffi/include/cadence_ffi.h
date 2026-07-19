@@ -77,6 +77,9 @@ char *cadence_store_recent_json(CadenceStore *store, size_t limit);
 /* One-time JSONL import; idempotent. Returns records imported, or -1 on failure. */
 int64_t cadence_store_import_jsonl(CadenceStore *store, const char *jsonl_path);
 
+/* Retention: purge utterances older than `days` (<=0 no-op). Rows purged, or -1. */
+int64_t cadence_store_purge_utterances(CadenceStore *store, int64_t days);
+
 /* Settings KV (§24). Get returns NULL when unset/error; free with cadence_string_free. */
 char *cadence_store_setting_get(CadenceStore *store, const char *key);
 bool cadence_store_setting_set(CadenceStore *store, const char *key, const char *value);

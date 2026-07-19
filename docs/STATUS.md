@@ -250,8 +250,12 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    scheduler latch, final jobs → AsrFailed) and retries next time. Regression-pinned:
    `idle_unload_reloads_transparently_on_next_dictation` (1 s unload window, full dictation
    after). 80/80 workspace + 11/11 FFI-whisper. Closes the last §28 idle-budget miss
-   pending live confirmation (footprint sampling across the 5-min threshold in
-   `qa/unload-verify.jsonl`; expect a drop from ~176–218 MB to well under 150 MB).
-7. §24 remainder: audio_blobs, dictionary/corrections/style/redaction/sync tables,
-   retention/purge, ModelStore-over-DB.
+   **CONFIRMED LIVE (qa/unload-verify.jsonl): 177 MB → 36 MB at exactly the 5-min mark —
+   §28 idle budget MET with 4× margin.** All three idle targets now green.
+7. **Retention + registry-over-DB (2026-07-18):** `purge_utterances_older_than_days`
+   (`retention_days` setting, unset/0 = keep forever; shell runs it at open via
+   `cadence_store_purge_utterances`) and `impl cadence_models::ModelStore for Store`
+   (schema v2: `models.bundled` column; save is transactional whole-set replace). v1→v2
+   migration ran clean on the live store. 82/82. §24 remainder: audio_blobs,
+   dictionary/corrections/style/redaction/sync tables; a Settings UI for retention.
 5. Windows environment → port insertion spike + this FFI (header already C-clean).

@@ -14,7 +14,7 @@ use rusqlite::{params, Connection, OpenFlags};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -255,6 +255,12 @@ impl Store {
                 "#,
             )?;
         }
+        if version < 2 {
+            // §17.5: the registry needs the bundled-golden flag to roll back to.
+            tx.execute_batch(
+                "ALTER TABLE models ADD COLUMN bundled INTEGER NOT NULL DEFAULT 0;",
+            )?;
+        }
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         tx.commit()?;
         Ok(())
@@ -359,6 +365,20 @@ impl Store {
         Ok((imported, skipped))
     }
 
+    /// Retention (§24/§ privacy: "configurable retention and auto-purge"): delete utterance
+    /// rows older than `days`. Returns rows purged. Callers read the `retention_days`
+    /// setting (0/absent = keep forever) and run this at open.
+    pub fn purge_utterances_older_than_days(&self, days: i64) -> Result<usize, StoreError> {
+        if days <= 0 {
+            return Ok(0);
+        }
+        let cutoff_ms = now_ms() - days * 86_400_000;
+        let n = self
+            .conn
+            .execute("DELETE FROM utterances WHERE created_at < ?1", [cutoff_ms])?;
+        Ok(n)
+    }
+
     // ---- settings ---------------------------------------------------------------------
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), StoreError> {
@@ -378,6 +398,106 @@ impl Store {
             })
             .optional()?)
     }
+}
+
+/// §17.5/§24: the model registry persisted in the encrypted store — `ModelRegistry` plugs
+/// in here in place of the JSON manifest. `save` replaces the whole set transactionally
+/// (the registry owns the entries; partial writes would corrupt rollback state).
+impl cadence_models::ModelStore for Store {
+    fn load(&self) -> Result<Vec<cadence_models::ModelEntry>, cadence_models::ModelError> {
+        let map_err = |e: rusqlite::Error| cadence_models::ModelError::Io {
+            path: self.path.display().to_string(),
+            msg: e.to_string(),
+        };
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, role, version, path, hash, active, size_bytes, bundled
+                 FROM models ORDER BY id",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, i64>(5)?,
+                    r.get::<_, i64>(6)?,
+                    r.get::<_, i64>(7)?,
+                ))
+            })
+            .map_err(map_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_err)?;
+        rows.into_iter()
+            .map(|(id, role, version, path, sha256, active, size, bundled)| {
+                let role = serde_json::from_value(serde_json::Value::String(role.clone()))
+                    .map_err(|e| cadence_models::ModelError::Io {
+                        path: self.path.display().to_string(),
+                        msg: format!("bad role '{role}' for model {id}: {e}"),
+                    })?;
+                Ok(cadence_models::ModelEntry {
+                    id,
+                    role,
+                    version,
+                    path: PathBuf::from(path),
+                    sha256,
+                    size_bytes: size as u64,
+                    active: active != 0,
+                    bundled: bundled != 0,
+                })
+            })
+            .collect()
+    }
+
+    fn save(
+        &self,
+        entries: &[cadence_models::ModelEntry],
+    ) -> Result<(), cadence_models::ModelError> {
+        let map_err = |e: rusqlite::Error| cadence_models::ModelError::Io {
+            path: self.path.display().to_string(),
+            msg: e.to_string(),
+        };
+        let tx = self.conn.unchecked_transaction().map_err(map_err)?;
+        tx.execute("DELETE FROM models", []).map_err(map_err)?;
+        for e in entries {
+            let role = match serde_json::to_value(e.role) {
+                Ok(serde_json::Value::String(s)) => s,
+                _ => {
+                    return Err(cadence_models::ModelError::Io {
+                        path: self.path.display().to_string(),
+                        msg: format!("unserializable role for model {}", e.id),
+                    })
+                }
+            };
+            tx.execute(
+                "INSERT INTO models (id, role, version, path, hash, active, size_bytes, bundled)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                params![
+                    e.id,
+                    role,
+                    e.version,
+                    e.path.display().to_string(),
+                    e.sha256,
+                    e.active as i64,
+                    e.size_bytes as i64,
+                    e.bundled as i64,
+                ],
+            )
+            .map_err(map_err)?;
+        }
+        tx.commit().map_err(map_err)
+    }
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 fn parse_iso8601_ms(s: &str) -> Option<i64> {
@@ -550,6 +670,68 @@ mod tests {
         let (again, _) = store.import_jsonl(&jsonl).unwrap();
         assert_eq!(again, 2);
         assert_eq!(store.utterance_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn retention_purges_only_old_rows() {
+        let path = tmp("retention.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        let old = UtteranceRecord {
+            id: "old".into(),
+            created_at_ms: now_ms() - 40 * 86_400_000,
+            ..Default::default()
+        };
+        let recent = UtteranceRecord {
+            id: "recent".into(),
+            created_at_ms: now_ms() - 86_400_000,
+            ..Default::default()
+        };
+        store.insert_utterance(&old).unwrap();
+        store.insert_utterance(&recent).unwrap();
+        assert_eq!(store.purge_utterances_older_than_days(30).unwrap(), 1);
+        let left = store.recent_utterances(10).unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].id, "recent");
+        // 0 = keep forever: a no-op by contract.
+        assert_eq!(store.purge_utterances_older_than_days(0).unwrap(), 0);
+    }
+
+    #[test]
+    fn model_registry_roundtrips_through_the_store() {
+        use cadence_models::{ModelEntry, ModelRole, ModelStore as _};
+        let path = tmp("models.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        let entries = vec![
+            ModelEntry {
+                id: "base.en".into(),
+                role: ModelRole::Asr,
+                version: "1".into(),
+                path: PathBuf::from("/models/ggml-base.en.bin"),
+                sha256: "a".repeat(64),
+                size_bytes: 147_964_211,
+                active: true,
+                bundled: true,
+            },
+            ModelEntry {
+                id: "rules-v1".into(),
+                role: ModelRole::Cleanup,
+                version: "1".into(),
+                path: PathBuf::from("/models/rules.bin"),
+                sha256: "b".repeat(64),
+                size_bytes: 0,
+                active: false,
+                bundled: false,
+            },
+        ];
+        store.save(&entries).unwrap();
+        let mut back = store.load().unwrap();
+        back.sort_by(|a, b| a.id.cmp(&b.id));
+        assert_eq!(back, entries);
+        // save replaces wholesale (registry owns the set).
+        store.save(&entries[..1]).unwrap();
+        assert_eq!(store.load().unwrap().len(), 1);
     }
 
     #[test]
