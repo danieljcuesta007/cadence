@@ -772,6 +772,63 @@ pub unsafe extern "C" fn cadence_store_import_jsonl(
     .unwrap_or(-1)
 }
 
+/// Read a settings value (§24 settings KV). NULL when unset or on error (see last_error).
+/// Caller frees with `cadence_string_free`.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_setting_get(
+    store: *mut StoreHandle,
+    key: *const c_char,
+) -> *mut c_char {
+    if store.is_null() {
+        set_last_error("cadence_store_setting_get: store is NULL".into());
+        return std::ptr::null_mut();
+    }
+    guarded("cadence_store_setting_get", || {
+        let Some(k) = cstr_arg(key) else {
+            set_last_error("key is NULL or not UTF-8".into());
+            return std::ptr::null_mut();
+        };
+        let store = &*store;
+        match store.store.lock().unwrap().get_setting(&k) {
+            Ok(Some(v)) => CString::new(v).map(CString::into_raw).unwrap_or(std::ptr::null_mut()),
+            Ok(None) => std::ptr::null_mut(),
+            Err(e) => {
+                set_last_error(format!("setting get ({k}): {e}"));
+                std::ptr::null_mut()
+            }
+        }
+    })
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Write a settings value (§24 settings KV). False on failure.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_setting_set(
+    store: *mut StoreHandle,
+    key: *const c_char,
+    value: *const c_char,
+) -> bool {
+    if store.is_null() {
+        set_last_error("cadence_store_setting_set: store is NULL".into());
+        return false;
+    }
+    guarded("cadence_store_setting_set", || {
+        let (Some(k), Some(v)) = (cstr_arg(key), cstr_arg(value)) else {
+            set_last_error("key/value is NULL or not UTF-8".into());
+            return false;
+        };
+        let store = &*store;
+        match store.store.lock().unwrap().set_setting(&k, &v) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(format!("setting set ({k}): {e}"));
+                false
+            }
+        }
+    })
+    .unwrap_or(false)
+}
+
 /// Free a string returned by this library (currently `cadence_store_recent_json`).
 #[no_mangle]
 pub unsafe extern "C" fn cadence_string_free(s: *mut c_char) {
@@ -1108,6 +1165,17 @@ mod tests {
         let arr: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(arr[0]["text"], "over the c abi");
         assert_eq!(arr[0]["capture_start_ms"], 36, "extra metric survived");
+
+        // Settings KV over the ABI (per-app rules ride on this).
+        let k = CString::new("disabled_apps").unwrap();
+        let v = CString::new(r#"["Terminal"]"#).unwrap();
+        assert!(unsafe { cadence_store_setting_set(store, k.as_ptr(), v.as_ptr()) });
+        let got = unsafe { cadence_store_setting_get(store, k.as_ptr()) };
+        assert!(!got.is_null());
+        assert_eq!(unsafe { CStr::from_ptr(got) }.to_str().unwrap(), r#"["Terminal"]"#);
+        unsafe { cadence_string_free(got) };
+        let missing = CString::new("never-set").unwrap();
+        assert!(unsafe { cadence_store_setting_get(store, missing.as_ptr()) }.is_null());
 
         // Wrong key fails closed with a diagnostic, not a crash.
         unsafe { cadence_store_free(store) };

@@ -20,9 +20,17 @@ public enum Strategy: String, Codable {
     case clipboardNotify  // words parked on the clipboard + notify (never lost)
 }
 
+/// Post-insert verification outcome (AC-20: "inserted" must not be a blind claim).
+public enum Verification: String, Codable {
+    case verified      // focused element's value readback contains the inserted text
+    case unverifiable  // element's value not readable (AX-opaque: web views, canvases…)
+    case contradicted  // value readable and the text is NOT there — the paste was swallowed
+}
+
 public struct InsertionResult: Codable {
     public var strategy: Strategy
     public var inserted: Bool
+    public var verification: Verification
     public var clipboardRestored: Bool
     public var refusedSecureField: Bool
     public var elapsedMs: Int
@@ -93,11 +101,12 @@ public final class InsertionEngine {
 
     public func insert(_ text: String) -> InsertionResult {
         let start = Date()
-        func done(_ s: Strategy, _ ok: Bool, restored: Bool, refused: Bool = false,
+        func done(_ s: Strategy, _ ok: Bool, verify: Verification = .unverifiable,
+                  restored: Bool, refused: Bool = false,
                   _ detail: String) -> InsertionResult {
             InsertionResult(
-                strategy: s, inserted: ok, clipboardRestored: restored,
-                refusedSecureField: refused,
+                strategy: s, inserted: ok, verification: verify,
+                clipboardRestored: restored, refusedSecureField: refused,
                 elapsedMs: Int(Date().timeIntervalSince(start) * 1000), detail: detail)
         }
 
@@ -117,7 +126,11 @@ public final class InsertionEngine {
             let deadline = timeoutMs
             let axTimeout = self.axTimeout
             if let ok = withDeadline(deadline, { directInsert(text, axTimeout: axTimeout) }) {
-                if ok { return done(.direct, true, restored: true, "AX selected-text replace") }
+                // directInsert already readback-verifies when the value is readable.
+                if ok {
+                    return done(.direct, true, verify: .verified, restored: true,
+                                "AX selected-text replace")
+                }
             } else {
                 // Deadline expired: the target was slow — we abandoned the attempt without
                 // blocking anyone. Fall through to paste.
@@ -126,8 +139,19 @@ public final class InsertionEngine {
             // Strategy 2: synthetic ⌘V with clipboard snapshot/restore.
             let pasted = pasteWithRestore(text, deadlineMs: deadline)
             if pasted.pasted {
-                return done(.pasteRestore, true, restored: pasted.restored,
-                            pasted.detail)
+                switch pasted.verification {
+                case .contradicted:
+                    // AC-20 blind-paste gap (found live in Pages page-layout): the target
+                    // readably does NOT contain the text — the paste was swallowed. The
+                    // words are already parked on the clipboard (restore was skipped);
+                    // report not-inserted so the caller notifies instead of celebrating.
+                    return done(.clipboardNotify, false, verify: .contradicted,
+                                restored: false,
+                                "paste swallowed by target (readback missing) — text left on clipboard")
+                case .verified, .unverifiable:
+                    return done(.pasteRestore, true, verify: pasted.verification,
+                                restored: pasted.restored, pasted.detail)
+                }
             }
         }
 
@@ -145,6 +169,7 @@ public final class InsertionEngine {
     struct PasteOutcome {
         var pasted: Bool
         var restored: Bool
+        var verification: Verification
         var detail: String
     }
 
@@ -160,6 +185,7 @@ public final class InsertionEngine {
             // Could not synthesize the keystroke: undo our clipboard write immediately.
             let restored = snapshot.restore(to: pb, ifChangeCountStill: ourChangeCount)
             return PasteOutcome(pasted: false, restored: restored,
+                                verification: .unverifiable,
                                 detail: "CGEvent post failed; clipboard restored")
         }
 
@@ -167,11 +193,42 @@ public final class InsertionEngine {
         // *our* latency only; the target processes ⌘V on its own schedule and is never blocked.
         Thread.sleep(forTimeInterval: Double(min(deadlineMs, 250)) / 1000.0)
 
+        // AC-20 post-insert verification, BEFORE the clipboard restore so a swallowed paste
+        // can keep the words parked (never lost). Readback is best-effort: only a readable
+        // focused value can confirm or deny; opaque targets stay "unverifiable" and are
+        // trusted as before (VS Code, web views and Spotlight land pastes AX-opaquely).
+        let verification = verifyLanded(text)
+        if verification == .contradicted {
+            // Leave OUR text on the clipboard (do not restore): the user was just told
+            // nothing was inserted — the words must be one ⌘V away (§29).
+            return PasteOutcome(pasted: true, restored: false, verification: .contradicted,
+                                detail: "readback contradicts paste")
+        }
+
         let restored = snapshot.restore(to: pb, ifChangeCountStill: ourChangeCount)
         return PasteOutcome(
-            pasted: true, restored: restored,
+            pasted: true, restored: restored, verification: verification,
             detail: restored ? "pasted; prior clipboard restored"
                              : "pasted; clipboard changed by another app mid-flight — left alone")
+    }
+
+    /// Best-effort readback of the focused element after a paste. `verified` only when the
+    /// value is readable AND contains the text; `contradicted` only when readable and the
+    /// text is absent (checked via a tail sample — values can be huge). Everything else is
+    /// `unverifiable` — never treated as failure.
+    func verifyLanded(_ text: String) -> Verification {
+        let probe = String(text.suffix(64))
+        guard !probe.isEmpty,
+            let outcome = withDeadline(timeoutMs, { () -> Verification in
+                guard let el = focusedElement() else { return .unverifiable }
+                AXUIElementSetMessagingTimeout(el, self.axTimeout)
+                guard let value = axString(el, kAXValueAttribute), !value.isEmpty else {
+                    return .unverifiable
+                }
+                return value.contains(probe) ? .verified : .contradicted
+            })
+        else { return .unverifiable }
+        return outcome
     }
 
     func postCmdV() -> Bool {

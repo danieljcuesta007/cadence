@@ -10,7 +10,7 @@ import IOKit.hid
 
 // MARK: - Menu-bar agent
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let config: Config
     var statusItem: NSStatusItem!
     let stateMenuItem = NSMenuItem(title: "Idle", action: nil, keyEquivalent: "")
@@ -20,6 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let hotkeys = HotkeyMonitor()
     var engine: CoreEngine?
     var pttDownAt: Date?
+    var historyStore: HistoryStore?
+    /// PTT-down reads this cache, never the DB (§28: the hot path stays hot).
+    var disabledApps: Set<String> = []
+    let disableItem = NSMenuItem(title: "Disable in This App", action: nil, keyEquivalent: "")
+    /// Frontmost app captured when the menu opens (stable while it's held open).
+    var menuFrontApp: String?
+    /// A PTT-down swallowed by a per-app rule must also swallow its up.
+    var pttSwallowed = false
     // Held during an utterance: App Nap must never throttle a decode mid-dictation
     // (§28 latency budgets; suspected cause of a one-off 30 s Metal stall in testing).
     var activity: NSObjectProtocol?
@@ -43,9 +51,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             title: "History & Metrics…", action: #selector(showDashboard), keyEquivalent: "d")
         dashItem.target = self
         menu.addItem(dashItem)
+        let undoItem = NSMenuItem(
+            title: "Undo Last Dictation", action: #selector(undoLast), keyEquivalent: "z")
+        undoItem.keyEquivalentModifierMask = [.control, .option, .command]
+        undoItem.target = self
+        menu.addItem(undoItem)
+        menu.addItem(.separator())
+        // Per-app rule (§7 per-app overrides, first slice): toggle dictation for whatever
+        // app is frontmost when the menu opens (we're an LSUIElement — opening the menu
+        // does not steal frontmost). Title/state refresh in menuNeedsUpdate.
+        disableItem.action = #selector(toggleDisableFrontApp)
+        disableItem.target = self
+        menu.addItem(disableItem)
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit Cadence", action: #selector(quit), keyEquivalent: "q"))
+        menu.delegate = self
         statusItem.menu = menu
 
         router.overlay = overlay
@@ -54,8 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Encrypted store (§24): key from the login keychain, DB at ~/.cadence/store.db.
         // Nil (keychain refused / bad open) keeps the JSONL stand-in — never a gate.
         let store = HistoryStore()
+        historyStore = store
         router.historyStore = store
         HistoryReader.store = store
+        disabledApps = store?.disabledApps() ?? []
         router.engine = { [weak self] in self?.engine }
         router.statusUpdate = { [weak self] state in
             guard let self else { return }
@@ -70,6 +93,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.isActive = { [weak self] in (self?.router.activeState ?? "idle") != "idle" }
         hotkeys.onPTTDown = { [weak self] in
             guard let self else { return }
+            // Per-app rule: dictation is off here — say so briefly, touch nothing else.
+            let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+            if self.disabledApps.contains(front) {
+                self.pttSwallowed = true
+                self.overlay.show(state: "disabled", chip: nil)
+                self.overlay.scheduleFade(after: 0.9)
+                return
+            }
             self.pttDownAt = Date()
             if self.activity == nil {
                 self.activity = ProcessInfo.processInfo.beginActivity(
@@ -77,8 +108,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.engine?.triggerDown(verbatim: self.config.verbatim)
         }
-        hotkeys.onPTTUp = { [weak self] in self?.engine?.triggerUp() }
+        hotkeys.onPTTUp = { [weak self] in
+            guard let self else { return }
+            // Symmetry with the gate above: a swallowed down means nothing to stop.
+            if self.pttSwallowed {
+                self.pttSwallowed = false
+                return
+            }
+            self.engine?.triggerUp()
+        }
         hotkeys.onCancel = { [weak self] in self?.engine?.cancel() }
+        hotkeys.onUndo = { [weak self] in self?.router.undoLastInsertion() }
         startHotkeysOrOnboard()
 
         capture.onChunk = { [weak self] samples, level in
@@ -179,6 +219,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var dashboard: DashboardWindowController?
+
+    // MARK: menu
+
+    /// Refresh the per-app toggle for whatever is frontmost as the menu opens. We're an
+    /// LSUIElement, so opening our menu leaves the user's app frontmost.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let front = NSWorkspace.shared.frontmostApplication?.localizedName
+        menuFrontApp = front
+        if let front, historyStore != nil {
+            let off = disabledApps.contains(front)
+            disableItem.title = off ? "Enable in \(front)" : "Disable in \(front)"
+            disableItem.state = off ? .on : .off
+            disableItem.isEnabled = true
+        } else {
+            disableItem.title = "Disable in This App"
+            disableItem.isEnabled = false
+        }
+    }
+
+    @objc func toggleDisableFrontApp() {
+        guard let app = menuFrontApp, let store = historyStore else { return }
+        let nowDisabled = !disabledApps.contains(app)
+        store.setApp(app, disabled: nowDisabled)
+        disabledApps = store.disabledApps()
+        router.log("per-app rule: \(app) → \(nowDisabled ? "disabled" : "enabled")")
+    }
+
+    @objc func undoLast() {
+        router.undoLastInsertion()
+    }
 
     @objc func showDashboard() {
         if dashboard == nil { dashboard = DashboardWindowController() }

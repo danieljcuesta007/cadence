@@ -37,6 +37,52 @@ final class EffectRouter {
     private let metricsLock = NSLock()
     private var utteranceMetrics: [String: Any] = [:]
 
+    // §26/F21 undo state: written on insertionQueue, armed on the core thread, fired on
+    // main (hotkey/menu) — lock-guarded.
+    struct UndoRecord {
+        let app: String
+        let text: String
+        let at: Date
+        var armed: Bool
+    }
+    private let undoLock = NSLock()
+    private var undoRecord: UndoRecord?
+
+    /// F21: revert the last dictation. Insertions land as a single undoable unit (one paste
+    /// / one AX set), so a ⌘Z aimed at the same app reverts exactly that unit. Guards: must
+    /// be armed (core confirmed the utterance completed), same app still frontmost, fresh
+    /// (≤ 2 min), and no dictation mid-flight. Main thread (hotkey/menu).
+    func undoLastInsertion() {
+        undoLock.lock()
+        let rec = undoRecord
+        undoLock.unlock()
+        guard activeState == "idle", let rec, rec.armed else {
+            log("undo: nothing armed")
+            return
+        }
+        guard Date().timeIntervalSince(rec.at) <= 120 else {
+            log("undo: record stale (>2 min) — refusing")
+            return
+        }
+        let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+        guard front == rec.app else {
+            log("undo: frontmost is \(front), inserted into \(rec.app) — refusing")
+            overlay?.show(state: "switch to \(rec.app) to undo", chip: nil)
+            overlay?.scheduleFade(after: 1.2)
+            return
+        }
+        guard postKey(CGKeyCode(6 /* kVK_ANSI_Z */), flags: .maskCommand) else {
+            log("undo: CGEvent post failed")
+            return
+        }
+        undoLock.lock()
+        undoRecord = nil
+        undoLock.unlock()
+        log("undo: sent ⌘Z to \(front) (\(rec.text.count) chars)")
+        overlay?.show(state: "undone", chip: nil)
+        overlay?.scheduleFade(after: 0.9)
+    }
+
     private func setMetric(_ key: String, _ value: Any) {
         metricsLock.lock()
         utteranceMetrics[key] = value
@@ -115,7 +161,9 @@ final class EffectRouter {
                 History.append(record: obj, text: lastInsertedText, metrics: takeMetrics())
             }
         case "arm_undo":
-            break // dedicated undo hotkey lands with per-app rules (§32 Phase 1, later slice)
+            undoLock.lock()
+            undoRecord?.armed = true
+            undoLock.unlock()
         case "schedule_fade_to_idle":
             onUI {
                 self.activeState = "idle"
@@ -175,11 +223,20 @@ final class EffectRouter {
         case .pasteRestore: strategy = "paste_restore"
         case .clipboardNotify: strategy = "clipboard_notify"
         }
+        let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
         setMetric("insertion_ms", result.elapsedMs)
         setMetric("strategy", strategy)
-        setMetric("app", NSWorkspace.shared.frontmostApplication?.localizedName ?? "")
+        setMetric("app", app)
+        setMetric("verification", result.verification.rawValue)
+        if result.inserted {
+            // §26 undo state: what went where. arm_undo (post-insert) makes it fireable.
+            undoLock.lock()
+            undoRecord = UndoRecord(app: app, text: text, at: Date(), armed: false)
+            undoLock.unlock()
+        }
         log(
             "insertion: \(strategy) inserted=\(result.inserted) "
+                + "verify=\(result.verification.rawValue) "
                 + "clipboardRestored=\(result.clipboardRestored) \(result.elapsedMs) ms")
         engine()?.insertionResult(
             utterance: utterance, strategy: strategy, inserted: result.inserted,

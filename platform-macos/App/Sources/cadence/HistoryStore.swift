@@ -116,6 +116,35 @@ final class HistoryStore {
         }
     }
 
+    // MARK: per-app rules (first slice: a disabled-apps list in the settings KV)
+
+    private static let disabledKey = "disabled_apps"
+
+    /// Apps (by localized name) where dictation is switched off. Read once at launch and
+    /// after each toggle — PTT-down checks the cached set, never the DB.
+    func disabledApps() -> Set<String> {
+        guard let handle, let c = cadence_store_setting_get(handle, Self.disabledKey)
+        else { return [] }
+        defer { cadence_string_free(c) }
+        guard let data = String(cString: c).data(using: .utf8),
+            let arr = (try? JSONSerialization.jsonObject(with: data)) as? [String]
+        else { return [] }
+        return Set(arr)
+    }
+
+    func setApp(_ app: String, disabled: Bool) {
+        guard let handle else { return }
+        var apps = disabledApps()
+        if disabled { apps.insert(app) } else { apps.remove(app) }
+        guard let data = try? JSONSerialization.data(withJSONObject: Array(apps).sorted()),
+            let json = String(data: data, encoding: .utf8)
+        else { return }
+        if !cadence_store_setting_set(handle, Self.disabledKey, json) {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("app rule save failed: \(msg)")
+        }
+    }
+
     /// One-time migration: fold the JSONL stand-in into the store, then rename it aside so
     /// the import never runs twice (and the plaintext stops accumulating). The file is
     /// renamed, not deleted — it is the user's dictation history (do-not-destroy).

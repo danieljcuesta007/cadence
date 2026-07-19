@@ -77,6 +77,10 @@ char *cadence_store_recent_json(CadenceStore *store, size_t limit);
 /* One-time JSONL import; idempotent. Returns records imported, or -1 on failure. */
 int64_t cadence_store_import_jsonl(CadenceStore *store, const char *jsonl_path);
 
+/* Settings KV (§24). Get returns NULL when unset/error; free with cadence_string_free. */
+char *cadence_store_setting_get(CadenceStore *store, const char *key);
+bool cadence_store_setting_set(CadenceStore *store, const char *key, const char *value);
+
 void cadence_string_free(char *s);
 
 /* Last error on the calling thread, or NULL. Valid until the next failing call. */
