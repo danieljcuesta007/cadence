@@ -32,7 +32,9 @@ public enum CaptureError: Error, CustomStringConvertible {
 }
 
 public final class AudioCapture {
-    private let engine = AVAudioEngine()
+    // var, not let: recreated outright when a route change leaves it serving stale
+    // formats (reset() proved insufficient live — see start()).
+    private var engine = AVAudioEngine()
     private var running = false
     private var tapInstalled = false
     private var tapFormat: AVAudioFormat?
@@ -76,13 +78,11 @@ public final class AudioCapture {
         do {
             try startOnce()
         } catch {
-            // Route may have changed under a stale tap. A plain rebuild is NOT enough:
-            // inputNode.outputFormat(forBus:) can keep serving the old sample rate until
-            // the engine is reset, so the re-installed tap raises the same
-            // format.sampleRate mismatch (bit us live 2026-07-19 10:43). Hard-reset to
-            // force a re-query of the true hardware format, then rebuild and retry once.
-            teardownTap()
-            engine.reset()
+            // Route changed under a stale tap. reset() proved insufficient live
+            // (2026-07-19 13:03–13:06: four consecutive tap rejections, every dictation
+            // cancelling) — an AVAudioEngine can keep serving stale formats for the life
+            // of the object. Recreate it outright and retry once.
+            recreateEngine()
             try startOnce()
         }
         running = true
@@ -91,6 +91,21 @@ public final class AudioCapture {
     private func startOnce() throws {
         try ensureTap()
         do { try engine.start() } catch { throw CaptureError.engineStart(error) }
+    }
+
+    /// Nuclear route-change recovery: discard the engine (its tap dies with it) and start
+    /// clean. The config-change observer is engine-bound, so it is re-registered by the
+    /// next ensureTap.
+    private func recreateEngine() {
+        if let o = routeChangeObserver {
+            NotificationCenter.default.removeObserver(o)
+            routeChangeObserver = nil
+        }
+        rebuildWork?.cancel()
+        engine.stop()
+        tapInstalled = false
+        tapFormat = nil
+        engine = AVAudioEngine()
     }
 
     /// Synchronous stop. After return, in-flight tap callbacks have had time to land their
@@ -111,7 +126,7 @@ public final class AudioCapture {
         if tapInstalled {
             // Trust the format, not the flag: a route change the observer missed (or one
             // that landed mid-debounce) leaves a tap bound to the old sample rate.
-            let current = engine.inputNode.outputFormat(forBus: 0)
+            let current = engine.inputNode.inputFormat(forBus: 0)
             if let f = tapFormat, f.sampleRate == current.sampleRate,
                 f.channelCount == current.channelCount {
                 return
@@ -119,7 +134,11 @@ public final class AudioCapture {
             teardownTap()
         }
         let input = engine.inputNode
-        let inFormat = input.outputFormat(forBus: 0)
+        // The HARDWARE format, not outputFormat(forBus:): installTap asserts
+        // format.sampleRate == inputHWFormat.sampleRate, and the output side can serve a
+        // stale rate after a route change (the exact repeated live failure) while
+        // inputFormat is the source of truth the assert compares against.
+        let inFormat = input.inputFormat(forBus: 0)
         // channelCount too: mid-route-change the node can report 48 kHz / 0 ch, and
         // installTap raises on it.
         guard inFormat.sampleRate > 0, inFormat.channelCount > 0,
