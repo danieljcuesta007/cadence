@@ -1,0 +1,179 @@
+{
+ "generated": "2026-07-19T03:55:33Z",
+ "results": {
+  "models/artifacts/ggml-base.en.bin": {
+   "wer": 0.07111111111111111,
+   "errors": 16,
+   "ref_words": 225,
+   "asr_ms_mean": 146.8,
+   "asr_ms_max": 206,
+   "fixtures": [
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 16,
+     "errors": 0,
+     "wav": "s01.wav",
+     "hyp": "Hey, just checking in about tomorrow's meeting. Can we push it to 3.30 instead?",
+     "asr_ms": 159
+    },
+    {
+     "wer": 0.2,
+     "sub": 0,
+     "del": 3,
+     "ins": 0,
+     "ref_words": 15,
+     "errors": 3,
+     "wav": "s02.wav",
+     "hyp": "quarterly numbers look strong, revenue grew 12% and churn dropped below 2%.",
+     "asr_ms": 169
+    },
+    {
+     "wer": 0.16666666666666666,
+     "sub": 1,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 12,
+     "errors": 2,
+     "wav": "d01.wav",
+     "hyp": "Please send the invoice to accounts payable by Friday 21.",
+     "asr_ms": 120
+    },
+    {
+     "wer": 0.16666666666666666,
+     "sub": 2,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 18,
+     "errors": 3,
+     "wav": "d02.wav",
+     "hyp": "I think the route causes a race condition between the audio callback and the ring buffer clear.",
+     "asr_ms": 118
+    },
+    {
+     "wer": 0.25,
+     "sub": 2,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 12,
+     "errors": 3,
+     "wav": "k01.wav",
+     "hyp": "Admilk, Eggs, Sowidow Bread, and 2 Avocados to the shopping list",
+     "asr_ms": 154
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 17,
+     "errors": 0,
+     "wav": "k02.wav",
+     "hyp": "The flight departs Sydney at 6.45 in the morning and lands in Auckland around noon.",
+     "asr_ms": 143
+    },
+    {
+     "wer": 0.07142857142857142,
+     "sub": 1,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 14,
+     "errors": 1,
+     "wav": "m01.wav",
+     "hyp": "Let's schedule the design review for Wednesday afternoon in the LOUGE conference room.",
+     "asr_ms": 179
+    },
+    {
+     "wer": 0.07692307692307693,
+     "sub": 0,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 13,
+     "errors": 1,
+     "wav": "t01.wav",
+     "hyp": "The new model reduces latency by roughly 40% while keeping accuracy unchanged.",
+     "asr_ms": 132
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 18,
+     "errors": 0,
+     "wav": "s03.wav",
+     "hyp": "Dear team, thank you all for the incredible effort on the launch. Take Friday off, you earned it.",
+     "asr_ms": 206
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 14,
+     "errors": 0,
+     "wav": "d03.wav",
+     "hyp": "Navigate to settings, then privacy and security, then microphone, and enable access for cadence.",
+     "asr_ms": 124
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 15,
+     "errors": 0,
+     "wav": "k03.wav",
+     "hyp": "My address is 42 Wallaby Way, apartment 7, and the postcode is 2000.",
+     "asr_ms": 119
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 17,
+     "errors": 0,
+     "wav": "m02.wav",
+     "hyp": "The recipe needs two cups of flour, a teaspoon of baking soda, and a pinch of salt.",
+     "asr_ms": 147
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 17,
+     "errors": 0,
+     "wav": "s04.wav",
+     "hyp": "Honestly the fastest fix is to revert the merge, cut a patch release, and investigate on Monday.",
+     "asr_ms": 129
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 15,
+     "errors": 0,
+     "wav": "t02.wav",
+     "hyp": "encryption keys live in the keychain and the database is never written in plain text.",
+     "asr_ms": 128
+    },
+    {
+     "wer": 0.25,
+     "sub": 2,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 12,
+     "errors": 3,
+     "wav": "f01.wav",
+     "hyp": "The train to Boston leaves from platform 9 at F-S4.",
+     "asr_ms": 175
+    }
+   ]
+  }
+ }
+}
