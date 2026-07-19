@@ -79,15 +79,22 @@ final class HistoryStore {
     }
 
     /// §24 retention: `retention_days` setting (unset/0 = keep forever). Runs at launch.
+    /// Expired audio blobs are purged unconditionally — their `purge_after` deadline was
+    /// stamped at write time, independent of the transcript window.
     private func applyRetention() {
-        guard let handle,
-            let c = cadence_store_setting_get(handle, "retention_days")
-        else { return }
-        defer { cadence_string_free(c) }
-        guard let days = Int64(String(cString: c)), days > 0 else { return }
-        let purged = cadence_store_purge_utterances(handle, days)
-        if purged > 0 {
-            LogFile.append("store: retention purged \(purged) utterances (> \(days) days)")
+        guard let handle else { return }
+        if let c = cadence_store_setting_get(handle, "retention_days") {
+            defer { cadence_string_free(c) }
+            if let days = Int64(String(cString: c)), days > 0 {
+                let purged = cadence_store_purge_utterances(handle, days)
+                if purged > 0 {
+                    LogFile.append("store: retention purged \(purged) utterances (> \(days) days)")
+                }
+            }
+        }
+        let audioPurged = cadence_store_audio_purge_expired(handle)
+        if audioPurged > 0 {
+            LogFile.append("store: purged \(audioPurged) expired audio blobs")
         }
     }
 
@@ -96,15 +103,42 @@ final class HistoryStore {
     }
 
     /// Persist the enriched history record; falls back to JSONL on any failure (AC-22).
-    /// Async on the store queue — never blocks the effect router.
-    func persist(record: [String: Any], text: String?, metrics: [String: Any]) {
+    /// Async on the store queue — never blocks the effect router. `audio` is the utterance's
+    /// 16 kHz mono capture, retained as an encrypted WAV blob only when the user opted in
+    /// (§24; the router passes nil otherwise). Audio is best-effort: a blob failure costs
+    /// the audio, never the words.
+    func persist(
+        record: [String: Any], text: String?, metrics: [String: Any], audio: [Int16]? = nil
+    ) {
         var rec = record
         rec["text"] = text
         rec["ts"] = ISO8601DateFormatter().string(from: Date())
         rec.merge(metrics) { current, _ in current }
         queue.async { [weak self] in
-            guard let self, let handle = self.handle,
-                let data = try? JSONSerialization.data(withJSONObject: rec),
+            guard let self, let handle = self.handle else {
+                History.append(record: record, text: text, metrics: metrics)
+                return
+            }
+            // Blob first so the record can carry the link. Redacted utterances never
+            // retain audio — the raw capture would keep what redaction removed.
+            if let audio, !audio.isEmpty, (rec["redacted"] as? Bool) != true {
+                let blobId = "audio-" + UUID().uuidString
+                let wav = WavWriter.data(from: audio)
+                let ok = wav.withUnsafeBytes { raw -> Bool in
+                    guard let base = raw.bindMemory(to: UInt8.self).baseAddress else {
+                        return false
+                    }
+                    return cadence_store_audio_put(
+                        handle, blobId, base, raw.count, self.audioPurgeDeadlineMs())
+                }
+                if ok {
+                    rec["audio_blob_id"] = blobId
+                } else {
+                    let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+                    LogFile.append("audio blob put failed (keeping transcript): \(msg)")
+                }
+            }
+            guard let data = try? JSONSerialization.data(withJSONObject: rec),
                 let json = String(data: data, encoding: .utf8),
                 cadence_store_persist_json(handle, json)
             else {
@@ -114,6 +148,39 @@ final class HistoryStore {
                 return
             }
         }
+    }
+
+    // MARK: retained audio (§24, opt-in; off by default)
+
+    private static let retainAudioKey = "retain_audio"
+
+    var retainAudioEnabled: Bool {
+        guard let handle, let c = cadence_store_setting_get(handle, Self.retainAudioKey)
+        else { return false }
+        defer { cadence_string_free(c) }
+        return String(cString: c) == "on"
+    }
+
+    func setRetainAudio(_ on: Bool) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, Self.retainAudioKey, on ? "on" : "off") {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("retain_audio save failed: \(msg)")
+        }
+    }
+
+    /// Absolute purge deadline for a blob written now. `audio_retention_days` wins when
+    /// set (0 = keep until the utterance goes); otherwise the transcript's
+    /// `retention_days` window applies; 0 = no per-blob deadline.
+    private func audioPurgeDeadlineMs() -> Int64 {
+        for key in ["audio_retention_days", "retention_days"] {
+            guard let handle, let c = cadence_store_setting_get(handle, key) else { continue }
+            defer { cadence_string_free(c) }
+            guard let days = Int64(String(cString: c)) else { continue }
+            return days > 0
+                ? Int64(Date().timeIntervalSince1970 * 1000) + days * 86_400_000 : 0
+        }
+        return 0
     }
 
     /// Newest-first history for the dashboard. Synchronous (dashboard opens on demand).

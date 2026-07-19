@@ -4,8 +4,9 @@
 //! OS keychain and passes raw key bytes at open (hex-encoded into the `PRAGMA key` below).
 //! Schema versioning via `PRAGMA user_version`; migrations are forward-only and idempotent
 //! per version. This slice covers what the app writes today — utterance history, settings
-//! KV, per-app rules, and the model-registry manifest — with the rest of the §24 tables
-//! (dictionary, corrections, style, redaction, sync) landing with their features.
+//! KV, per-app rules, the model-registry manifest, and opt-in retained audio — with the
+//! rest of the §24 tables (dictionary, corrections, style, redaction, sync) landing with
+//! their features.
 //!
 //! AC-22 posture: an utterance INSERT failure must never lose words — callers keep the
 //! JSONL fallback for exactly that error path.
@@ -14,7 +15,7 @@ use rusqlite::{params, Connection, OpenFlags};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -39,6 +40,8 @@ pub struct UtteranceRecord {
     pub processing_location: Option<String>,
     pub language: Option<String>,
     pub duration_ms: Option<i64>,
+    /// FK into `audio_blobs`; None when audio was not retained for this utterance.
+    pub audio_blob_id: Option<String>,
     pub transcript_instant: Option<String>,
     pub transcript_final: Option<String>,
     pub output_text: Option<String>,
@@ -86,6 +89,7 @@ impl UtteranceRecord {
             "redacted",
             "word_count",
             "latency_ms",
+            "audio_blob_id",
         ];
         let extra: serde_json::Map<String, serde_json::Value> = obj
             .iter()
@@ -101,6 +105,7 @@ impl UtteranceRecord {
             processing_location: s("location"),
             language: s("language"),
             duration_ms: n("capture_window_ms"),
+            audio_blob_id: s("audio_blob_id"),
             transcript_instant: None,
             transcript_final: None,
             word_count: n("word_count").or_else(|| {
@@ -135,6 +140,7 @@ impl UtteranceRecord {
         put("location", self.processing_location.clone().into());
         put("language", self.language.clone().into());
         put("capture_window_ms", self.duration_ms.into());
+        put("audio_blob_id", self.audio_blob_id.clone().into());
         put("text", self.output_text.clone().into());
         put("inserted", self.inserted_ok.into());
         put("strategy", self.insertion_strategy.clone().into());
@@ -187,6 +193,9 @@ impl Store {
         }
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
+        // §24 "hard delete + secure blob erase": freed pages are zeroed, not just unlinked,
+        // so a purged audio blob leaves no (even ciphertext) residue in the file.
+        conn.pragma_update(None, "secure_delete", "ON")?;
         let mut store = Self {
             conn,
             path: path.as_ref().to_owned(),
@@ -261,6 +270,25 @@ impl Store {
                 "ALTER TABLE models ADD COLUMN bundled INTEGER NOT NULL DEFAULT 0;",
             )?;
         }
+        if version < 3 {
+            // §24 audio_blobs. Deviation from the blueprint sketch (which had `path TEXT`):
+            // audio lives in-row as a BLOB so it sits under the same SQLCipher key as the
+            // transcripts — a sidecar file would need its own encryption and key custody.
+            // `purge_after` (epoch ms, NULL = tied to the utterance's lifetime) drives the
+            // §24 retention job; deletes are hard deletes and `secure_delete=ON` (set at
+            // open) zeroes freed pages for the "secure blob erase" clause.
+            tx.execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS audio_blobs(
+                    id TEXT PRIMARY KEY,
+                    data BLOB NOT NULL,
+                    bytes INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    purge_after INTEGER
+                );
+                "#,
+            )?;
+        }
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         tx.commit()?;
         Ok(())
@@ -275,9 +303,9 @@ impl Store {
         self.conn.execute(
             r#"INSERT OR REPLACE INTO utterances
                (id, created_at, app_bundle_id, mode, processing_location, language,
-                duration_ms, transcript_instant, transcript_final, output_text,
+                duration_ms, audio_blob_id, transcript_instant, transcript_final, output_text,
                 inserted_ok, insertion_strategy, redacted, word_count, latency_ms, extra_json)
-               VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)"#,
+               VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)"#,
             params![
                 rec.id,
                 rec.created_at_ms,
@@ -286,6 +314,7 @@ impl Store {
                 rec.processing_location,
                 rec.language,
                 rec.duration_ms,
+                rec.audio_blob_id,
                 rec.transcript_instant,
                 rec.transcript_final,
                 rec.output_text,
@@ -303,9 +332,9 @@ impl Store {
     pub fn recent_utterances(&self, limit: usize) -> Result<Vec<UtteranceRecord>, StoreError> {
         let mut stmt = self.conn.prepare(
             r#"SELECT id, created_at, app_bundle_id, mode, processing_location, language,
-                      duration_ms, transcript_instant, transcript_final, output_text,
-                      inserted_ok, insertion_strategy, redacted, word_count, latency_ms,
-                      extra_json
+                      duration_ms, audio_blob_id, transcript_instant, transcript_final,
+                      output_text, inserted_ok, insertion_strategy, redacted, word_count,
+                      latency_ms, extra_json
                FROM utterances ORDER BY created_at DESC, rowid DESC LIMIT ?1"#,
         )?;
         let rows = stmt.query_map([limit as i64], |r| {
@@ -317,15 +346,16 @@ impl Store {
                 processing_location: r.get(4)?,
                 language: r.get(5)?,
                 duration_ms: r.get(6)?,
-                transcript_instant: r.get(7)?,
-                transcript_final: r.get(8)?,
-                output_text: r.get(9)?,
-                inserted_ok: r.get::<_, i64>(10)? != 0,
-                insertion_strategy: r.get(11)?,
-                redacted: r.get::<_, i64>(12)? != 0,
-                word_count: r.get(13)?,
-                latency_ms: r.get(14)?,
-                extra_json: r.get(15)?,
+                audio_blob_id: r.get(7)?,
+                transcript_instant: r.get(8)?,
+                transcript_final: r.get(9)?,
+                output_text: r.get(10)?,
+                inserted_ok: r.get::<_, i64>(11)? != 0,
+                insertion_strategy: r.get(12)?,
+                redacted: r.get::<_, i64>(13)? != 0,
+                word_count: r.get(14)?,
+                latency_ms: r.get(15)?,
+                extra_json: r.get(16)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -367,15 +397,88 @@ impl Store {
 
     /// Retention (§24/§ privacy: "configurable retention and auto-purge"): delete utterance
     /// rows older than `days`. Returns rows purged. Callers read the `retention_days`
-    /// setting (0/absent = keep forever) and run this at open.
+    /// setting (0/absent = keep forever) and run this at open. Audio blobs referenced by
+    /// purged rows go with them (one transaction — a blob must never outlive its utterance).
     pub fn purge_utterances_older_than_days(&self, days: i64) -> Result<usize, StoreError> {
         if days <= 0 {
             return Ok(0);
         }
         let cutoff_ms = now_ms() - days * 86_400_000;
-        let n = self
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM audio_blobs WHERE id IN
+               (SELECT audio_blob_id FROM utterances
+                WHERE created_at < ?1 AND audio_blob_id IS NOT NULL)",
+            [cutoff_ms],
+        )?;
+        let n = tx.execute("DELETE FROM utterances WHERE created_at < ?1", [cutoff_ms])?;
+        tx.commit()?;
+        Ok(n)
+    }
+
+    // ---- audio blobs (§24: optional retained audio, off by default) -------------------
+
+    /// Store one utterance's audio (any encoded form; the shell writes 16 kHz mono WAV).
+    /// `purge_after_ms` is an absolute epoch-ms deadline for the retention job; None ties
+    /// the blob's lifetime to its utterance (purged together, kept together).
+    pub fn put_audio_blob(
+        &self,
+        id: &str,
+        data: &[u8],
+        purge_after_ms: Option<i64>,
+    ) -> Result<(), StoreError> {
+        if id.is_empty() {
+            return Err(StoreError::BadRecord("empty blob id".into()));
+        }
+        self.conn.execute(
+            "INSERT OR REPLACE INTO audio_blobs (id, data, bytes, created_at, purge_after)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, data, data.len() as i64, now_ms(), purge_after_ms],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_audio_blob(&self, id: &str) -> Result<Option<Vec<u8>>, StoreError> {
+        use rusqlite::OptionalExtension;
+        Ok(self
             .conn
-            .execute("DELETE FROM utterances WHERE created_at < ?1", [cutoff_ms])?;
+            .query_row("SELECT data FROM audio_blobs WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
+    /// Hard-delete one blob (secure_delete zeroes its pages) and clear any utterance
+    /// reference to it. Returns whether a blob row existed.
+    pub fn delete_audio_blob(&self, id: &str) -> Result<bool, StoreError> {
+        let tx = self.conn.unchecked_transaction()?;
+        let n = tx.execute("DELETE FROM audio_blobs WHERE id = ?1", [id])?;
+        tx.execute(
+            "UPDATE utterances SET audio_blob_id = NULL WHERE audio_blob_id = ?1",
+            [id],
+        )?;
+        tx.commit()?;
+        Ok(n > 0)
+    }
+
+    /// §24 retention job: hard-delete blobs whose `purge_after` deadline has passed and
+    /// null out the dangling utterance references. Returns blobs purged. Runs at open.
+    pub fn purge_expired_audio_blobs(&self) -> Result<usize, StoreError> {
+        let now = now_ms();
+        let tx = self.conn.unchecked_transaction()?;
+        let n = tx.execute(
+            "DELETE FROM audio_blobs WHERE purge_after IS NOT NULL AND purge_after <= ?1",
+            [now],
+        )?;
+        if n > 0 {
+            tx.execute(
+                "UPDATE utterances SET audio_blob_id = NULL
+                 WHERE audio_blob_id IS NOT NULL
+                   AND audio_blob_id NOT IN (SELECT id FROM audio_blobs)",
+                [],
+            )?;
+        }
+        tx.commit()?;
         Ok(n)
     }
 
@@ -695,6 +798,106 @@ mod tests {
         assert_eq!(left[0].id, "recent");
         // 0 = keep forever: a no-op by contract.
         assert_eq!(store.purge_utterances_older_than_days(0).unwrap(), 0);
+    }
+
+    #[test]
+    fn audio_blob_roundtrips_and_links_to_utterance() {
+        let path = tmp("audio.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        let wav = vec![0x52u8, 0x49, 0x46, 0x46, 0xAA, 0x00, 0xFF, 0x7F];
+        store.put_audio_blob("blob-1", &wav, None).unwrap();
+        assert_eq!(store.get_audio_blob("blob-1").unwrap().as_deref(), Some(&wav[..]));
+        assert_eq!(store.get_audio_blob("nope").unwrap(), None);
+
+        // The shell links via the record JSON; it must survive the roundtrip + to_json.
+        let line = r#"{"utterance":"utt-9","ts":"2026-07-18T10:00:00Z","text":"hi","audio_blob_id":"blob-1","type":"persist_utterance"}"#;
+        let rec = UtteranceRecord::from_json(line).unwrap();
+        assert_eq!(rec.audio_blob_id.as_deref(), Some("blob-1"));
+        store.insert_utterance(&rec).unwrap();
+        let back = &store.recent_utterances(1).unwrap()[0];
+        assert_eq!(back.audio_blob_id.as_deref(), Some("blob-1"));
+        assert_eq!(back.to_json()["audio_blob_id"], "blob-1");
+
+        // Deleting the blob clears the utterance's reference.
+        assert!(store.delete_audio_blob("blob-1").unwrap());
+        assert!(!store.delete_audio_blob("blob-1").unwrap());
+        assert_eq!(store.get_audio_blob("blob-1").unwrap(), None);
+        assert_eq!(store.recent_utterances(1).unwrap()[0].audio_blob_id, None);
+    }
+
+    #[test]
+    fn expired_audio_blobs_are_purged_and_refs_cleared() {
+        let path = tmp("audio-expiry.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        store
+            .put_audio_blob("expired", b"old", Some(now_ms() - 1_000))
+            .unwrap();
+        store
+            .put_audio_blob("fresh", b"new", Some(now_ms() + 86_400_000))
+            .unwrap();
+        store.put_audio_blob("forever", b"keep", None).unwrap();
+        let rec = UtteranceRecord {
+            id: "utt-exp".into(),
+            created_at_ms: now_ms(),
+            audio_blob_id: Some("expired".into()),
+            ..Default::default()
+        };
+        store.insert_utterance(&rec).unwrap();
+        assert_eq!(store.purge_expired_audio_blobs().unwrap(), 1);
+        assert_eq!(store.get_audio_blob("expired").unwrap(), None);
+        assert!(store.get_audio_blob("fresh").unwrap().is_some());
+        assert!(store.get_audio_blob("forever").unwrap().is_some());
+        assert_eq!(store.recent_utterances(1).unwrap()[0].audio_blob_id, None);
+        // Idempotent: nothing left to purge.
+        assert_eq!(store.purge_expired_audio_blobs().unwrap(), 0);
+    }
+
+    #[test]
+    fn utterance_retention_purge_takes_its_audio_with_it() {
+        let path = tmp("audio-retention.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        store.put_audio_blob("old-audio", b"bytes", None).unwrap();
+        store.put_audio_blob("new-audio", b"bytes", None).unwrap();
+        let old = UtteranceRecord {
+            id: "old".into(),
+            created_at_ms: now_ms() - 40 * 86_400_000,
+            audio_blob_id: Some("old-audio".into()),
+            ..Default::default()
+        };
+        let recent = UtteranceRecord {
+            id: "recent".into(),
+            created_at_ms: now_ms(),
+            audio_blob_id: Some("new-audio".into()),
+            ..Default::default()
+        };
+        store.insert_utterance(&old).unwrap();
+        store.insert_utterance(&recent).unwrap();
+        assert_eq!(store.purge_utterances_older_than_days(30).unwrap(), 1);
+        assert_eq!(store.get_audio_blob("old-audio").unwrap(), None);
+        assert!(store.get_audio_blob("new-audio").unwrap().is_some());
+    }
+
+    #[test]
+    fn v2_store_migrates_forward_to_v3() {
+        let path = tmp("migrate-v2.db");
+        let _ = std::fs::remove_file(&path);
+        {
+            // Rewind a fresh store to the v2 shape: drop the v3 table, stamp user_version 2.
+            let store = Store::open(&path, &key()).unwrap();
+            store.conn.execute_batch("DROP TABLE audio_blobs;").unwrap();
+            store.conn.pragma_update(None, "user_version", 2).unwrap();
+        }
+        let store = Store::open(&path, &key()).unwrap();
+        store.put_audio_blob("post-migrate", b"ok", None).unwrap();
+        assert!(store.get_audio_blob("post-migrate").unwrap().is_some());
+        let v: i64 = store
+            .conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
     }
 
     #[test]

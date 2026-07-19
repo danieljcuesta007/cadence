@@ -948,6 +948,143 @@ pub unsafe extern "C" fn cadence_store_setting_set(
     .unwrap_or(false)
 }
 
+/// Store one utterance's retained audio (§24, opt-in). `purge_after_ms` is an absolute
+/// epoch-ms deadline; ≤ 0 means no per-blob deadline (the blob lives and dies with its
+/// utterance). False on failure.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_audio_put(
+    store: *mut StoreHandle,
+    id: *const c_char,
+    data: *const u8,
+    data_len: usize,
+    purge_after_ms: i64,
+) -> bool {
+    if store.is_null() {
+        set_last_error("cadence_store_audio_put: store is NULL".into());
+        return false;
+    }
+    guarded("cadence_store_audio_put", || {
+        let Some(id) = cstr_arg(id) else {
+            set_last_error("id is NULL or not UTF-8".into());
+            return false;
+        };
+        if data.is_null() {
+            set_last_error("data is NULL".into());
+            return false;
+        }
+        let bytes = std::slice::from_raw_parts(data, data_len);
+        let deadline = (purge_after_ms > 0).then_some(purge_after_ms);
+        let store = &*store;
+        match store.store.lock().unwrap().put_audio_blob(&id, bytes, deadline) {
+            Ok(()) => true,
+            Err(e) => {
+                set_last_error(format!("audio put ({id}): {e}"));
+                false
+            }
+        }
+    })
+    .unwrap_or(false)
+}
+
+/// Fetch a retained audio blob. Returns a malloc'd buffer (length in `*out_len`) that the
+/// caller frees with `cadence_bytes_free`, or NULL when absent / on error (see last_error;
+/// absence sets no error).
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_audio_get(
+    store: *mut StoreHandle,
+    id: *const c_char,
+    out_len: *mut usize,
+) -> *mut u8 {
+    if store.is_null() || out_len.is_null() {
+        set_last_error("cadence_store_audio_get: store/out_len is NULL".into());
+        return std::ptr::null_mut();
+    }
+    *out_len = 0;
+    guarded("cadence_store_audio_get", || {
+        let Some(id) = cstr_arg(id) else {
+            set_last_error("id is NULL or not UTF-8".into());
+            return std::ptr::null_mut();
+        };
+        let store = &*store;
+        match store.store.lock().unwrap().get_audio_blob(&id) {
+            Ok(Some(data)) => {
+                let mut boxed = data.into_boxed_slice();
+                let ptr = boxed.as_mut_ptr();
+                *out_len = boxed.len();
+                std::mem::forget(boxed);
+                ptr
+            }
+            Ok(None) => std::ptr::null_mut(),
+            Err(e) => {
+                set_last_error(format!("audio get ({id}): {e}"));
+                std::ptr::null_mut()
+            }
+        }
+    })
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Hard-delete one audio blob and clear any utterance reference to it. True if a blob
+/// row existed.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_audio_delete(
+    store: *mut StoreHandle,
+    id: *const c_char,
+) -> bool {
+    if store.is_null() {
+        set_last_error("cadence_store_audio_delete: store is NULL".into());
+        return false;
+    }
+    guarded("cadence_store_audio_delete", || {
+        let Some(id) = cstr_arg(id) else {
+            set_last_error("id is NULL or not UTF-8".into());
+            return false;
+        };
+        let store = &*store;
+        match store.store.lock().unwrap().delete_audio_blob(&id) {
+            Ok(existed) => existed,
+            Err(e) => {
+                set_last_error(format!("audio delete ({id}): {e}"));
+                false
+            }
+        }
+    })
+    .unwrap_or(false)
+}
+
+/// §24 retention job: purge audio blobs past their `purge_after` deadline. Returns blobs
+/// purged, or -1 on failure. The shell runs this at launch next to the utterance purge.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_audio_purge_expired(store: *mut StoreHandle) -> i64 {
+    if store.is_null() {
+        set_last_error("cadence_store_audio_purge_expired: store is NULL".into());
+        return -1;
+    }
+    guarded("cadence_store_audio_purge_expired", || {
+        let store = &*store;
+        match store.store.lock().unwrap().purge_expired_audio_blobs() {
+            Ok(n) => n as i64,
+            Err(e) => {
+                set_last_error(format!("audio purge: {e}"));
+                -1
+            }
+        }
+    })
+    .unwrap_or(-1)
+}
+
+/// Free a buffer returned by `cadence_store_audio_get`. `len` must be the value that call
+/// wrote to `out_len`.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_bytes_free(ptr: *mut u8, len: usize) {
+    if ptr.is_null() {
+        return;
+    }
+    guarded("cadence_bytes_free", || {
+        drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len)));
+    });
+}
+
 /// Free a string returned by this library (currently `cadence_store_recent_json`).
 #[no_mangle]
 pub unsafe extern "C" fn cadence_string_free(s: *mut c_char) {
@@ -1324,6 +1461,36 @@ mod tests {
         unsafe { cadence_string_free(got) };
         let missing = CString::new("never-set").unwrap();
         assert!(unsafe { cadence_store_setting_get(store, missing.as_ptr()) }.is_null());
+
+        // Retained audio (§24 opt-in) over the ABI: put → get → linked record → delete.
+        let blob_id = CString::new("audio-abi-1").unwrap();
+        let wav: &[u8] = &[0x52, 0x49, 0x46, 0x46, 0x00, 0xFF, 0x7F, 0x80];
+        assert!(
+            unsafe { cadence_store_audio_put(store, blob_id.as_ptr(), wav.as_ptr(), wav.len(), 0) },
+            "{}",
+            last_err()
+        );
+        let mut len = 0usize;
+        let got_audio = unsafe { cadence_store_audio_get(store, blob_id.as_ptr(), &mut len) };
+        assert!(!got_audio.is_null(), "{}", last_err());
+        assert_eq!(unsafe { std::slice::from_raw_parts(got_audio, len) }, wav);
+        unsafe { cadence_bytes_free(got_audio, len) };
+
+        let rec_audio = CString::new(
+            r#"{"utterance":"utt-2","ts":"2026-07-18T23:01:00Z","text":"with audio","audio_blob_id":"audio-abi-1"}"#,
+        )
+        .unwrap();
+        assert!(unsafe { cadence_store_persist_json(store, rec_audio.as_ptr()) }, "{}", last_err());
+        let json = unsafe { cadence_store_recent_json(store, 1) };
+        let s = unsafe { CStr::from_ptr(json) }.to_str().unwrap().to_owned();
+        unsafe { cadence_string_free(json) };
+        let arr: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(arr[0]["audio_blob_id"], "audio-abi-1");
+
+        assert!(unsafe { cadence_store_audio_delete(store, blob_id.as_ptr()) });
+        let mut len2 = 0usize;
+        assert!(unsafe { cadence_store_audio_get(store, blob_id.as_ptr(), &mut len2) }.is_null());
+        assert_eq!(unsafe { cadence_store_audio_purge_expired(store) }, 0);
 
         // Wrong key fails closed with a diagnostic, not a crash.
         unsafe { cadence_store_free(store) };
