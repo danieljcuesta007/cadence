@@ -867,6 +867,30 @@ pub unsafe extern "C" fn cadence_store_import_jsonl(
     .unwrap_or(-1)
 }
 
+/// Retention (§24): purge utterances older than `days` (≤0 is a no-op). Returns rows
+/// purged, or -1 on failure.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_purge_utterances(
+    store: *mut StoreHandle,
+    days: i64,
+) -> i64 {
+    if store.is_null() {
+        set_last_error("cadence_store_purge_utterances: store is NULL".into());
+        return -1;
+    }
+    guarded("cadence_store_purge_utterances", || {
+        let store = &*store;
+        match store.store.lock().unwrap().purge_utterances_older_than_days(days) {
+            Ok(n) => n as i64,
+            Err(e) => {
+                set_last_error(format!("purge: {e}"));
+                -1
+            }
+        }
+    })
+    .unwrap_or(-1)
+}
+
 /// Read a settings value (§24 settings KV). NULL when unset or on error (see last_error).
 /// Caller frees with `cadence_string_free`.
 #[no_mangle]

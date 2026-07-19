@@ -75,6 +75,20 @@ final class HistoryStore {
         }
         handle = opened
         importLegacyJSONLIfPresent()
+        applyRetention()
+    }
+
+    /// §24 retention: `retention_days` setting (unset/0 = keep forever). Runs at launch.
+    private func applyRetention() {
+        guard let handle,
+            let c = cadence_store_setting_get(handle, "retention_days")
+        else { return }
+        defer { cadence_string_free(c) }
+        guard let days = Int64(String(cString: c)), days > 0 else { return }
+        let purged = cadence_store_purge_utterances(handle, days)
+        if purged > 0 {
+            LogFile.append("store: retention purged \(purged) utterances (> \(days) days)")
+        }
     }
 
     deinit {

@@ -44,8 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(stateMenuItem)
         menu.addItem(
             NSMenuItem(
-                title: "Hold Right-Option to dictate · Esc cancels", action: nil,
-                keyEquivalent: ""))
+                title: "Hold Right-Option to dictate · Esc cancels · ⌃⌥⌘Z undoes",
+                action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
         let dashItem = NSMenuItem(
             title: "History & Metrics…", action: #selector(showDashboard), keyEquivalent: "d")
