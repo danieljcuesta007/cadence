@@ -28,6 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var menuFrontApp: String?
     /// A PTT-down swallowed by a per-app rule must also swallow its up.
     var pttSwallowed = false
+    /// §24 retained audio: cached opt-in flag (capture start reads this, never the DB).
+    var retainAudio = false
+    let retainAudioItem = NSMenuItem(
+        title: "Keep Audio Recordings", action: nil, keyEquivalent: "")
     // Held during an utterance: App Nap must never throttle a decode mid-dictation
     // (§28 latency budgets; suspected cause of a one-off 30 s Metal stall in testing).
     var activity: NSObjectProtocol?
@@ -63,6 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         disableItem.action = #selector(toggleDisableFrontApp)
         disableItem.target = self
         menu.addItem(disableItem)
+        // §24 retained audio, opt-in (default off): keep each dictation's audio as an
+        // encrypted blob alongside its transcript. Disabled entirely when the store is
+        // unavailable — audio never goes to the JSONL fallback.
+        retainAudioItem.action = #selector(toggleRetainAudio)
+        retainAudioItem.target = self
+        menu.addItem(retainAudioItem)
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit Cadence", action: #selector(quit), keyEquivalent: "q"))
@@ -79,6 +89,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         router.historyStore = store
         HistoryReader.store = store
         disabledApps = store?.disabledApps() ?? []
+        retainAudio = store?.retainAudioEnabled ?? false
+        router.retainAudioEnabled = { [weak self] in self?.retainAudio ?? false }
         router.engine = { [weak self] in self?.engine }
         router.statusUpdate = { [weak self] state in
             guard let self else { return }
@@ -123,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         capture.onChunk = { [weak self] samples, level in
             self?.engine?.pushAudio(samples, level: level)
+            self?.router.retainChunk(samples)
         }
 
         // Mic permission just-in-time would be at first PTT; the spine asks at launch so a
@@ -236,6 +249,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             disableItem.title = "Disable in This App"
             disableItem.isEnabled = false
         }
+        retainAudioItem.state = retainAudio ? .on : .off
+        retainAudioItem.isEnabled = historyStore != nil
+    }
+
+    @objc func toggleRetainAudio() {
+        guard let store = historyStore else { return }
+        retainAudio.toggle()
+        store.setRetainAudio(retainAudio)
+        router.log("retained audio → \(retainAudio ? "on" : "off")")
     }
 
     @objc func toggleDisableFrontApp() {

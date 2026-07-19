@@ -25,6 +25,41 @@ final class EffectRouter {
     var onIdle: ((String?) -> Void)?
     /// Encrypted store (§24); nil (keychain/open failure) keeps the JSONL stand-in.
     var historyStore: HistoryStore?
+    /// §24 retained audio: opt-in check, read at capture start (the composition root caches
+    /// the setting; default off — never accumulate audio the user didn't ask to keep).
+    var retainAudioEnabled: () -> Bool = { false }
+
+    // Per-utterance audio accumulator (§24). Chunks arrive on the capture callback thread;
+    // start/stop flips on uiQueue; persist reads on the core thread — lock-guarded. At
+    // 16 kHz i16 this grows 32 KB/s, so even a minutes-long hold stays trivially small.
+    private let audioLock = NSLock()
+    private var retainedAudio: [Int16] = []
+    private var retainingAudio = false
+
+    /// Tee from the capture callback (AppMain's onChunk) — a no-op unless this utterance
+    /// is being retained.
+    func retainChunk(_ samples: [Int16]) {
+        audioLock.lock()
+        if retainingAudio { retainedAudio.append(contentsOf: samples) }
+        audioLock.unlock()
+    }
+
+    private func setRetaining(_ on: Bool, clear: Bool = false) {
+        audioLock.lock()
+        retainingAudio = on
+        if clear { retainedAudio = [] }
+        audioLock.unlock()
+    }
+
+    private func takeRetainedAudio() -> [Int16] {
+        audioLock.lock()
+        defer {
+            retainedAudio = []
+            retainingAudio = false
+            audioLock.unlock()
+        }
+        return retainedAudio
+    }
 
     private let insertionEngine = InsertionEngine()
     private let insertionQueue = DispatchQueue(label: "cadence.insertion", qos: .userInteractive)
@@ -122,7 +157,11 @@ final class EffectRouter {
         case "stop_capture":
             onUI { self.stopCapture() }
         case "discard_capture":
-            onUI { self.capture?.stop() }
+            onUI {
+                self.capture?.stop()
+                // Cancelled utterance: nothing persists, audio included.
+                self.setRetaining(false, clear: true)
+            }
         case "play_sound":
             if earconsEnabled { Earcons.play(obj["sound"] as? String ?? "") }
         case "show_overlay":
@@ -155,8 +194,11 @@ final class EffectRouter {
                 self.log("words preserved on clipboard (\(text.count) chars)")
             }
         case "persist_utterance":
+            let audio = takeRetainedAudio()
             if let store = historyStore {
-                store.persist(record: obj, text: lastInsertedText, metrics: takeMetrics())
+                store.persist(
+                    record: obj, text: lastInsertedText, metrics: takeMetrics(),
+                    audio: audio.isEmpty ? nil : audio)
             } else {
                 History.append(record: obj, text: lastInsertedText, metrics: takeMetrics())
             }
@@ -182,6 +224,9 @@ final class EffectRouter {
             return
         }
         let t0 = Date()
+        // Arm the accumulator before the tap starts so the first chunk is never missed;
+        // clear stale audio from any utterance that ended without a persist.
+        setRetaining(retainAudioEnabled(), clear: true)
         do {
             try capture.start()
             let ms = Int(Date().timeIntervalSince(t0) * 1000)

@@ -263,4 +263,29 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    (schema v2: `models.bundled` column; save is transactional whole-set replace). v1→v2
    migration ran clean on the live store. 82/82. §24 remainder: audio_blobs,
    dictionary/corrections/style/redaction/sync tables; a Settings UI for retention.
+8. **audio_blobs SHIPPED (2026-07-19): §24 retained audio, opt-in, off by default.**
+   Schema v3 (`audio_blobs`): deliberate deviation from the blueprint sketch — audio is an
+   in-row `data BLOB` under the same SQLCipher key, not a `path` to a sidecar file (which
+   would need its own encryption + key custody). `secure_delete=ON` at open makes purges
+   zero freed pages ("hard delete + secure blob erase", §24). Store API: `put/get/
+   delete_audio_blob` + `purge_expired_audio_blobs` (absolute `purge_after` epoch-ms
+   deadline stamped at write; NULL = lives and dies with its utterance — the utterance
+   retention purge cascades to referenced blobs in one transaction). `UtteranceRecord`
+   gains `audio_blob_id` (column existed since v1; now read/written + in record JSON).
+   FFI: `cadence_store_audio_put/get/delete/purge_expired` + `cadence_bytes_free`, header
+   updated. Shell: menu toggle "Keep Audio Recordings" (`retain_audio` setting, cached —
+   PTT never touches the DB); router tees capture chunks into a lock-guarded per-utterance
+   accumulator (armed before tap start, cleared on cancel/discard), `persist_utterance`
+   hands samples to `HistoryStore` which writes a 16 kHz mono WAV (`WavWriter`, canonical
+   44-byte header, no AVFoundation) blob then links it in the record. Blob deadline:
+   `audio_retention_days` setting wins, else `retention_days`, else none; expired-blob
+   purge runs at every launch. Audio is best-effort: blob failure keeps the transcript
+   (AC-22); redacted utterances never retain audio; audio never goes to the JSONL
+   fallback. Tests 86/86 (blob roundtrip+link, expiry purge + ref-clearing, retention
+   cascade, v2→v3 forward migration, full C-ABI roundtrip). dist/Cadence.app repackaged —
+   v2→v3 migration will run on next launch of the installed app. LIVE CHECKS PENDING:
+   toggle "Keep Audio Recordings", dictate, confirm a WAV-shaped blob row + linked
+   `audio_blob_id` in history; playback UI is future work (dashboard doesn't surface
+   audio yet). §24 remainder: dictionary/corrections/style/redaction/sync tables; a
+   Settings UI for retention windows.
 5. Windows environment → port insertion spike + this FFI (header already C-clean).
