@@ -216,5 +216,31 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    E2E persist of a *new* dictation not yet observed live (user was active; next real
    dictation is the check — `History & Metrics` should show it, and history.jsonl must NOT
    reappear).
-5. Undo + per-app rules on the live spine (app_rules table ready).
+5. **Undo + per-app rules + AC-20 verification SHIPPED (2026-07-18):**
+   - **Post-insert verification (closes the blind-paste gap):** `InsertionResult` gains
+     `verification: verified | unverifiable | contradicted`. pasteRestore reads back the
+     focused element AFTER the paste, BEFORE the clipboard restore: a readable value that
+     lacks the text tail = `contradicted` → reported as NOT inserted, restore skipped so
+     the words stay one ⌘V away (§29), user sees "saved to clipboard". Opaque targets
+     (VS Code, web views, Spotlight) stay `unverifiable` and are trusted exactly as before —
+     the 6/6 matrix behavior is unchanged. Direct-AX keeps its built-in readback
+     (= `verified`). Verification is logged + persisted per utterance (`verification` in
+     history extra).
+   - **Undo (F21/§26):** ⌃⌥⌘Z global chord (CGEvent tap, consumed) + menu item "Undo Last
+     Dictation". Router keeps an `UndoRecord` (app, text, time) written at insert, armed by
+     the core's `arm_undo` (fires only on confirmed insertion). Fire guards: armed + idle +
+     same app still frontmost (else pill says "switch to X to undo") + ≤2 min fresh; then
+     one ⌘Z — insertions land as a single undoable unit (one paste / one AX set), so the
+     target reverts exactly that. Standard in-app ⌘Z keeps working independently (§26).
+   - **Per-app rules (first slice):** menu toggle "Disable in <frontmost app>" (LSUIElement
+     ⇒ opening our menu doesn't steal frontmost; captured in `menuNeedsUpdate`). Persisted
+     in the store settings KV (`disabled_apps`, new FFI `cadence_store_setting_get/set`),
+     cached in the shell so PTT-down never touches the DB. A swallowed PTT-down also
+     swallows its up (no orphan trigger_up). Pill shows "‖ off here", fades.
+   - Tests 79/79 (settings KV pinned over the C ABI). LIVE RE-TESTS PENDING: dictate then
+     ⌃⌥⌘Z (should revert + "undone" pill); menu toggle in some app then PTT there ("off
+     here" pill, no capture); Pages page-layout blind-paste should now report "saved to
+     clipboard" instead of a false success.
+6. §24 remainder: audio_blobs, dictionary/corrections/style/redaction/sync tables,
+   retention/purge, ModelStore-over-DB. Then idle model unload (<150 MB, ADR-0006).
 5. Windows environment → port insertion spike + this FFI (header already C-clean).

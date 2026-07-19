@@ -12,6 +12,8 @@ public final class HotkeyMonitor {
     public var onPTTDown: (() -> Void)?
     public var onPTTUp: (() -> Void)?
     public var onCancel: (() -> Void)?
+    /// §7 F21: dedicated undo-last-dictation chord (⌃⌥⌘Z), consumed when handled.
+    public var onUndo: (() -> Void)?
     /// Governs Esc consumption; read on the tap thread (main run loop).
     public var isActive: () -> Bool = { false }
 
@@ -21,6 +23,7 @@ public final class HotkeyMonitor {
 
     private static let kRightOption: Int64 = 61
     private static let kEscape: Int64 = 53
+    private static let kZ: Int64 = 6
 
     public init() {}
 
@@ -72,6 +75,13 @@ public final class HotkeyMonitor {
         if type == .keyDown, keyCode == Self.kEscape, isActive() {
             DispatchQueue.main.async { self.onCancel?() }
             return nil // consumed: cancel must not also close the user's dialog/sheet
+        }
+        if type == .keyDown, keyCode == Self.kZ, onUndo != nil {
+            let mods: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand]
+            if event.flags.isSuperset(of: mods) {
+                DispatchQueue.main.async { self.onUndo?() }
+                return nil // consumed: the chord is ours alone
+            }
         }
         return Unmanaged.passUnretained(event)
     }
