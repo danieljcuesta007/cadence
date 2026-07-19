@@ -6,6 +6,6 @@ pub mod pipeline;
 pub mod ring;
 
 pub use machine::Orchestrator;
-pub use partial::PartialScheduler;
+pub use partial::{PartialScheduler, DEFAULT_TAIL_WINDOW_SAMPLES, PARTIAL_AUDIO_CTX_FRAMES};
 pub use pipeline::{CollectSink, InsertionSink, Pipeline, RunReport, Timings};
 pub use ring::RingBuffer;

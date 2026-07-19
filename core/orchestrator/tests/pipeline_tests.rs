@@ -1,14 +1,71 @@
 //! End-to-end headless pipeline tests: PCM → orchestrator → ASR → cleanup → insertion.
 
-use cadence_asr::MockAsr;
+use cadence_asr::{AsrEngine, AsrError, MockAsr};
 use cadence_cleanup::{Guarded, RuleCleanup};
-use cadence_ipc::{Mode, ProcessingPolicy};
-use cadence_orchestrator::{CollectSink, Pipeline};
+use cadence_ipc::{Mode, ProcessingPolicy, Transcript};
+use cadence_orchestrator::{CollectSink, Pipeline, DEFAULT_TAIL_WINDOW_SAMPLES};
 
 fn tone(samples: usize) -> Vec<i16> {
     (0..samples)
         .map(|i| ((i as f32 * 0.1).sin() * 8000.0) as i16)
         .collect()
+}
+
+/// Records the size of every window handed to each pass, so tests can pin the sliding-tail
+/// contract: partials stay O(tail) on long dictations while the refined pass sees everything.
+struct RecordingAsr {
+    partial_windows: Vec<usize>,
+    refined_windows: Vec<usize>,
+}
+
+impl AsrEngine for RecordingAsr {
+    fn transcribe(&mut self, pcm: &[f32]) -> Result<Transcript, AsrError> {
+        self.refined_windows.push(pcm.len());
+        Ok(Transcript {
+            instant: None,
+            refined: "long dictation".into(),
+            language: Some("en".into()),
+        })
+    }
+
+    fn transcribe_partial(&mut self, pcm: &[f32]) -> Result<Transcript, AsrError> {
+        self.partial_windows.push(pcm.len());
+        Ok(Transcript {
+            instant: Some("partial".into()),
+            refined: "partial".into(),
+            language: Some("en".into()),
+        })
+    }
+}
+
+#[test]
+fn long_dictation_partials_decode_only_the_tail() {
+    let mut asr = RecordingAsr {
+        partial_windows: Vec::new(),
+        refined_windows: Vec::new(),
+    };
+    let cleanup = Guarded::new(RuleCleanup::default());
+    let mut sink = CollectSink::default();
+    let total = 16_000 * 30; // 30 s utterance, well past the 8 s tail
+    let mut p = Pipeline::new(total, &mut asr, &cleanup, &mut sink);
+
+    let report = p.run_utterance(&tone(total), Mode::Dictation, ProcessingPolicy::LocalOnly);
+
+    assert!(report.inserted);
+    assert!(
+        asr.partial_windows.len() > 10,
+        "expected a stream of partials, got {}",
+        asr.partial_windows.len()
+    );
+    let widest = *asr.partial_windows.iter().max().unwrap();
+    assert!(
+        widest <= DEFAULT_TAIL_WINDOW_SAMPLES,
+        "partial decoded {widest} samples — past the {DEFAULT_TAIL_WINDOW_SAMPLES} tail cap"
+    );
+    // Early partials (window still shorter than the tail) must NOT be truncated.
+    assert!(asr.partial_windows[0] < DEFAULT_TAIL_WINDOW_SAMPLES);
+    // The refined pass is authoritative: it sees the complete utterance exactly once.
+    assert_eq!(asr.refined_windows, vec![total]);
 }
 
 #[test]

@@ -142,7 +142,13 @@ impl OrchLoop {
             return;
         };
         if self.partials.on_audio(samples) {
-            let window = self.ring.lock().unwrap().snapshot();
+            let mut window = self.ring.lock().unwrap().snapshot();
+            // Sliding tail (§12.3): long dictations decode only the recent window, keeping
+            // each partial O(tail) and inside the capped encoder's coverage.
+            let start = self.partials.window_start(window.len());
+            if start > 0 {
+                window.drain(..start);
+            }
             if self
                 .asr_tx
                 .send(AsrJob::Partial { utterance, window })
@@ -444,7 +450,12 @@ pub unsafe extern "C" fn cadence_engine_new(
         #[cfg(feature = "whisper")]
         {
             match cadence_asr::whisper::WhisperAsr::load(&path) {
-                Ok(asr) => Box::into_raw(Box::new(Engine::start(Box::new(asr), cb, ctx))),
+                Ok(mut asr) => {
+                    // Instant pass encodes at most the sliding tail — cap the encoder to
+                    // match (O(tail) per partial instead of the model's full 30 s window).
+                    asr.set_partial_audio_ctx(cadence_orchestrator::PARTIAL_AUDIO_CTX_FRAMES);
+                    Box::into_raw(Box::new(Engine::start(Box::new(asr), cb, ctx)))
+                }
                 Err(e) => {
                     set_last_error(format!("whisper load ({path}): {e}"));
                     std::ptr::null_mut()
