@@ -195,6 +195,22 @@ final class HistoryStore {
         }
     }
 
+    /// Apple voice processing (noise suppression) on capture; default ON.
+    var voiceIsolation: Bool {
+        guard let handle, let c = cadence_store_setting_get(handle, "voice_isolation")
+        else { return true }
+        defer { cadence_string_free(c) }
+        return String(cString: c) != "off"
+    }
+
+    func setVoiceIsolation(_ on: Bool) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, "voice_isolation", on ? "on" : "off") {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("voice_isolation save failed: \(msg)")
+        }
+    }
+
     // MARK: retained audio (§24, opt-in; off by default)
 
     private static let retainAudioKey = "retain_audio"
