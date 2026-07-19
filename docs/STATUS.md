@@ -56,7 +56,7 @@ model-unload lever (ADR-0006) is what closes it. Sampler: `qa/soak.sh` →
 | Insertion prototype, 0 freezes / 0 corruption | ✅ automated 9/9, 0 freezes, 0 corruption (full table: `qa/matrix-results.jsonl` + git history of this file). Interactive pass 2026-07-16: Spotlight, Pages, Word, VS Code, Messages + Slack (both draft-to-self, never sent, drafts cleared) — 6/6 PASS. Still uncovered: not-installed apps (iTerm2, Cursor, Discord, JetBrains) |
 | Windows insertion spike | 🔴 Deferred — no Windows env (ADR-0004); first task when one exists |
 | Orchestrator + IPC schema, headless, fully tested | ✅ |
-| Golden local model chosen + verified fetch | 🟡 base.en working candidate; final selection needs §30 eval harness |
+| Golden local model chosen + verified fetch | 🟡 base.en measured via §30 harness: **7.1 % WER, 146.8 ms mean / 206 ms max ASR** (16 TTS fixtures, 225 ref words). Working candidate confirmed by data; final lock still wants a small.en A/B on the same fixtures |
 
 ## Phase-1 spine — what works today (2026-07-15)
 
@@ -146,7 +146,12 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
    word-losing — audio stays in the ring/history path and a hung utterance does not crash the
    hotkey listener. First suspect if any dictation hangs in "thinking". Watch during soak.
 4. Direct-AX coverage across Electron/web apps still shallow (falls back to pasteRestore).
-5. TTS fixtures only; WER harness (§30) not started.
+5. WER harness (§30) SHIPPED (2026-07-19, `qa/wer.py` + `wer-harness.sh` + `wer-fixtures.sh`,
+   results pinned in `qa/wer-results.json`): alignment-based WER/sub/del/ins scoring +
+   per-fixture ASR latency, over 16 held-out fixtures. base.en baseline = **7.1 % WER,
+   146.8 ms mean ASR**. Caveat: fixtures are **TTS-synthesized** — real-human/accented eval
+   set still pending, and only base.en has been run (small.en A/B open, see model row above).
+   Fixture WAVs gitignored; `manifest.tsv` ground truth committed.
 
 ## Next steps (§32 order)
 1. ~~First live `cadence run`~~ ✅ DONE 2026-07-15 (mic granted, ~90 % accuracy). Overlay
