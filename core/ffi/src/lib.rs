@@ -233,16 +233,94 @@ fn debug_log(msg: &str) {
     }
 }
 
-fn asr_worker(mut engine: Box<dyn AsrEngine + Send>, rx: Receiver<AsrJob>, tx: Sender<Control>) {
-    // Warm the Metal pipeline (encode + both decode paths) once, so the user's first partial
-    // isn't the slow cold one (ADR-0006). Silence → Empty is the expected, ignored result.
+/// Rebuilds the ASR engine after an idle unload. Must produce an engine configured
+/// identically to the initial one (audio_ctx cap included).
+type AsrFactory = Box<dyn Fn() -> Result<Box<dyn AsrEngine + Send>, String> + Send>;
+
+/// Idle model unload (§28 idle-RAM budget, ADR-0006): after this long with no ASR work the
+/// worker drops the engine (~200 MB of model + Metal buffers); the next dictation reloads
+/// transparently (~200–500 ms warm, worn as a longer "thinking" — capture is unaffected,
+/// audio waits in the ring). Env `CADENCE_UNLOAD_SECS` overrides; 0 disables.
+const DEFAULT_UNLOAD_AFTER: Duration = Duration::from_secs(300);
+
+fn unload_after_config() -> Option<Duration> {
+    match std::env::var("CADENCE_UNLOAD_SECS").ok().and_then(|v| v.parse::<u64>().ok()) {
+        Some(0) => None,
+        Some(secs) => Some(Duration::from_secs(secs)),
+        None => Some(DEFAULT_UNLOAD_AFTER),
+    }
+}
+
+/// Warm the Metal pipeline (encode + both decode paths) once, so the user's first partial
+/// isn't the slow cold one (ADR-0006). Silence → Empty is the expected, ignored result.
+fn warm_engine(engine: &mut Box<dyn AsrEngine + Send>) {
     let warm = vec![0.0f32; 8_000];
     let _ = engine.transcribe(&warm);
     let _ = engine.transcribe_partial(&warm);
     engine.reset_stream();
+}
+
+fn asr_worker(
+    engine: Box<dyn AsrEngine + Send>,
+    factory: AsrFactory,
+    unload_after: Option<Duration>,
+    rx: Receiver<AsrJob>,
+    tx: Sender<Control>,
+) {
+    let mut engine = Some(engine);
+    warm_engine(engine.as_mut().expect("initial engine"));
 
     let mut last_utt: Option<UtteranceId> = None;
-    while let Ok(job) = rx.recv() {
+    loop {
+        let job = match unload_after {
+            Some(after) => match rx.recv_timeout(after) {
+                Ok(job) => job,
+                Err(RecvTimeoutError::Timeout) => {
+                    if engine.take().is_some() {
+                        debug_log("asr engine unloaded (idle)");
+                    }
+                    continue;
+                }
+                Err(RecvTimeoutError::Disconnected) => return,
+            },
+            None => match rx.recv() {
+                Ok(job) => job,
+                Err(_) => return,
+            },
+        };
+        let engine = match &mut engine {
+            Some(e) => e,
+            slot @ None => {
+                let t = Instant::now();
+                match factory() {
+                    Ok(mut e) => {
+                        warm_engine(&mut e);
+                        debug_log(&format!("asr engine reloaded in {} ms", t.elapsed().as_millis()));
+                        slot.insert(e)
+                    }
+                    Err(msg) => {
+                        // Reload failed (model missing/corrupt): stay unloaded, retry on the
+                        // next job. A partial just skips (and releases the scheduler latch);
+                        // a final fails the utterance so the no-lost-words path runs.
+                        debug_log(&format!("asr engine reload FAILED: {msg}"));
+                        let sent = match &job {
+                            AsrJob::Partial { .. } => tx.send(Control::PartialComplete(None)),
+                            AsrJob::Final { utterance, .. } => {
+                                tx.send(Control::Event(Event::AsrFailed {
+                                    utterance: utterance.clone(),
+                                    location: ProcessingLocation::Local,
+                                    empty: false,
+                                }))
+                            }
+                        };
+                        if sent.is_err() {
+                            return;
+                        }
+                        continue;
+                    }
+                }
+            }
+        };
         // Utterance boundary: drop stale instant-pass stream state before the new one's partials.
         if last_utt.as_ref() != Some(job.utterance()) {
             engine.reset_stream();
@@ -295,16 +373,22 @@ fn asr_worker(mut engine: Box<dyn AsrEngine + Send>, rx: Receiver<AsrJob>, tx: S
 }
 
 impl Engine {
-    fn start(asr: Box<dyn AsrEngine + Send>, cb: EffectCallback, ctx: *mut c_void) -> Engine {
+    fn start(
+        asr: Box<dyn AsrEngine + Send>,
+        factory: AsrFactory,
+        cb: EffectCallback,
+        ctx: *mut c_void,
+    ) -> Engine {
         let ring = Arc::new(Mutex::new(RingBuffer::new(RING_CAPACITY)));
         let (tx, rx) = channel::<Control>();
         let (asr_tx, asr_rx) = channel::<AsrJob>();
 
         let asr_thread = {
             let tx = tx.clone();
+            let unload_after = unload_after_config();
             std::thread::Builder::new()
                 .name("cadence-asr".into())
-                .spawn(move || asr_worker(asr, asr_rx, tx))
+                .spawn(move || asr_worker(asr, factory, unload_after, asr_rx, tx))
                 .expect("spawn asr thread")
         };
         let orch_thread = {
@@ -449,12 +533,19 @@ pub unsafe extern "C" fn cadence_engine_new(
         };
         #[cfg(feature = "whisper")]
         {
-            match cadence_asr::whisper::WhisperAsr::load(&path) {
-                Ok(mut asr) => {
-                    // Instant pass encodes at most the sliding tail — cap the encoder to
-                    // match (O(tail) per partial instead of the model's full 30 s window).
-                    asr.set_partial_audio_ctx(cadence_orchestrator::PARTIAL_AUDIO_CTX_FRAMES);
-                    Box::into_raw(Box::new(Engine::start(Box::new(asr), cb, ctx)))
+            let load = |path: &str| -> Result<Box<dyn AsrEngine + Send>, String> {
+                let mut asr =
+                    cadence_asr::whisper::WhisperAsr::load(path).map_err(|e| e.to_string())?;
+                // Instant pass encodes at most the sliding tail — cap the encoder to
+                // match (O(tail) per partial instead of the model's full 30 s window).
+                asr.set_partial_audio_ctx(cadence_orchestrator::PARTIAL_AUDIO_CTX_FRAMES);
+                Ok(Box::new(asr))
+            };
+            match load(&path) {
+                Ok(asr) => {
+                    let factory_path = path.clone();
+                    let factory: AsrFactory = Box::new(move || load(&factory_path));
+                    Box::into_raw(Box::new(Engine::start(asr, factory, cb, ctx)))
                 }
                 Err(e) => {
                     set_last_error(format!("whisper load ({path}): {e}"));
@@ -483,8 +574,12 @@ pub unsafe extern "C" fn cadence_engine_new_mock(
 ) -> *mut Engine {
     guarded("cadence_engine_new_mock", || {
         let refined = cstr_arg(refined_text).unwrap_or_else(|| "mock transcript".into());
-        let asr = MockAsr { refined };
-        Box::into_raw(Box::new(Engine::start(Box::new(asr), cb, ctx)))
+        let asr = MockAsr {
+            refined: refined.clone(),
+        };
+        let factory: AsrFactory =
+            Box::new(move || Ok(Box::new(MockAsr { refined: refined.clone() }) as _));
+        Box::into_raw(Box::new(Engine::start(Box::new(asr), factory, cb, ctx)))
     })
     .unwrap_or(std::ptr::null_mut())
 }
@@ -1037,6 +1132,7 @@ mod tests {
         let ctx = &*tx as *const mpsc::Sender<String> as *mut c_void;
         let engine = Box::into_raw(Box::new(Engine::start(
             Box::new(CountingAsr),
+            Box::new(|| Ok(Box::new(CountingAsr) as _)),
             collect_cb,
             ctx,
         )));
@@ -1139,6 +1235,34 @@ mod tests {
     fn new_engine_reports_version() {
         let v = unsafe { CStr::from_ptr(cadence_version()) };
         assert!(!v.to_str().unwrap().is_empty());
+    }
+
+    #[test]
+    fn idle_unload_reloads_transparently_on_next_dictation() {
+        // Tiny idle window so the unload provably fires between dictations. Env is
+        // process-global: restore it before the assertions so parallel-test pollution
+        // windows stay minimal (other tests here don't idle long enough to unload).
+        std::env::set_var("CADENCE_UNLOAD_SECS", "1");
+        let h = Harness::new();
+        std::env::remove_var("CADENCE_UNLOAD_SECS");
+
+        // Let the idle timeout fire: the worker must drop its engine.
+        std::thread::sleep(Duration::from_millis(1500));
+
+        // A full dictation AFTER the unload must work end-to-end (factory reload path).
+        unsafe { cadence_engine_trigger_down(h.engine, false) };
+        h.expect("start_capture");
+        push_chunk(&h, 1600);
+        push_chunk(&h, 1600);
+        unsafe { cadence_engine_trigger_up(h.engine) };
+        h.expect("stop_capture");
+        unsafe { cadence_engine_capture_stopped(h.engine) };
+        let ins = h.expect("run_insertion");
+        assert!(
+            ins["text"].as_str().unwrap().starts_with("Hello"),
+            "reloaded engine produced wrong text: {}",
+            ins["text"]
+        );
     }
 
     #[test]

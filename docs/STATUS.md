@@ -241,6 +241,17 @@ Phase-0 orchestrator over the new C ABI (ADR-0005).
      ⌃⌥⌘Z (should revert + "undone" pill); menu toggle in some app then PTT there ("off
      here" pill, no capture); Pages page-layout blind-paste should now report "saved to
      clipboard" instead of a false success.
-6. §24 remainder: audio_blobs, dictionary/corrections/style/redaction/sync tables,
-   retention/purge, ModelStore-over-DB. Then idle model unload (<150 MB, ADR-0006).
+6. **Idle model unload SHIPPED (2026-07-18):** the ASR worker drops the whisper engine
+   (~200 MB model + Metal buffers) after 5 min without ASR work (`CADENCE_UNLOAD_SECS`
+   env override; 0 disables) and reloads via a factory on the next dictation — warm-up
+   decode re-run, audio_ctx cap re-applied. Reload is worn as a longer "thinking" (~200–
+   500 ms warm); capture is unaffected (ring buffers regardless). Reload failure fails
+   only that utterance through the existing no-lost-words path (partial jobs release the
+   scheduler latch, final jobs → AsrFailed) and retries next time. Regression-pinned:
+   `idle_unload_reloads_transparently_on_next_dictation` (1 s unload window, full dictation
+   after). 80/80 workspace + 11/11 FFI-whisper. Closes the last §28 idle-budget miss
+   pending live confirmation (footprint sampling across the 5-min threshold in
+   `qa/unload-verify.jsonl`; expect a drop from ~176–218 MB to well under 150 MB).
+7. §24 remainder: audio_blobs, dictionary/corrections/style/redaction/sync tables,
+   retention/purge, ModelStore-over-DB.
 5. Windows environment → port insertion spike + this FFI (header already C-clean).
