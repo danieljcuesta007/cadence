@@ -13,6 +13,7 @@
 
 import AVFoundation
 import CObjCCatch
+import CoreAudio
 
 public enum CaptureError: Error, CustomStringConvertible {
     case formatUnavailable
@@ -45,6 +46,91 @@ public final class AudioCapture {
     /// the tap checks this flag so a buffer straggling in after stop() is still delivered
     /// (no-lost-words), but nothing arrives once the engine is stopped.
     public var onChunk: (([Int16], Float) -> Void)?
+
+    /// Prefer the built-in mic over the system default input (default ON). Bluetooth
+    /// headsets as input mean telephony-mode audio — muffled 16 kHz HFP that whisper
+    /// mangles — AND the user's music drops to the same codec. The Mac's mic array beats
+    /// both; in-ear playback can't leak into it either.
+    public var preferBuiltInMic = true
+
+    public func setPreferBuiltInMic(_ on: Bool) {
+        guard on != preferBuiltInMic else { return }
+        preferBuiltInMic = on
+        guard !running else { return } // mid-capture: applies at the next start
+        recreateEngine()
+        prewarm()
+    }
+
+    /// Human-readable current input ("MacBook Pro Microphone @ 48000 Hz") for the log.
+    public var inputDescription: String {
+        let fmt = engine.inputNode.inputFormat(forBus: 0)
+        var name = "default input"
+        if let unit = engine.inputNode.audioUnit {
+            var dev = AudioDeviceID(0)
+            var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+            if AudioUnitGetProperty(
+                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                &dev, &size) == noErr, dev != 0, let n = Self.deviceName(dev) {
+                name = n
+            }
+        }
+        return "\(name) @ \(Int(fmt.sampleRate)) Hz"
+    }
+
+    // MARK: - CoreAudio device selection
+
+    private static func deviceName(_ id: AudioDeviceID) -> String? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var nameRef: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &nameRef) == noErr,
+            let name = nameRef?.takeRetainedValue()
+        else { return nil }
+        return name as String
+    }
+
+    /// The built-in input device (transport type built-in, has input streams), or nil
+    /// (clamshell-less Macs, hypothetical headless boxes) — callers fall back to default.
+    private static func builtInInputDevice() -> AudioDeviceID? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        let sys = AudioObjectID(kAudioObjectSystemObject)
+        guard AudioObjectGetPropertyDataSize(sys, &addr, 0, nil, &size) == noErr else {
+            return nil
+        }
+        var ids = [AudioDeviceID](
+            repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(sys, &addr, 0, nil, &size, &ids) == noErr else {
+            return nil
+        }
+        for id in ids {
+            var taddr = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyTransportType,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain)
+            var transport: UInt32 = 0
+            var tsize = UInt32(MemoryLayout<UInt32>.size)
+            guard AudioObjectGetPropertyData(id, &taddr, 0, nil, &tsize, &transport) == noErr,
+                transport == kAudioDeviceTransportTypeBuiltIn
+            else { continue }
+            var saddr = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreams,
+                mScope: kAudioDevicePropertyScopeInput,
+                mElement: kAudioObjectPropertyElementMain)
+            var ssize: UInt32 = 0
+            guard AudioObjectGetPropertyDataSize(id, &saddr, 0, nil, &ssize) == noErr,
+                ssize > 0
+            else { continue }
+            return id
+        }
+        return nil
+    }
 
     public init() {}
 
@@ -134,6 +220,15 @@ public final class AudioCapture {
             teardownTap()
         }
         let input = engine.inputNode
+        // Pin the built-in mic (when preferred and present) BEFORE reading the format:
+        // the AUHAL otherwise follows the system default input, i.e. whatever Bluetooth
+        // headset connected last. Failure to pin falls through to the default silently.
+        if preferBuiltInMic, let dev = Self.builtInInputDevice(), let unit = input.audioUnit {
+            var id = dev
+            _ = AudioUnitSetProperty(
+                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                &id, UInt32(MemoryLayout<AudioDeviceID>.size))
+        }
         // The HARDWARE format, not outputFormat(forBus:): installTap asserts
         // format.sampleRate == inputHWFormat.sampleRate, and the output side can serve a
         // stale rate after a route change (the exact repeated live failure) while
