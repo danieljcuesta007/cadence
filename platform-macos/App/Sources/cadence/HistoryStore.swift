@@ -195,12 +195,13 @@ final class HistoryStore {
         }
     }
 
-    /// Apple voice processing (noise suppression) on capture; default ON.
+    /// Apple voice processing (noise suppression) on capture; default OFF — experimental
+    /// (AUVoiceIO teardown deadlocked the app live 2026-07-19; opt-in until trustworthy).
     var voiceIsolation: Bool {
         guard let handle, let c = cadence_store_setting_get(handle, "voice_isolation")
-        else { return true }
+        else { return false }
         defer { cadence_string_free(c) }
-        return String(cString: c) != "off"
+        return String(cString: c) == "on"
     }
 
     func setVoiceIsolation(_ on: Bool) {

@@ -54,10 +54,12 @@ public final class AudioCapture {
     public var preferBuiltInMic = true
 
     /// Apple voice processing on the input (AEC + noise suppression — the "Voice
-    /// Isolation" machinery; default ON). Cafés and open offices otherwise leak ambient
-    /// chatter into the transcript. If enabling it makes capture fail, start() drops it
-    /// for the session rather than cancel dictations (see vpDisabledFallback).
-    public var voiceIsolation = true
+    /// Isolation" machinery; default OFF, experimental). Enabling helps café/office
+    /// ambience, but AUVoiceIO teardown DEADLOCKED the main thread live (2026-07-19
+    /// 14:07 sample: AudioComponentInstanceDispose → shared_mutex wait, app frozen) —
+    /// stays opt-in until its lifecycle proves trustworthy. If enabling it makes capture
+    /// fail, start() drops it for the session rather than cancel dictations.
+    public var voiceIsolation = false
     private var vpDisabledFallback = false
 
     public func setPreferBuiltInMic(_ on: Bool) {
@@ -211,16 +213,25 @@ public final class AudioCapture {
     /// Nuclear route-change recovery: discard the engine (its tap dies with it) and start
     /// clean. The config-change observer is engine-bound, so it is re-registered by the
     /// next ensureTap.
+    ///
+    /// The old engine is disposed on a background queue, NEVER inline: deallocating an
+    /// engine whose AUVoiceIO was live deadlocks in AudioComponentInstanceDispose
+    /// (froze the whole app on the main thread, 2026-07-19). If Apple's dispose hangs on
+    /// the background queue we leak one engine — annoying, invisible, survivable.
     private func recreateEngine() {
         if let o = routeChangeObserver {
             NotificationCenter.default.removeObserver(o)
             routeChangeObserver = nil
         }
         rebuildWork?.cancel()
-        engine.stop()
+        let old = engine
         tapInstalled = false
         tapFormat = nil
         engine = AVAudioEngine()
+        DispatchQueue.global(qos: .utility).async {
+            old.stop()
+            // `old` released here, off the main thread.
+        }
     }
 
     /// Synchronous stop. After return, in-flight tap callbacks have had time to land their
