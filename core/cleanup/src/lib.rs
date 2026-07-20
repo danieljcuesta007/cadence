@@ -100,10 +100,27 @@ fn finish_sentences(s: &str) -> String {
         } else {
             out.push(c);
         }
-        // Sentence boundary only when followed by space/end — a '.' inside "3.30" is not
-        // one (was capitalizing the word after a decimal).
-        if matches!(c, '.' | '!' | '?') && matches!(chars.peek(), None | Some(' ')) {
-            cap_next = true;
+        if matches!(c, '.' | '!' | '?') {
+            // ASR sometimes glues sentences ("out there.I don't know", live 2026-07-19):
+            // lowercase before + uppercase after = a missing boundary space. The guards
+            // keep "U.S." (uppercase before) and "google.com" (lowercase after) intact.
+            let prev_lower = out.chars().rev().nth(1).is_some_and(|p| p.is_lowercase());
+            let next_upper = chars.peek().is_some_and(|n| n.is_uppercase());
+            if prev_lower && next_upper {
+                out.push(' ');
+                cap_next = true;
+            } else if matches!(chars.peek(), None | Some(' ')) {
+                // Sentence boundary only when followed by space/end — a '.' inside
+                // "3.30" is not one (was capitalizing the word after a decimal). An
+                // acronym-final '.' ("U.S. office") isn't one either: single capital
+                // letter preceded by its own dot.
+                let mut rev = out.chars().rev().skip(1);
+                let acronym =
+                    rev.next().is_some_and(|p| p.is_uppercase()) && rev.next() == Some('.');
+                if !acronym {
+                    cap_next = true;
+                }
+            }
         }
     }
     let mut text = fix_standalone_i(&out);
@@ -297,6 +314,18 @@ mod tests {
             clean("hello there. how are you"),
             "Hello there. How are you?"
         );
+    }
+
+    #[test]
+    fn glued_sentences_get_a_boundary_space() {
+        assert_eq!(
+            clean("putting that out there.I don't know"),
+            "Putting that out there. I don't know."
+        );
+        // Acronyms and URLs must not be split — and an acronym's final '.' is not a
+        // sentence end ("office" stays lowercase).
+        assert_eq!(clean("the U.S. office is closed"), "The U.S. office is closed.");
+        assert_eq!(clean("check google.com for it"), "Check google.com for it.");
     }
 
     #[test]

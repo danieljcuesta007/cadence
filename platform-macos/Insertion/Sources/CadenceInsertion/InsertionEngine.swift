@@ -216,7 +216,21 @@ public final class InsertionEngine {
     /// value is readable AND contains the text; `contradicted` only when readable and the
     /// text is absent (checked via a tail sample — values can be huge). Everything else is
     /// `unverifiable` — never treated as failure.
+    ///
+    /// A first-read "contradicted" gets ONE re-read after a render window: terminal TUIs
+    /// process a paste through the pty and redraw asynchronously, so the immediate
+    /// readback sees the pre-paste screen. Live false-negatives (3× on 2026-07-19,
+    /// dictating into a Claude Code terminal): text visibly landed, yet history said
+    /// inserted=false and the user's clipboard was left stomped. A genuine swallow
+    /// (the Pages page-layout case) is still absent on the re-read.
     func verifyLanded(_ text: String) -> Verification {
+        let first = readbackVerdict(text)
+        guard first == .contradicted else { return first }
+        Thread.sleep(forTimeInterval: 0.18)
+        return readbackVerdict(text)
+    }
+
+    private func readbackVerdict(_ text: String) -> Verification {
         let probe = String(text.suffix(64))
         guard !probe.isEmpty,
             let outcome = withDeadline(timeoutMs, { () -> Verification in
