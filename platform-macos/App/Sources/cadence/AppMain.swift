@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let builtInMicItem = NSMenuItem(
         title: "Use Built-in Microphone", action: nil, keyEquivalent: "")
     let voiceIsolationItem = NSMenuItem(
-        title: "Voice Isolation", action: nil, keyEquivalent: "")
+        title: "Voice Isolation (Experimental)", action: nil, keyEquivalent: "")
     let retentionItem = NSMenuItem(title: "Keep History", action: nil, keyEquivalent: "")
     /// §24 retention choices surfaced in the menu (days; 0 = forever).
     static let retentionChoices: [(String, Int64)] = [
