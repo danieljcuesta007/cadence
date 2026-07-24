@@ -43,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static let retentionChoices: [(String, Int64)] = [
         ("Forever", 0), ("90 Days", 90), ("30 Days", 30), ("7 Days", 7),
     ]
+    let languageItem = NSMenuItem(title: "Dictation Language", action: nil, keyEquivalent: "")
+    /// Language menu: label → code passed to the core ("auto" detects per utterance).
+    static let languageChoices: [(String, String)] = [
+        ("Automatic", "auto"), ("English", "en"), ("Spanish", "es"),
+    ]
+    /// Cached so menuNeedsUpdate can tick the current choice without hitting the DB.
+    var dictationLanguage = "auto"
     // Held during an utterance: App Nap must never throttle a decode mid-dictation
     // (§28 latency budgets; suspected cause of a one-off 30 s Metal stall in testing).
     var activity: NSObjectProtocol?
@@ -111,6 +118,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         voiceIsolationItem.action = #selector(toggleVoiceIsolation)
         voiceIsolationItem.target = self
         menu.addItem(voiceIsolationItem)
+        // Dictation language (auto-detect by default; Spanish needs the multilingual model).
+        let languageMenu = NSMenu()
+        for (label, code) in Self.languageChoices {
+            let item = NSMenuItem(
+                title: label, action: #selector(pickLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = code
+            languageMenu.addItem(item)
+        }
+        languageItem.submenu = languageMenu
+        menu.addItem(languageItem)
         // Daily-driver basics: the app should survive a reboot without being remembered.
         loginItem.action = #selector(toggleStartAtLogin)
         loginItem.target = self
@@ -132,6 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HistoryReader.store = store
         disabledApps = store?.disabledApps() ?? []
         retainAudio = store?.retainAudioEnabled ?? false
+        dictationLanguage = store?.dictationLanguage ?? "auto"
         router.retainAudioEnabled = { [weak self] in self?.retainAudio ?? false }
         capture.preferBuiltInMic = store?.preferBuiltInMic ?? true
         capture.voiceIsolation = store?.voiceIsolation ?? true
@@ -201,6 +220,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let engine else { exit(1) }
                 DispatchQueue.main.async {
                     self.engine = engine
+                    // Apply the saved language now that the engine exists (env default is
+                    // "auto"; this makes a persisted English/Spanish choice stick across launches).
+                    engine.setLanguage(self.dictationLanguage)
                     let ms = Int(Date().timeIntervalSince(t0) * 1000)
                     self.router.log(
                         "core ready in \(ms) ms (core v\(CoreEngine.coreVersion)) — "
@@ -305,6 +327,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         builtInMicItem.state = capture.preferBuiltInMic ? .on : .off
         voiceIsolationItem.state = capture.voiceIsolation ? .on : .off
+        for item in languageItem.submenu?.items ?? [] {
+            item.state = (item.representedObject as? String) == dictationLanguage ? .on : .off
+        }
+    }
+
+    @objc func pickLanguage(_ sender: NSMenuItem) {
+        guard let code = sender.representedObject as? String else { return }
+        dictationLanguage = code
+        historyStore?.setDictationLanguage(code)
+        engine?.setLanguage(code)  // instant — no model reload
+        let label = Self.languageChoices.first { $0.1 == code }?.0 ?? code
+        router.log("dictation language → \(label) (\(code))")
     }
 
     @objc func toggleBuiltInMic() {

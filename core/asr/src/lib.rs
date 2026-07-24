@@ -39,6 +39,12 @@ pub trait AsrEngine {
     /// Drop any per-utterance streaming state carried across [`transcribe_partial`] calls, so
     /// the next utterance's instant pass starts clean. Default no-op for stateless engines.
     fn reset_stream(&mut self) {}
+
+    /// Set the decode language: "auto" (detect per utterance, multilingual models only) or an
+    /// ISO code like "en"/"es". Cheap — language is a per-decode parameter, not baked into the
+    /// loaded model, so this takes effect on the next `transcribe`. Default no-op for engines
+    /// (like the mock) that don't decode. Empty string is ignored by convention.
+    fn set_language(&mut self, _lang: &str) {}
 }
 
 /// Deterministic mock for tests and for machines without a model present.
@@ -217,6 +223,13 @@ pub mod whisper {
 
         fn reset_stream(&mut self) {
             self.partial_state = None;
+        }
+
+        fn set_language(&mut self, lang: &str) {
+            let lang = lang.trim();
+            if !lang.is_empty() {
+                self.lang = lang.to_lowercase();
+            }
         }
     }
 
