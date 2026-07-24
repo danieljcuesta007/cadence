@@ -49,6 +49,9 @@ final class CoreEngine {
     func cancel() { cadence_engine_cancel(handle) }
     func captureStopped() { cadence_engine_capture_stopped(handle) }
 
+    /// Runtime language override: "auto", an ISO code ("en"/"es"), or "" to leave as loaded.
+    func setLanguage(_ lang: String) { cadence_engine_set_language(handle, lang) }
+
     func pushAudio(_ samples: [Int16], level: Float) {
         samples.withUnsafeBufferPointer {
             cadence_engine_push_audio(handle, $0.baseAddress, $0.count, level)
