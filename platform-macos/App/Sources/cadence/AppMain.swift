@@ -360,9 +360,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         router.undoLastInsertion()
     }
 
+    // Clicking Cadence in the Dock/Finder (or `open`-ing it while it's already running)
+    // routes here instead of launching a second copy. We're an accessory app with no
+    // window of its own, so without this the click appears to "do nothing" — surface the
+    // dashboard, which is the thing a user is looking for when they click the app.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        showDashboard()
+        return true
+    }
+
     @objc func showDashboard() {
         if dashboard == nil { dashboard = DashboardWindowController() }
+        // Accessory apps don't come forward on their own; activate so the window is
+        // actually visible and focused rather than opening behind everything.
+        NSApp.activate(ignoringOtherApps: true)
         dashboard?.showWindow(nil)
+        dashboard?.window?.makeKeyAndOrderFront(nil)
     }
 
     @objc func quit() {
