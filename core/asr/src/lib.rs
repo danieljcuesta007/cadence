@@ -84,6 +84,22 @@ pub mod whisper {
         /// whisper.cpp's `stream` example exposes as `--audio-ctx`. Must stay ≥ the window's own
         /// frame count (~50 frames/s) or trailing audio is truncated.
         partial_audio_ctx: i32,
+        /// Decode language passed to whisper. "auto" lets whisper detect the spoken language
+        /// per utterance (multilingual models only) — this is what makes bilingual dictation
+        /// "just work". An explicit ISO code ("en", "es") pins it. Resolved once from
+        /// `CADENCE_LANG` at load; see [`resolve_language`].
+        lang: String,
+    }
+
+    /// Language for the decode: `CADENCE_LANG` if set (e.g. "es" to force Spanish, "en" to
+    /// force English), otherwise "auto" so whisper detects it from the audio. Auto-detection
+    /// requires a multilingual model — the English-only `.en` tiers ignore it and stay English.
+    fn resolve_language() -> String {
+        std::env::var("CADENCE_LANG")
+            .ok()
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "auto".into())
     }
 
     impl WhisperAsr {
@@ -99,6 +115,7 @@ pub mod whisper {
                 threads,
                 partial_state: None,
                 partial_audio_ctx: 0,
+                lang: resolve_language(),
             })
         }
 
@@ -107,15 +124,25 @@ pub mod whisper {
         pub fn set_partial_audio_ctx(&mut self, frames: i32) {
             self.partial_audio_ctx = frames;
         }
+
+        /// What to record as the utterance's language. A pinned code is reported as-is; "auto"
+        /// leaves it unknown (whisper detected it internally, but we don't surface the id here).
+        fn reported_language(&self) -> Option<String> {
+            if self.lang == "auto" {
+                None
+            } else {
+                Some(self.lang.clone())
+            }
+        }
     }
 
     /// Low-latency instant-pass params. Free function (not a method) so it borrows nothing from
     /// `WhisperAsr` — otherwise the returned [`FullParams`] would pin an immutable borrow of
     /// `self` that collides with the `&mut partial_state` the decode needs.
-    fn fast_params<'a>(threads: i32, audio_ctx: i32) -> FullParams<'a, 'a> {
+    fn fast_params<'a>(threads: i32, audio_ctx: i32, lang: &'a str) -> FullParams<'a, 'a> {
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_n_threads(threads);
-        params.set_language(Some("en"));
+        params.set_language(Some(lang));
         params.set_print_special(false);
         params.set_print_progress(false);
         params.set_print_realtime(false);
@@ -141,7 +168,7 @@ pub mod whisper {
                 .map_err(|e| AsrError::Engine(format!("state: {e}")))?;
             let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
             params.set_n_threads(self.threads);
-            params.set_language(Some("en"));
+            params.set_language(Some(&self.lang));
             params.set_print_special(false);
             params.set_print_progress(false);
             params.set_print_realtime(false);
@@ -157,7 +184,7 @@ pub mod whisper {
             Ok(Transcript {
                 instant: None,
                 refined,
-                language: Some("en".into()),
+                language: self.reported_language(),
             })
         }
 
@@ -172,7 +199,7 @@ pub mod whisper {
                         .map_err(|e| AsrError::Engine(format!("partial state: {e}")))?,
                 );
             }
-            let params = fast_params(self.threads, self.partial_audio_ctx);
+            let params = fast_params(self.threads, self.partial_audio_ctx, &self.lang);
             let state = self.partial_state.as_mut().expect("state just ensured");
             state
                 .full(params, pcm)
@@ -184,7 +211,7 @@ pub mod whisper {
             Ok(Transcript {
                 instant: Some(text.clone()),
                 refined: text,
-                language: Some("en".into()),
+                language: self.reported_language(),
             })
         }
 
