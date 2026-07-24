@@ -212,6 +212,26 @@ final class HistoryStore {
         }
     }
 
+    // MARK: dictation language (auto-detect by default; multilingual model required for ES)
+
+    /// "auto" (detect per utterance), "en", or "es". Unset ⇒ "auto" — the bundled multilingual
+    /// model detects the spoken language, so bilingual dictation works with no configuration.
+    var dictationLanguage: String {
+        guard let handle, let c = cadence_store_setting_get(handle, "dictation_language")
+        else { return "auto" }
+        defer { cadence_string_free(c) }
+        let v = String(cString: c)
+        return v.isEmpty ? "auto" : v
+    }
+
+    func setDictationLanguage(_ lang: String) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, "dictation_language", lang) {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("dictation_language save failed: \(msg)")
+        }
+    }
+
     // MARK: retained audio (§24, opt-in; off by default)
 
     private static let retainAudioKey = "retain_audio"
@@ -243,6 +263,18 @@ final class HistoryStore {
                 ? Int64(Date().timeIntervalSince1970 * 1000) + days * 86_400_000 : 0
         }
         return 0
+    }
+
+    /// Fetch a retained audio blob (the encrypted WAV) by id, for dashboard playback. Nil when
+    /// absent (never retained, purged, or store unavailable).
+    func audioBlob(id: String) -> Data? {
+        guard let handle else { return nil }
+        return queue.sync {
+            var len: Int = 0
+            guard let ptr = cadence_store_audio_get(handle, id, &len), len > 0 else { return nil }
+            defer { cadence_bytes_free(ptr, len) }
+            return Data(bytes: ptr, count: len)
+        }
     }
 
     /// Newest-first history for the dashboard. Synchronous (dashboard opens on demand).
