@@ -38,6 +38,11 @@ void cadence_engine_trigger_down(CadenceEngine *engine, bool verbatim);
 void cadence_engine_trigger_up(CadenceEngine *engine);
 void cadence_engine_cancel(CadenceEngine *engine);
 
+/* Set the dictation language at runtime: "auto" (detect per utterance; multilingual models
+ * only), an ISO code like "en"/"es", or "" to leave the engine as loaded. Effective on the
+ * next decode; no model reload; survives idle unload. */
+void cadence_engine_set_language(CadenceEngine *engine, const char *lang);
+
 /* Confirm capture is stopped and the final audio buffer has been pushed. The core
  * holds the ASR window open for this (500 ms grace) so no trailing words are lost. */
 void cadence_engine_capture_stopped(CadenceEngine *engine);
