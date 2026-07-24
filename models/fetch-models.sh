@@ -39,3 +39,9 @@ fetch ggml-base.en.bin \
 fetch ggml-small.en.bin \
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin" \
     "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d"
+
+# small (multilingual) — bilingual daily model: same tier as small.en but decodes any
+# language, so Spanish/English dictation auto-detects (CADENCE_LANG=auto). Pinned 2026-07-24.
+fetch ggml-small.bin \
+    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin" \
+    "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"

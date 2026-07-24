@@ -1,7 +1,7 @@
 // Renders the Cadence app icon master (1024×1024 PNG) — run: swift render-icon.swift out.png
 //
-// Design: warm ivory squircle (Apple continuous corner curve via CALayer cornerCurve),
-// five-bar cadence waveform in warm ink, peak bar in antique gold. No emoji, no gloss —
+// Design: white squircle (Apple continuous corner curve via CALayer cornerCurve),
+// five-bar cadence soundwave in neutral ink, peak bar in sage green. No emoji, no gloss —
 // clean at 16 px, distinctive at Dock size. Regenerate AppIcon.icns via make-icns.sh.
 
 import AppKit
@@ -34,7 +34,7 @@ root.addSublayer(shadowHost)
 
 let plateLayer = CAGradientLayer()
 plateLayer.frame = CGRect(x: (canvas - plate) / 2, y: (canvas - plate) / 2, width: plate, height: plate)
-plateLayer.colors = [color(0xFBF7EE), color(0xEFE6D4)] // ivory, warm
+plateLayer.colors = [color(0xFFFFFF), color(0xF7F8F6)] // white, faint cool wash for depth
 plateLayer.startPoint = CGPoint(x: 0.5, y: 1) // layer y=1 is top pre-flip; render() flips
 plateLayer.endPoint = CGPoint(x: 0.5, y: 0)
 plateLayer.cornerRadius = corner
@@ -42,21 +42,23 @@ plateLayer.cornerCurve = .continuous
 plateLayer.masksToBounds = true
 shadowHost.addSublayer(plateLayer)
 
-// Hairline inner keyline: separates the ivory plate from light backgrounds.
+// Hairline inner keyline: separates the white plate from light backgrounds (a white
+// icon on a light Dock/wallpaper would otherwise lose its edge — hence a touch stronger).
 let keyline = CALayer()
 keyline.frame = plateLayer.bounds
 keyline.cornerRadius = corner
 keyline.cornerCurve = .continuous
 keyline.borderWidth = 4
-keyline.borderColor = CGColor(gray: 0.20, alpha: 0.10)
+keyline.borderColor = CGColor(gray: 0.20, alpha: 0.14)
 plateLayer.addSublayer(keyline)
 
-// The cadence mark: five bars, heights shaped like a spoken phrase.
-let heights: [CGFloat] = [0.34, 0.72, 1.00, 0.55, 0.80]
+// The cadence mark: five bars tapering symmetrically from a center peak — a clean
+// soundwave silhouette. The peak carries the sage highlight; the rest read as the wave.
+let heights: [CGFloat] = [0.45, 0.78, 1.00, 0.78, 0.45]
 let barW: CGFloat = 76, gap: CGFloat = 46, maxH: CGFloat = 400
 let markW = barW * 5 + gap * 4
 let x0 = (plate - markW) / 2
-let ink = color(0x201C14) // warm near-black
+let ink = color(0x23262B) // neutral near-black, reads clean on white
 
 for (i, h) in heights.enumerated() {
     let barH = maxH * h
@@ -67,7 +69,7 @@ for (i, h) in heights.enumerated() {
     bar.cornerRadius = barW / 2
     bar.cornerCurve = .continuous
     if h == 1.0 {
-        bar.colors = [color(0xCBA94E), color(0xA9862F)] // antique gold, lit from top
+        bar.colors = [color(0xA9BA8C), color(0x7E9265)] // sage green, lit from top
         bar.startPoint = CGPoint(x: 0.5, y: 1)
         bar.endPoint = CGPoint(x: 0.5, y: 0)
     } else {
