@@ -96,6 +96,19 @@ final class DictionaryWindowController: NSWindowController, NSWindowDelegate {
         window?.makeFirstResponder(textView)
     }
 
+    /// Fold in a term added from elsewhere (the dashboard's Add to Dictionary) while this editor
+    /// is open. Without this, an open window holds pre-add text and Save would write the new
+    /// term straight back out. Appends rather than reloading so in-progress edits survive.
+    func absorb(term: String) {
+        let lines = textView.string.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard !lines.contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else {
+            return
+        }
+        let body = lines.filter { !$0.isEmpty } + [term]
+        textView.string = body.joined(separator: "\n")
+    }
+
     @objc private func save() {
         onSave?(textView.string)
         window?.close()

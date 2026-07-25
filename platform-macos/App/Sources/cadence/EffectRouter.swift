@@ -183,6 +183,12 @@ final class EffectRouter {
             onUI { self.overlay?.setLevel(level) }
         case "show_partial":
             let text = obj["text"] as? String ?? ""
+            // Keep the latest streaming decode so the record can carry it: the dashboard
+            // shows instant-vs-final, which is how we see the instant pass drifting on long
+            // dictations (it only ever sees a sliding tail window).
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                setMetric("transcript_instant", text)
+            }
             onUI { self.overlay?.setPartial(text) }
         case "run_insertion":
             insertionQueue.async { self.runInsertion(obj) }
@@ -227,6 +233,9 @@ final class EffectRouter {
         // Arm the accumulator before the tap starts so the first chunk is never missed;
         // clear stale audio from any utterance that ended without a persist.
         setRetaining(retainAudioEnabled(), clear: true)
+        // Same for metrics: a cancelled utterance never reaches persist, so its numbers —
+        // and now its partial transcript — would otherwise ride along on the next record.
+        _ = takeMetrics()
         do {
             try capture.start()
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
