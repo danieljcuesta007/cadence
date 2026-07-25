@@ -231,7 +231,7 @@ public final class InsertionEngine {
     }
 
     private func readbackVerdict(_ text: String) -> Verification {
-        let probe = String(text.suffix(64))
+        let probe = foldForReadback(String(text.suffix(64)))
         guard !probe.isEmpty,
             let outcome = withDeadline(timeoutMs, { () -> Verification in
                 guard let el = focusedElement() else { return .unverifiable }
@@ -239,7 +239,7 @@ public final class InsertionEngine {
                 guard let value = axString(el, kAXValueAttribute), !value.isEmpty else {
                     return .unverifiable
                 }
-                return value.contains(probe) ? .verified : .contradicted
+                return foldForReadback(value).contains(probe) ? .verified : .contradicted
             })
         else { return .unverifiable }
         return outcome
@@ -444,10 +444,30 @@ func directInsert(_ text: String, axTimeout: Float) -> Bool {
     guard err == .success else { return false }
 
     // Best-effort verification: if the element's value is readable, the text must be in it.
+    // Folded, because a false negative here is expensive: `insert` falls through to the paste
+    // strategy and the text lands twice.
     if let value = axString(el, kAXValueAttribute) {
-        return value.contains(text)
+        return foldForReadback(value).contains(foldForReadback(text))
     }
     return true
+}
+
+/// Reduce text to what a target cannot silently change while displaying it: letters and digits,
+/// lowercased. Readback comparison has to survive the target's own rendering, and exact
+/// substring matching does not:
+///
+/// - **Soft wrap.** A terminal or TUI re-flows a pasted line at its window width, so the AX value
+///   carries hard newlines (and box gutters like `│ `) mid-string. Measured live: Terminal
+///   exposes only the visible screen, wrapped at ~93 columns, so a contiguous 64-char probe
+///   survives roughly one time in four. This produced 14 false `contradicted` verdicts in 40
+///   live insertions (2026-07-16…25) — text that landed perfectly was reported as swallowed,
+///   the user's clipboard was left stomped, and undo was never armed.
+/// - **Substitutions.** Smart quotes/dashes turn `don't` into `don’t` on entry in several apps.
+///
+/// A genuine swallow — the Pages page-layout case this verification exists for — has the text
+/// absent under any folding, so the check still catches what it was built to catch.
+public func foldForReadback(_ s: String) -> String {
+    s.lowercased().filter { $0.isLetter || $0.isNumber }
 }
 
 // MARK: - clipboard snapshot/restore
