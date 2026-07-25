@@ -2,6 +2,63 @@
 
 Updated: 2026-07-25 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
+## Latency + Spanish eval (2026-07-25, second pass)
+
+Follow-on to the audit: "make the thinking faster", plus the two gaps the audit left open
+(no Spanish fixtures, no Swift tests). Everything below is A/B'd on the §30 harness, which
+reports WER and ASR latency together — so no speedup was accepted without checking what it cost.
+
+**Refined pass: ~660 ms → ~500 ms, WER unchanged at 1.778 %.** Two levers, both accuracy-neutral.
+Absolute latency drifts ±50 ms run to run on this machine (480/495/554 ms across three identical
+runs), so treat the deltas below as the finding and any single number as approximate; WER, by
+contrast, reproduced exactly (4/225 errors) in every run:
+- **Flash attention** (`WhisperContextParameters.flash_attn`, off by default in whisper-rs):
+  659 → 537 ms, identical WER. A fused attention kernel — same arithmetic, less memory traffic.
+- **Encoder window** (`audio_ctx` 1500 → 1280): ~537 → ~500 ms, identical WER. Whisper always
+  encodes a 30 s mel, so a 4 s utterance pays for 26 s of silence. Sizing the window to the
+  audio is *not* free, though — the sweep in `refined_audio_ctx`'s doc comment shows the cliff
+  (1024 → 2.2 %, 768 → 3.6 %, sized-to-audio → 4.0 %). 1280 is the knee; we take the free 12 %
+  and stop.
+
+**Insertion: the 250 ms paste settle is now a poll, not a sleep.** The wait exists so the
+clipboard restore cannot beat the target to the pasteboard — but a readback that already contains
+our text proves the target is done, so verifiable targets stop waiting the moment it lands
+(typically 40–80 ms). Opaque targets (VS Code, web views, Spotlight) still wear the full settle.
+Combined with the ASR work, perceived end-to-end goes from ~913 ms to ~575 ms.
+
+**Rejected, with the measurement that killed it:** reusing the instant pass's language detection
+so "Automatic" could skip its own detection encode. It worked for English (454 → 308 ms, same
+WER) but wrecked Spanish (21.5 % → 29.4 %): detection off a capped-encoder partial is unreliable,
+and taking the last partial instead of the first changed nothing. Reverted — a latency win that
+silently degrades one of two supported languages is not a win.
+
+**Spanish is now measured, and Automatic is the wrong default for it.** New corpus:
+`qa/wer-fixtures-es.sh` → 15 fixtures / 214 ref words, Spain + Mexico voices, in their own
+directory (`qa/fixtures/wer-es/`) with its own manifest and results file — the English generator
+wipes its own WAVs, and one mixed manifest would score English-only models against Spanish audio.
+`qa/wer.py` now folds diacritics before tokenising (its filter keeps `[a-z0-9:' ]`, so "canción"
+was being shattered into "canci n"); folding is symmetric, so a dropped accent is never an error.
+
+| bundled small.bin | WER | mean ASR |
+|---|---|---|
+| English, Automatic | 1.778 % | 495 ms |
+| Spanish, Automatic | 21.495 % | 556 ms |
+| Spanish, pinned `es` | **13.551 %** | **344 ms** |
+| English, pinned `en` | 1.778 % | 295 ms |
+| Spanish on `small.en` (control) | 70.561 % | — |
+
+The control confirms the corpus really measures Spanish. The finding is that **Automatic costs
+~160 ms in both languages and ~8 points of WER in Spanish** — pinning the Language menu is better
+on both axes. Caveat: fixtures are `say`-synthesized, and synthetic Spanish may detect worse than
+a real voice. **Open decision for the user:** leave Automatic as the default (bilingual "just
+works", slower, worse Spanish) or default to a pinned language and switch in the menu.
+
+**Swift maths now has tests:** `cadence selftest-stats` — 18 checks over `Stats.compute` (time
+saved incl. the never-negative floor, pace ignoring rows without a capture window, streak
+counting to the gap and surviving a not-yet-dictated today, range scoping, the 7-bucket chart,
+top-app ranking and bar fractions, empty history). All pass; no bug found, but the dashboard's
+arithmetic is no longer unpinned. Same pattern as `insertctl selftest`, no XCTest required.
+
 ## Systems audit (2026-07-25) — measured, not reviewed
 
 Nine days of real single-user use (49 captures, 40 insertions, `~/.cadence/logs/cadence.log`),
@@ -218,9 +275,9 @@ Refreshed 2026-07-25 from 9 days of live logs + the §30 harness on the **bundle
 
 | Metric | Target | Measured |
 |---|---|---|
-| Local refined-pass pipeline | ≤ 700 ms p50 | **MISS by design** — ASR alone 672 ms mean / 798 ms max on bundled `ggml-small.bin` (§30, 15 fixtures); + ~250 ms insertion ≈ 0.9 s end-to-end. Was 203–233 ms on base.en; accuracy was chosen over latency (1.78 % vs 5.78 % WER) |
-| ASR accuracy (§30) | — | **1.778 % WER** bundled multilingual small · 3.111 % small.en · 5.778 % base.en (225 ref words, TTS fixtures) |
-| Insertion engine call | ≤ 250 ms + fallback | 26–29 ms direct AX; **253–268 ms paste_restore live** (the real daily path — includes the 250 ms paste settle + readback) |
+| Local refined-pass pipeline | ≤ 700 ms p50 | **~600 ms end-to-end** (ASR ~500 ms ±50 + insertion ~80 ms on a verifiable target) — target MET after the 7/25 latency pass; was ~913 ms |
+| ASR accuracy (§30) | — | **1.778 % WER** bundled multilingual small · 3.111 % small.en · 5.778 % base.en (225 ref words, TTS fixtures). Spanish: 21.5 % on Automatic, **13.6 % pinned** (214 ref words) |
+| Insertion engine call | ≤ 250 ms + fallback | 26–29 ms direct AX; **~40–80 ms paste_restore** on verifiable targets (poll, not a flat sleep); opaque targets still 250 ms |
 | Insertion outcome (live, 40 real) | inserted, verified | 24 verified · 2 unverifiable · **14 falsely contradicted → root-caused and fixed 7/25** |
 | Key-down → capture start | ≤ 50 ms perceived | **p50 43 ms / p90 79 ms / max 330 ms** over 49 live captures — p50 target MET; the tail is likely post-idle-unload reload |
 | Active RAM peak | < 1.2 GB | 282 MB (Phase-0 headless, base.en; shell with small.bin unmeasured) |

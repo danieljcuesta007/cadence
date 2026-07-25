@@ -18,16 +18,23 @@ if (( ${#MODELS[@]} == 0 )); then
     MODELS=(models/artifacts/ggml-*.bin)
 fi
 
-MANIFEST=qa/fixtures/wer/manifest.tsv
-[[ -f "$MANIFEST" ]] || { echo "run qa/wer-fixtures.sh first" >&2; exit 1; }
+# Corpus + output are overridable so a second language can be scored without disturbing the
+# English baseline: WER_MANIFEST=qa/fixtures/wer-es/manifest.tsv WER_OUT=qa/wer-results-es.json
+MANIFEST="${WER_MANIFEST:-qa/fixtures/wer/manifest.tsv}"
+[[ -f "$MANIFEST" ]] || {
+    echo "no manifest at $MANIFEST — run qa/wer-fixtures.sh (or wer-fixtures-es.sh) first" >&2
+    exit 1
+}
 
-OUT=qa/wer-results.json
+OUT="${WER_OUT:-qa/wer-results.json}"
 python3 - "$BIN" "$MANIFEST" "$OUT" "${MODELS[@]}" <<'EOF'
-import json, subprocess, sys, time
+import json, os, subprocess, sys, time
 sys.path.insert(0, "qa")
 from wer import normalize, wer
 
 bin_, manifest, out_path, *models = sys.argv[1:]
+# WAVs live beside their manifest, so a second corpus needs no further wiring.
+wav_dir = os.path.dirname(manifest)
 fixtures = []
 for line in open(manifest):
     wav, ref = line.rstrip("\n").split("\t")
@@ -38,7 +45,7 @@ for model in models:
     rows, total_err, total_ref, asr_ms = [], 0, 0, []
     for wav, ref in fixtures:
         p = subprocess.run(
-            [bin_, "--wav", f"qa/fixtures/wer/{wav}", "--verbatim", "--model", model],
+            [bin_, "--wav", os.path.join(wav_dir, wav), "--verbatim", "--model", model],
             capture_output=True, text=True, timeout=180)
         if p.returncode != 0:
             rows.append({"wav": wav, "error": p.stderr.strip()[-200:]})
