@@ -1,12 +1,12 @@
 {
- "generated": "2026-07-25T18:15:22Z",
+ "generated": "2026-07-25T22:50:56Z",
  "results": {
   "models/artifacts/ggml-small.bin": {
    "wer": 0.017777777777777778,
    "errors": 4,
    "ref_words": 225,
-   "asr_ms_mean": 672.2,
-   "asr_ms_max": 798,
+   "asr_ms_mean": 553.6,
+   "asr_ms_max": 884,
    "fixtures": [
     {
      "wer": 0.0,
@@ -17,7 +17,7 @@
      "errors": 0,
      "wav": "s01.wav",
      "hyp": "Hey, just checking in about tomorrow's meeting. Can we push it to 3.30 instead?",
-     "asr_ms": 757
+     "asr_ms": 500
     },
     {
      "wer": 0.0,
@@ -28,7 +28,7 @@
      "errors": 0,
      "wav": "s02.wav",
      "hyp": "The quarterly numbers look strong. Revenue grew 12% and churn dropped below 2%.",
-     "asr_ms": 606
+     "asr_ms": 472
     },
     {
      "wer": 0.16666666666666666,
@@ -39,7 +39,7 @@
      "errors": 2,
      "wav": "d01.wav",
      "hyp": "Please send the invoice to accounts payable by Friday 21.",
-     "asr_ms": 563
+     "asr_ms": 518
     },
     {
      "wer": 0.0,
@@ -50,7 +50,7 @@
      "errors": 0,
      "wav": "d02.wav",
      "hyp": "I think the root cause is a race condition between the audio callback and the ring buffer clear.",
-     "asr_ms": 633
+     "asr_ms": 532
     },
     {
      "wer": 0.0,
@@ -61,7 +61,7 @@
      "errors": 0,
      "wav": "k01.wav",
      "hyp": "add milk, eggs, sourdough bread, and two avocados to the shopping list.",
-     "asr_ms": 739
+     "asr_ms": 534
     },
     {
      "wer": 0.0,
@@ -72,7 +72,7 @@
      "errors": 0,
      "wav": "k02.wav",
      "hyp": "The flight departs Sydney at 6.45 in the morning and lands in Auckland around noon.",
-     "asr_ms": 751
+     "asr_ms": 512
     },
     {
      "wer": 0.07142857142857142,
@@ -83,7 +83,7 @@
      "errors": 1,
      "wav": "m01.wav",
      "hyp": "Let's schedule the design review for Wednesday afternoon in the Louch Conference Room.",
-     "asr_ms": 598
+     "asr_ms": 884
     },
     {
      "wer": 0.0,
@@ -94,7 +94,7 @@
      "errors": 0,
      "wav": "t01.wav",
      "hyp": "The new model reduces latency by roughly 40% while keeping accuracy unchanged.",
-     "asr_ms": 702
+     "asr_ms": 680
     },
     {
      "wer": 0.0,
@@ -105,7 +105,7 @@
      "errors": 0,
      "wav": "s03.wav",
      "hyp": "Dear team, thank you all for the incredible effort on the launch. Take Friday off, you earned it.",
-     "asr_ms": 613
+     "asr_ms": 528
     },
     {
      "wer": 0.0,
@@ -116,7 +116,7 @@
      "errors": 0,
      "wav": "d03.wav",
      "hyp": "Navigate to settings, then privacy and security, then microphone, and enable access for cadence.",
-     "asr_ms": 635
+     "asr_ms": 540
     },
     {
      "wer": 0.06666666666666667,
@@ -127,7 +127,7 @@
      "errors": 1,
      "wav": "k03.wav",
      "hyp": "My address is 42 Wollaby Way, Apartment 7, and the postcode is 2000.",
-     "asr_ms": 612
+     "asr_ms": 639
     },
     {
      "wer": 0.0,
@@ -138,7 +138,7 @@
      "errors": 0,
      "wav": "m02.wav",
      "hyp": "The recipe needs two cups of flour, a teaspoon of baking soda, and a pinch of salt.",
-     "asr_ms": 765
+     "asr_ms": 560
     },
     {
      "wer": 0.0,
@@ -149,7 +149,7 @@
      "errors": 0,
      "wav": "s04.wav",
      "hyp": "Honestly the fastest fix is to revert the merge, cut a patch release, and investigate on Monday.",
-     "asr_ms": 798
+     "asr_ms": 500
     },
     {
      "wer": 0.0,
@@ -160,7 +160,7 @@
      "errors": 0,
      "wav": "t02.wav",
      "hyp": "encryption keys live in the keychain and the database is never written in plain text.",
-     "asr_ms": 661
+     "asr_ms": 473
     },
     {
      "wer": 0.0,
@@ -171,16 +171,16 @@
      "errors": 0,
      "wav": "f01.wav",
      "hyp": "The train to Boston leaves from platform 9 at half past 4.",
-     "asr_ms": 650
+     "asr_ms": 432
     }
    ]
   },
   "models/artifacts/ggml-small.en.bin": {
-   "wer": 0.03111111111111111,
-   "errors": 7,
+   "wer": 0.02666666666666667,
+   "errors": 6,
    "ref_words": 225,
-   "asr_ms_mean": 638.8666666666667,
-   "asr_ms_max": 769,
+   "asr_ms_mean": 484.46666666666664,
+   "asr_ms_max": 598,
    "fixtures": [
     {
      "wer": 0.0,
@@ -191,7 +191,7 @@
      "errors": 0,
      "wav": "s01.wav",
      "hyp": "Hey, just checking in about tomorrow's meeting, can we push it to 3.30 instead?",
-     "asr_ms": 706
+     "asr_ms": 443
     },
     {
      "wer": 0.06666666666666667,
@@ -202,7 +202,7 @@
      "errors": 1,
      "wav": "s02.wav",
      "hyp": "quarterly numbers look strong, revenue grew 12% and churn dropped below 2%.",
-     "asr_ms": 607
+     "asr_ms": 465
     },
     {
      "wer": 0.25,
@@ -213,7 +213,7 @@
      "errors": 3,
      "wav": "d01.wav",
      "hyp": "Please send the invoice to accounts payable by Friday 21st.",
-     "asr_ms": 581
+     "asr_ms": 421
     },
     {
      "wer": 0.0,
@@ -223,8 +223,8 @@
      "ref_words": 18,
      "errors": 0,
      "wav": "d02.wav",
-     "hyp": "I think the root cause is a race condition between the audio callback and the ring buffer clear",
-     "asr_ms": 632
+     "hyp": "I think the root cause is a race condition between the audio callback and the ring buffer clear.",
+     "asr_ms": 485
     },
     {
      "wer": 0.0,
@@ -235,7 +235,7 @@
      "errors": 0,
      "wav": "k01.wav",
      "hyp": "add milk, eggs, sourdough bread, and two avocados to the shopping list.",
-     "asr_ms": 587
+     "asr_ms": 481
     },
     {
      "wer": 0.0,
@@ -246,7 +246,7 @@
      "errors": 0,
      "wav": "k02.wav",
      "hyp": "The flight departs Sydney at 6.45 in the morning and lands in Auckland around noon.",
-     "asr_ms": 769
+     "asr_ms": 468
     },
     {
      "wer": 0.07142857142857142,
@@ -257,7 +257,7 @@
      "errors": 1,
      "wav": "m01.wav",
      "hyp": "Let's schedule the design review for Wednesday afternoon in the lounge conference room.",
-     "asr_ms": 603
+     "asr_ms": 435
     },
     {
      "wer": 0.0,
@@ -268,7 +268,7 @@
      "errors": 0,
      "wav": "t01.wav",
      "hyp": "The new model reduces latency by roughly 40% while keeping accuracy unchanged.",
-     "asr_ms": 638
+     "asr_ms": 487
     },
     {
      "wer": 0.0,
@@ -279,7 +279,7 @@
      "errors": 0,
      "wav": "s03.wav",
      "hyp": "Dear team, thank you all for the incredible effort on the launch. Take Friday off, you earned it!",
-     "asr_ms": 694
+     "asr_ms": 598
     },
     {
      "wer": 0.0,
@@ -290,7 +290,7 @@
      "errors": 0,
      "wav": "d03.wav",
      "hyp": "Navigate to Settings, then Privacy & Security, then Microphone, and enable access for cadence.",
-     "asr_ms": 609
+     "asr_ms": 485
     },
     {
      "wer": 0.0,
@@ -301,7 +301,7 @@
      "errors": 0,
      "wav": "k03.wav",
      "hyp": "My address is 42 Wallaby Way, Apartment 7, and the postcode is 2000.",
-     "asr_ms": 662
+     "asr_ms": 475
     },
     {
      "wer": 0.0,
@@ -312,7 +312,7 @@
      "errors": 0,
      "wav": "m02.wav",
      "hyp": "The recipe needs 2 cups of flour, a teaspoon of baking soda, and a pinch of salt.",
-     "asr_ms": 618
+     "asr_ms": 466
     },
     {
      "wer": 0.0,
@@ -323,7 +323,7 @@
      "errors": 0,
      "wav": "s04.wav",
      "hyp": "Honestly the fastest fix is to revert the merge, cut a patch release, and investigate on Monday.",
-     "asr_ms": 635
+     "asr_ms": 501
     },
     {
      "wer": 0.0,
@@ -334,27 +334,27 @@
      "errors": 0,
      "wav": "t02.wav",
      "hyp": "encryption keys live in the keychain and the database is never written in plain text.",
-     "asr_ms": 649
+     "asr_ms": 551
     },
     {
-     "wer": 0.16666666666666666,
-     "sub": 2,
+     "wer": 0.08333333333333333,
+     "sub": 1,
      "del": 0,
      "ins": 0,
      "ref_words": 12,
-     "errors": 2,
+     "errors": 1,
      "wav": "f01.wav",
-     "hyp": "The grain of Boston leaves from Platform 9 at half past four.",
-     "asr_ms": 593
+     "hyp": "The grain to Boston leaves from Platform 9 at half past four.",
+     "asr_ms": 506
     }
    ]
   },
   "models/artifacts/ggml-base.en.bin": {
-   "wer": 0.057777777777777775,
-   "errors": 13,
+   "wer": 0.06666666666666667,
+   "errors": 15,
    "ref_words": 225,
-   "asr_ms_mean": 214.66666666666666,
-   "asr_ms_max": 273,
+   "asr_ms_mean": 162.73333333333332,
+   "asr_ms_max": 203,
    "fixtures": [
     {
      "wer": 0.0,
@@ -365,7 +365,7 @@
      "errors": 0,
      "wav": "s01.wav",
      "hyp": "Hey, just checking in about tomorrow's meeting. Can we push it to 3.30 instead?",
-     "asr_ms": 190
+     "asr_ms": 143
     },
     {
      "wer": 0.06666666666666667,
@@ -376,7 +376,7 @@
      "errors": 1,
      "wav": "s02.wav",
      "hyp": "quarterly numbers look strong, revenue grew 12% and churn dropped below 2%.",
-     "asr_ms": 171
+     "asr_ms": 155
     },
     {
      "wer": 0.16666666666666666,
@@ -387,7 +387,7 @@
      "errors": 2,
      "wav": "d01.wav",
      "hyp": "Please send the invoice to accounts payable by Friday 21.",
-     "asr_ms": 168
+     "asr_ms": 129
     },
     {
      "wer": 0.16666666666666666,
@@ -398,18 +398,18 @@
      "errors": 3,
      "wav": "d02.wav",
      "hyp": "I think the route causes a race condition between the audio callback and the ring buffer clear.",
-     "asr_ms": 181
+     "asr_ms": 145
     },
     {
-     "wer": 0.25,
-     "sub": 2,
-     "del": 1,
+     "wer": 0.4166666666666667,
+     "sub": 5,
+     "del": 0,
      "ins": 0,
      "ref_words": 12,
-     "errors": 3,
+     "errors": 5,
      "wav": "k01.wav",
-     "hyp": "Admilk, Eggs, Sowidow Bread, and 2 Avocados to the shopping list",
-     "asr_ms": 214
+     "hyp": "Admilk, Eggs, Sowid O'Bred, and two avocados to the shopping list.",
+     "asr_ms": 161
     },
     {
      "wer": 0.0,
@@ -420,7 +420,7 @@
      "errors": 0,
      "wav": "k02.wav",
      "hyp": "The flight departs Sydney at 6.45 in the morning and lands in Auckland around noon.",
-     "asr_ms": 273
+     "asr_ms": 203
     },
     {
      "wer": 0.07142857142857142,
@@ -431,7 +431,7 @@
      "errors": 1,
      "wav": "m01.wav",
      "hyp": "Let's schedule the design review for Wednesday afternoon in the LOUGE conference room.",
-     "asr_ms": 228
+     "asr_ms": 158
     },
     {
      "wer": 0.0,
@@ -442,7 +442,7 @@
      "errors": 0,
      "wav": "t01.wav",
      "hyp": "The new model reduces latency by roughly 40% while keeping accuracy unchanged.",
-     "asr_ms": 221
+     "asr_ms": 136
     },
     {
      "wer": 0.0,
@@ -453,7 +453,7 @@
      "errors": 0,
      "wav": "s03.wav",
      "hyp": "Dear team, thank you all for the incredible effort on the launch. Take Friday off, you earned it.",
-     "asr_ms": 253
+     "asr_ms": 192
     },
     {
      "wer": 0.0,
@@ -464,7 +464,7 @@
      "errors": 0,
      "wav": "d03.wav",
      "hyp": "Navigate to settings, then privacy and security, then microphone, and enable access for cadence.",
-     "asr_ms": 249
+     "asr_ms": 151
     },
     {
      "wer": 0.0,
@@ -475,7 +475,7 @@
      "errors": 0,
      "wav": "k03.wav",
      "hyp": "My address is 42 Wallaby Way, apartment 7, and the postcode is 2000.",
-     "asr_ms": 237
+     "asr_ms": 186
     },
     {
      "wer": 0.0,
@@ -486,7 +486,7 @@
      "errors": 0,
      "wav": "m02.wav",
      "hyp": "The recipe needs two cups of flour, a teaspoon of baking soda, and a pinch of salt.",
-     "asr_ms": 237
+     "asr_ms": 152
     },
     {
      "wer": 0.0,
@@ -497,7 +497,7 @@
      "errors": 0,
      "wav": "s04.wav",
      "hyp": "Honestly the fastest fix is to revert the merge, cut a patch release, and investigate on Monday.",
-     "asr_ms": 209
+     "asr_ms": 172
     },
     {
      "wer": 0.0,
@@ -508,7 +508,7 @@
      "errors": 0,
      "wav": "t02.wav",
      "hyp": "encryption keys live in the keychain and the database is never written in plain text.",
-     "asr_ms": 185
+     "asr_ms": 201
     },
     {
      "wer": 0.25,
@@ -519,7 +519,7 @@
      "errors": 3,
      "wav": "f01.wav",
      "hyp": "The train to Boston leaves from platform 9 at F-S4.",
-     "asr_ms": 204
+     "asr_ms": 157
     }
    ]
   }

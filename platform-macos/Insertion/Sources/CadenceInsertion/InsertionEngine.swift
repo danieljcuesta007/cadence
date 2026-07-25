@@ -189,15 +189,31 @@ public final class InsertionEngine {
                                 detail: "CGEvent post failed; clipboard restored")
         }
 
-        // Give the target app time to service the paste before restoring. This wait bounds
-        // *our* latency only; the target processes ⌘V on its own schedule and is never blocked.
-        Thread.sleep(forTimeInterval: Double(min(deadlineMs, 250)) / 1000.0)
-
-        // AC-20 post-insert verification, BEFORE the clipboard restore so a swallowed paste
-        // can keep the words parked (never lost). Readback is best-effort: only a readable
-        // focused value can confirm or deny; opaque targets stay "unverifiable" and are
-        // trusted as before (VS Code, web views and Spotlight land pastes AX-opaquely).
-        let verification = verifyLanded(text)
+        // Wait for the target to service the paste — by watching, not by sleeping a flat 250 ms.
+        // The wait exists for correctness, not politeness: restoring the clipboard before the
+        // target has read the pasteboard would hand it the *previous* contents. But a readback
+        // that already contains our text proves the target is done, so on a verifiable target we
+        // can stop waiting the moment it lands (typically 40–80 ms instead of the full 250 ms —
+        // a third of the perceived "thinking" tail, at no risk).
+        //
+        // AC-20 post-insert verification happens here, BEFORE the restore, so a genuinely
+        // swallowed paste keeps the words parked on the clipboard (never lost). Opaque targets
+        // (VS Code, web views, Spotlight) can never confirm, so they wear the full conservative
+        // settle and stay "unverifiable" — trusted exactly as before.
+        let settleMs = min(deadlineMs, 250)
+        let settleDeadline = Date().addingTimeInterval(Double(settleMs) / 1000.0)
+        var verification: Verification = .unverifiable
+        repeat {
+            verification = readbackVerdict(text)
+            if verification == .verified { break }
+            Thread.sleep(forTimeInterval: 0.02)
+        } while Date() < settleDeadline
+        if verification == .contradicted {
+            // Never seen to land within the settle window: give the target one more render
+            // window before believing it (terminal TUIs redraw through the pty asynchronously).
+            Thread.sleep(forTimeInterval: 0.18)
+            verification = readbackVerdict(text)
+        }
         if verification == .contradicted {
             // Leave OUR text on the clipboard (do not restore): the user was just told
             // nothing was inserted — the words must be one ⌘V away (§29).
@@ -214,22 +230,11 @@ public final class InsertionEngine {
 
     /// Best-effort readback of the focused element after a paste. `verified` only when the
     /// value is readable AND contains the text; `contradicted` only when readable and the
-    /// text is absent (checked via a tail sample — values can be huge). Everything else is
-    /// `unverifiable` — never treated as failure.
+    /// text is absent (checked via a folded tail sample — values can be huge). Everything else
+    /// is `unverifiable` — never treated as failure.
     ///
-    /// A first-read "contradicted" gets ONE re-read after a render window: terminal TUIs
-    /// process a paste through the pty and redraw asynchronously, so the immediate
-    /// readback sees the pre-paste screen. Live false-negatives (3× on 2026-07-19,
-    /// dictating into a Claude Code terminal): text visibly landed, yet history said
-    /// inserted=false and the user's clipboard was left stomped. A genuine swallow
-    /// (the Pages page-layout case) is still absent on the re-read.
-    func verifyLanded(_ text: String) -> Verification {
-        let first = readbackVerdict(text)
-        guard first == .contradicted else { return first }
-        Thread.sleep(forTimeInterval: 0.18)
-        return readbackVerdict(text)
-    }
-
+    /// Called in a poll by `pasteWithRestore`, which owns the settle window and the one
+    /// post-render re-read (terminal TUIs redraw through the pty asynchronously).
     private func readbackVerdict(_ text: String) -> Verification {
         let probe = foldForReadback(String(text.suffix(64)))
         guard !probe.isEmpty,
