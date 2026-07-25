@@ -25,6 +25,11 @@ struct HistoryEntry {
     let captureStartMs: Int?
     let captureWindowMs: Int?
     let insertionMs: Int?
+    /// The two upstream passes behind `text`, when the store has them: the streaming decode
+    /// shown live in the overlay, and the refined ASR output before cleanup rewrote it. Both
+    /// are absent on rows written before they were recorded.
+    let transcriptInstant: String?
+    let transcriptFinal: String?
 
     /// Whisper emits bracketed non-speech markers ([BLANK_AUDIO], [MUSIC], [SILENCE]…) when it
     /// hears no words. They're not dictation — excluded from counts and shown muted.
@@ -68,7 +73,9 @@ enum HistoryReader {
             audioBlobId: obj["audio_blob_id"] as? String,
             captureStartMs: (obj["capture_start_ms"] as? NSNumber)?.intValue,
             captureWindowMs: (obj["capture_window_ms"] as? NSNumber)?.intValue,
-            insertionMs: (obj["insertion_ms"] as? NSNumber)?.intValue)
+            insertionMs: (obj["insertion_ms"] as? NSNumber)?.intValue,
+            transcriptInstant: obj["transcript_instant"] as? String,
+            transcriptFinal: obj["transcript_final"] as? String)
     }
 }
 
@@ -180,16 +187,30 @@ final class DashboardWindowController: NSWindowController {
     private var rowViews: [HistoryRowView] = []
 
     // Detail dock (pinned bottom).
-    private let detailText = NSTextField(wrappingLabelWithString: "")
+    /// A text view rather than a label: selecting a word here is how terms get into the personal
+    /// dictionary, and only a text view reports its selection reliably once focus moves to the
+    /// button that acts on it.
+    private let detailText = DetailTextView()
+    private let detailScroll = NSScrollView()
     private let detailMeta = NSTextField(labelWithString: "")
+    /// The upstream passes, shown only when they disagree with what was inserted.
+    private let instantLabel = NSTextField(labelWithString: "")
+    private let rawLabel = NSTextField(labelWithString: "")
     private let copyButton = NSButton()
     private let playButton = NSButton()
     private let reinsertButton = NSButton()
+    private let dictionaryButton = NSButton()
     private let deleteButton = NSButton()
+    /// Restores the dictionary button's title after its "Added" confirmation.
+    private var dictionaryFlash: Timer?
 
     /// Injected by the composition root: re-inserts text into the app that was frontmost before
     /// the dashboard came forward (focus handling lives there, not here). Nil = no re-insert.
     var onReinsert: ((String) -> Void)?
+
+    /// Injected by the composition root: adds a term to the personal dictionary, returning false
+    /// when it was already there. Nil = no store, so the button stays disabled.
+    var onAddToDictionary: ((String) -> Bool)?
 
     convenience init() {
         let window = NSWindow(
@@ -263,21 +284,57 @@ final class DashboardWindowController: NSWindowController {
         top.boxType = .separator
         top.translatesAutoresizingMaskIntoConstraints = false
 
+        detailText.isEditable = false
+        detailText.isSelectable = true
+        detailText.drawsBackground = false
         detailText.font = .systemFont(ofSize: 13)
-        detailText.textColor = .labelColor
-        detailText.maximumNumberOfLines = 2
-        detailText.stringValue = "Select a dictation to see the full transcript."
+        detailText.textContainerInset = .zero
+        detailText.isVerticallyResizable = true
+        detailText.isHorizontallyResizable = false
+        detailText.autoresizingMask = [.width]
+        detailText.textContainer?.widthTracksTextView = true
+        detailText.delegate = self
+        // Right-click is the fast path for "that word should be in my dictionary" — same action
+        // as the button, offered where the selection already is.
+        detailText.decorateMenu = { [weak self] menu in
+            guard let self, let term = self.dictionaryCandidate(), self.onAddToDictionary != nil
+            else { return }
+            let item = NSMenuItem(
+                title: "Add “\(term)” to Dictionary",
+                action: #selector(self.addSelectionToDictionary), keyEquivalent: "")
+            item.target = self
+            menu.insertItem(.separator(), at: 0)
+            menu.insertItem(item, at: 0)
+        }
+        detailScroll.documentView = detailText
+        detailScroll.drawsBackground = false
+        detailScroll.hasVerticalScroller = true
+        detailScroll.borderType = .noBorder
+        detailScroll.translatesAutoresizingMaskIntoConstraints = false
+        detailScroll.heightAnchor.constraint(equalToConstant: 36).isActive = true
+
         detailMeta.font = .systemFont(ofSize: 11)
         detailMeta.textColor = .secondaryLabelColor
         detailMeta.lineBreakMode = .byTruncatingTail
+        for label in [instantLabel, rawLabel] {
+            label.font = .systemFont(ofSize: 11)
+            label.textColor = .tertiaryLabelColor
+            label.lineBreakMode = .byTruncatingTail
+            label.isHidden = true
+        }
 
         styleButton(copyButton, "Copy", primary: false, action: #selector(copySelected))
         styleButton(reinsertButton, "Re-insert", primary: false, action: #selector(reinsertSelected))
+        styleButton(
+            dictionaryButton, Self.dictionaryButtonTitle, primary: false,
+            action: #selector(addSelectionToDictionary))
         styleButton(playButton, "Play Recording", primary: true, action: #selector(playSelected))
         styleButton(deleteButton, "Delete", primary: false, action: #selector(deleteSelected))
         deleteButton.contentTintColor = .systemRed
         copyButton.isEnabled = false
         reinsertButton.isEnabled = false
+        dictionaryButton.isEnabled = false
+        dictionaryButton.toolTip = "Select a word or phrase above to add it to your dictionary"
         playButton.isEnabled = false
         deleteButton.isEnabled = false
 
@@ -285,12 +342,15 @@ final class DashboardWindowController: NSWindowController {
         styleButton(exportButton, "Export All…", primary: false, action: #selector(exportAll))
 
         let actions = NSStackView(views: [
-            copyButton, reinsertButton, playButton, NSView(), deleteButton, exportButton,
+            copyButton, reinsertButton, dictionaryButton, playButton, NSView(), deleteButton,
+            exportButton,
         ])
         actions.orientation = .horizontal
         actions.spacing = 8
 
-        let stack = NSStackView(views: [detailText, detailMeta, actions])
+        let stack = NSStackView(views: [
+            detailScroll, instantLabel, rawLabel, detailMeta, actions,
+        ])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 7
@@ -307,6 +367,11 @@ final class DashboardWindowController: NSWindowController {
             stack.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -14),
             actions.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
             actions.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            detailScroll.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
+            detailScroll.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            instantLabel.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor),
+            rawLabel.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor),
+            detailMeta.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor),
         ])
         return box
     }
@@ -638,18 +703,20 @@ final class DashboardWindowController: NSWindowController {
     private func updateDetail() {
         player?.stop(); player = nil
         guard let e = selectedEntry() else {
-            detailText.stringValue = "Select a dictation to see the full transcript."
-            detailText.textColor = .secondaryLabelColor
+            setDetailText("Select a dictation to see the full transcript.", muted: true)
             detailMeta.stringValue = ""
+            instantLabel.isHidden = true
+            rawLabel.isHidden = true
             copyButton.isEnabled = false
             reinsertButton.isEnabled = false
+            dictionaryButton.isEnabled = false
             playButton.isEnabled = false
             deleteButton.isEnabled = false
             playButton.title = "Play Recording"
             return
         }
-        detailText.stringValue = e.isNonSpeech ? "No speech detected" : e.text
-        detailText.textColor = e.isNonSpeech ? .secondaryLabelColor : .labelColor
+        setDetailText(e.isNonSpeech ? "No speech detected" : e.text, muted: e.isNonSpeech)
+        showPasses(for: e)
 
         var bits: [String] = []
         if let ts = e.ts { bits.append(Self.detailTimeFmt.string(from: ts)) }
@@ -671,6 +738,92 @@ final class DashboardWindowController: NSWindowController {
         let hasAudio = e.audioBlobId != nil && HistoryReader.store != nil
         playButton.isEnabled = hasAudio
         playButton.title = hasAudio ? "Play Recording" : "No Recording"
+        refreshDictionaryButton()
+    }
+
+    /// Replace the transcript view's contents. Colour is applied over the whole run — a text
+    /// view keeps per-range attributes, so setting `textColor` alone would leave stale colour on
+    /// the previous string.
+    private func setDetailText(_ s: String, muted: Bool) {
+        detailText.string = s
+        detailText.setTextColor(
+            muted ? .secondaryLabelColor : .labelColor,
+            range: NSRange(location: 0, length: (s as NSString).length))
+        detailText.setSelectedRange(NSRange(location: 0, length: 0))
+        detailText.scroll(NSPoint.zero)
+    }
+
+    /// Surface the passes behind the inserted text, each only when it actually differs: the
+    /// instant (streaming) decode, and the refined ASR output before cleanup. Equal passes say
+    /// nothing, so showing them would just be noise in the dock.
+    private func showPasses(for e: HistoryEntry) {
+        let shown = Self.normalized(e.text)
+        let instant = e.transcriptInstant?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let raw = e.transcriptFinal?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if !instant.isEmpty, Self.normalized(instant) != shown, Self.normalized(instant) != Self.normalized(raw) {
+            instantLabel.stringValue = "While speaking  ·  \(instant)"
+            instantLabel.isHidden = false
+        } else {
+            instantLabel.isHidden = true
+        }
+        if !raw.isEmpty, Self.normalized(raw) != shown {
+            rawLabel.stringValue = "Before cleanup  ·  \(raw)"
+            rawLabel.isHidden = false
+        } else {
+            rawLabel.isHidden = true
+        }
+    }
+
+    /// Compare passes on words alone: the interesting difference is what was heard, not the
+    /// punctuation and casing cleanup is expected to change.
+    private static func normalized(_ s: String) -> String {
+        s.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    // MARK: add to dictionary (from a selection in the transcript)
+
+    private static let dictionaryButtonTitle = "Add to Dictionary"
+
+    /// The selected transcript text, if it's a plausible dictionary term. Terms bias the whisper
+    /// prompt, so a whole sentence would be worse than useless — cap it at a short phrase.
+    private func dictionaryCandidate() -> String? {
+        let r = detailText.selectedRange()
+        let ns = detailText.string as NSString
+        guard r.length > 0, NSMaxRange(r) <= ns.length else { return nil }
+        let term = ns.substring(with: r)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?…()[]{}\"'“”‘’"))
+        guard !term.isEmpty, term.count <= 48,
+            term.split(whereSeparator: \.isWhitespace).count <= 4,
+            term.rangeOfCharacter(from: .alphanumerics) != nil
+        else { return nil }
+        return term
+    }
+
+    private func refreshDictionaryButton() {
+        guard dictionaryFlash == nil else { return }  // mid-confirmation; leave it alone
+        dictionaryButton.title = Self.dictionaryButtonTitle
+        dictionaryButton.isEnabled = onAddToDictionary != nil && dictionaryCandidate() != nil
+    }
+
+    @objc private func addSelectionToDictionary() {
+        guard let term = dictionaryCandidate(), let add = onAddToDictionary else { return }
+        flashDictionary(add(term) ? "Added “\(term)”" : "Already in Dictionary")
+    }
+
+    /// Confirm in place on the button itself — an alert for a one-word add would be heavier than
+    /// the action deserves.
+    private func flashDictionary(_ message: String) {
+        dictionaryFlash?.invalidate()
+        dictionaryButton.title = message
+        dictionaryButton.isEnabled = false
+        dictionaryFlash = Timer.scheduledTimer(withTimeInterval: 1.6, repeats: false) {
+            [weak self] _ in
+            self?.dictionaryFlash = nil
+            self?.refreshDictionaryButton()
+        }
     }
 
     @objc private func copySelected() {
@@ -815,6 +968,30 @@ final class DashboardWindowController: NSWindowController {
         case nil, "": return "auto"
         case let other?: return other
         }
+    }
+}
+
+// MARK: - Transcript view
+
+extension DashboardWindowController: NSTextViewDelegate {
+    /// The Add to Dictionary button follows the selection, so it has to be re-evaluated on every
+    /// selection change — not just when a different dictation is picked.
+    func textViewDidChangeSelection(_ notification: Notification) {
+        refreshDictionaryButton()
+    }
+}
+
+/// The detail dock's transcript: read-only, selectable, and able to offer "Add to Dictionary"
+/// on its own contextual menu.
+final class DetailTextView: NSTextView {
+    /// Called with the standard editing menu so the owner can add its own items; the selection is
+    /// already current by the time the menu is built.
+    var decorateMenu: ((NSMenu) -> Void)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard let menu = super.menu(for: event) else { return nil }
+        decorateMenu?(menu)
+        return menu
     }
 }
 

@@ -381,6 +381,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.showWindow(nil)
     }
 
+    /// Add one term to the personal dictionary (the dashboard's Add to Dictionary, driven by a
+    /// selection in a past transcript — the moment you notice a misspelling is the moment to fix
+    /// it). Returns false when the term was already there. Case-insensitive: whisper's prompt bias
+    /// doesn't care, and a second "Addisuna" would just dilute the prompt.
+    private func addToDictionary(_ term: String) -> Bool {
+        guard let store = historyStore else { return false }
+        let existing = store.customVocabulary.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !existing.contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else {
+            router.log("personal dictionary: “\(term)” already present")
+            return false
+        }
+        let updated = (existing + [term]).joined(separator: "\n")
+        store.setCustomVocabulary(updated)
+        engine?.setVocabulary(Vocabulary.prompt(from: updated))  // instant — no model reload
+        dictionaryWindow?.absorb(term: term)
+        router.log("personal dictionary: added “\(term)” (\(existing.count + 1) terms)")
+        return true
+    }
+
     @objc func toggleBuiltInMic() {
         let on = !capture.preferBuiltInMic
         capture.setPreferBuiltInMic(on)
@@ -447,6 +468,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if dashboard == nil {
             let d = DashboardWindowController()
             d.onReinsert = { [weak self] text in self?.reinsertFromDashboard(text) }
+            if historyStore != nil {
+                d.onAddToDictionary = { [weak self] term in self?.addToDictionary(term) ?? false }
+            }
             dashboard = d
         }
         // Accessory apps don't come forward on their own; activate so the window is
@@ -470,14 +494,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         dashboard?.window?.orderOut(nil)
         target.activate(options: [])
-        // Give the target a beat to become frontmost before the insertion engine reads it.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            self?.router.reinsert(text) { ok in
+        // Wait for the switch to actually land instead of guessing at it. A fixed delay is
+        // wrong in both directions: too short and we paste into Cadence's own window (or a
+        // half-focused target that drops the ⌘V), too long and Re-insert feels broken. Poll
+        // frontmostApplication and go the moment the target owns focus.
+        waitForFrontmost(target, deadline: Date().addingTimeInterval(1.5)) { [weak self] ok in
+            guard let self else { return }
+            guard ok else {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                self.router.log(
+                    "re-insert: \(target.localizedName ?? "target") never came forward "
+                        + "— left text on clipboard")
+                return
+            }
+            self.router.reinsert(text) { ok in
                 if !ok {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                 }
             }
+        }
+    }
+
+    /// Call back once `app` is frontmost (true) or `deadline` passes without it (false). Polled
+    /// on main at display cadence — activation is not observable synchronously, and the
+    /// activation notification can arrive before the app is actually able to take keystrokes.
+    private func waitForFrontmost(
+        _ app: NSRunningApplication, deadline: Date, then done: @escaping (Bool) -> Void
+    ) {
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.processIdentifier == app.processIdentifier {
+            // One frame of settle: focus has moved to the app, but its key window may still be
+            // finishing first responder handoff.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { done(true) }
+            return
+        }
+        guard Date() < deadline else {
+            done(false)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.016) { [weak self] in
+            self?.waitForFrontmost(app, deadline: deadline, then: done)
         }
     }
 

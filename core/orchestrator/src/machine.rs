@@ -115,6 +115,7 @@ impl Orchestrator {
             utterance: u.id,
             location,
             inserted,
+            transcript_final: u.refined,
         });
         effects.push(Effect::ScheduleFadeToIdle);
         self.state = State::Idle;
