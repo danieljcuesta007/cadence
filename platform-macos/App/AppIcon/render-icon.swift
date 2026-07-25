@@ -1,7 +1,7 @@
 // Renders the Cadence app icon master (1024×1024 PNG) — run: swift render-icon.swift out.png
 //
 // Design: white squircle (Apple continuous corner curve via CALayer cornerCurve),
-// five-bar cadence soundwave in neutral ink, peak bar in sage green. No emoji, no gloss —
+// five-bar cadence soundwave in neutral ink, peak bar in a rich green. No emoji, no gloss —
 // clean at 16 px, distinctive at Dock size. Regenerate AppIcon.icns via make-icns.sh.
 
 import AppKit
@@ -69,7 +69,7 @@ for (i, h) in heights.enumerated() {
     bar.cornerRadius = barW / 2
     bar.cornerCurve = .continuous
     if h == 1.0 {
-        bar.colors = [color(0xA9BA8C), color(0x7E9265)] // sage green, lit from top
+        bar.colors = [color(0x4FA25F), color(0x3F8A4F)] // rich green, subtle top light
         bar.startPoint = CGPoint(x: 0.5, y: 1)
         bar.endPoint = CGPoint(x: 0.5, y: 0)
     } else {
