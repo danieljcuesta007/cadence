@@ -107,6 +107,53 @@ pub mod whisper {
         prompt: String,
     }
 
+    /// Encoder frames per second of audio: whisper's mel is 100 fps, and the encoder's first
+    /// conv layer strides by 2.
+    const ENCODER_FRAMES_PER_SEC: f32 = 50.0;
+    /// Full encoder context — 30 s, what the model was trained at.
+    const FULL_AUDIO_CTX: i32 = 1500;
+    /// Headroom over the audio's own frame count. The encoder must see past the last frame of
+    /// speech (trailing context is what lets it finish a word), and detection of a stray frame
+    /// boundary should never clip the tail.
+    const REFINED_CTX_MARGIN: i32 = 128;
+    /// Never shrink below this. Sizing the window to the audio is *not* free: the model has only
+    /// ever seen full-length positional embeddings, so a short window degrades accuracy even
+    /// when it covers every frame of speech. Measured on the §30 fixtures (bundled small, 225
+    /// ref words, 2026-07-25) — the cliff is steep and 1280 is the knee:
+    ///
+    /// | audio_ctx | WER | mean ASR |
+    /// |---|---|---|
+    /// | 1500 (full) | 1.778 % | 642 ms |
+    /// | **1280** | **1.778 %** | **566 ms** |
+    /// | 1024 | 2.222 % | 556 ms |
+    /// | 768 | 3.556 % | 503 ms |
+    /// | sized-to-audio (~384) | 4.000 % | 458 ms |
+    ///
+    /// Accuracy is the daily-use bottleneck, so we take only the free 12 % and stop.
+    const MIN_REFINED_CTX: i32 = 1280;
+
+    /// Encoder context for a refined decode of `samples` at 16 kHz.
+    ///
+    /// Whisper always encodes a 30 s mel, padding a 4 s utterance with 26 s of silence and paying
+    /// full encoder cost for it. Trimming `audio_ctx` (the knob whisper.cpp's `stream` example
+    /// exposes) reclaims some of that — but only down to [`MIN_REFINED_CTX`], below which
+    /// accuracy falls off a cliff. Long utterances still grow the window to cover their own
+    /// audio: truncating real speech is the one thing this must never do.
+    ///
+    /// `CADENCE_REFINED_CTX` overrides: a frame count pins it, `0` restores the full 30 s
+    /// encoder (the pre-2026-07-25 behaviour) for A/B measurement.
+    fn refined_audio_ctx(samples: usize) -> i32 {
+        if let Some(v) = std::env::var("CADENCE_REFINED_CTX")
+            .ok()
+            .and_then(|s| s.trim().parse::<i32>().ok())
+        {
+            return v.clamp(0, FULL_AUDIO_CTX);
+        }
+        let secs = samples as f32 / 16_000.0;
+        let needed = (secs * ENCODER_FRAMES_PER_SEC).ceil() as i32 + REFINED_CTX_MARGIN;
+        needed.clamp(MIN_REFINED_CTX, FULL_AUDIO_CTX)
+    }
+
     /// Language for the decode: `CADENCE_LANG` if set (e.g. "es" to force Spanish, "en" to
     /// force English), otherwise "auto" so whisper detects it from the audio. Auto-detection
     /// requires a multilingual model — the English-only `.en` tiers ignore it and stay English.
@@ -120,9 +167,17 @@ pub mod whisper {
 
     impl WhisperAsr {
         pub fn load(model_path: &str) -> Result<Self, AsrError> {
-            let ctx =
-                WhisperContext::new_with_params(model_path, WhisperContextParameters::default())
-                    .map_err(|e| AsrError::Engine(format!("model load: {e}")))?;
+            let mut cparams = WhisperContextParameters::default();
+            // Flash attention: a fused attention kernel, mathematically the same result with a
+            // smaller memory footprint — pure latency, no accuracy cost (verified against the
+            // §30 harness, not assumed). Off by default in whisper-rs; we opt in.
+            // `CADENCE_FLASH_ATTN=0` disables it for A/B measurement.
+            cparams.flash_attn = std::env::var("CADENCE_FLASH_ATTN")
+                .ok()
+                .map(|v| v.trim() != "0")
+                .unwrap_or(true);
+            let ctx = WhisperContext::new_with_params(model_path, cparams)
+                .map_err(|e| AsrError::Engine(format!("model load: {e}")))?;
             let threads = std::thread::available_parallelism()
                 .map(|n| (n.get() as i32).min(8))
                 .unwrap_or(4);
@@ -195,6 +250,11 @@ pub mod whisper {
             // only — the instant pass stays lean, and the refined text is authoritative.
             if !self.prompt.is_empty() {
                 params.set_initial_prompt(&self.prompt);
+            }
+            // Encode only as much context as the audio occupies (see `refined_audio_ctx`).
+            let ctx_frames = refined_audio_ctx(pcm.len());
+            if ctx_frames > 0 && ctx_frames < FULL_AUDIO_CTX {
+                params.set_audio_ctx(ctx_frames);
             }
             state
                 .full(params, pcm)

@@ -12,6 +12,7 @@ Usage: wer.py <reference> <hypothesis>   (prints json {wer, sub, del, ins, ref_w
 import json
 import re
 import sys
+import unicodedata
 
 _SMALL = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
 _TENS = "twenty thirty forty fifty sixty seventy eighty ninety".split()
@@ -45,8 +46,22 @@ def _expand_token(tok: str) -> str:
     return tok
 
 
+def _fold_diacritics(text: str) -> str:
+    """Strip combining marks: "canción" -> "cancion", "años" -> "anos".
+
+    The token filter below keeps only `[a-z0-9:' ]`, so without this every accented Spanish
+    word would be split into fragments ("canción" -> "canci n") and score as two errors of
+    encoding rather than recognition. Folding is applied to BOTH sides, so a model that gets
+    the accent right and one that drops it are scored identically — the honest comparison for
+    a dictation tool whose output is judged on words, not diacritics.
+    """
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn"
+    )
+
+
 def normalize(text: str) -> list[str]:
-    text = text.lower()
+    text = _fold_diacritics(text.lower())
     text = text.replace("'", "'")
     # Symbols whisper writes that the reference speaks: expand before punctuation strip,
     # or the spoken word counts as a phantom deletion.
@@ -99,6 +114,11 @@ def wer(ref: list[str], hyp: list[str]) -> dict:
 def self_test() -> None:
     assert normalize("It's 3:30, twelve percent!") == ["it", "s", "three", "thirty", "twelve", "percent"]
     assert normalize("The 42 avocados") == ["the", "forty", "two", "avocados"]
+    # Spanish: accents fold instead of shattering the word, and ¿¡ vanish with other punctuation.
+    assert normalize("¿Cuándo está la reunión?") == ["cuando", "esta", "la", "reunion"]
+    assert normalize("Añadir canción") == ["anadir", "cancion"]
+    # Folding is symmetric, so dropping an accent is never scored as an error.
+    assert normalize("reunión") == normalize("reunion")
     r = wer(["a", "b", "c"], ["a", "x", "c"])
     assert (r["wer"], r["sub"]) == (1 / 3, 1), r
     r = wer(["a", "b"], ["a", "b"])
