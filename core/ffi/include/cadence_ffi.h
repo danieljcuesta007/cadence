@@ -98,6 +98,9 @@ bool cadence_store_setting_set(CadenceStore *store, const char *key, const char 
  * deadline (the blob is purged with its utterance). */
 bool cadence_store_audio_put(CadenceStore *store, const char *id, const uint8_t *data,
                              size_t data_len, int64_t purge_after_ms);
+/* Delete a single utterance (and its audio blob) by id. Returns true if a row was removed. */
+bool cadence_store_delete_utterance(CadenceStore *store, const char *id);
+
 /* Malloc'd buffer (length via *out_len); free with cadence_bytes_free. NULL when absent. */
 uint8_t *cadence_store_audio_get(CadenceStore *store, const char *id, size_t *out_len);
 /* Hard delete + clears the utterance reference. True if a blob existed. */

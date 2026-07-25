@@ -13,6 +13,7 @@ import AVFoundation
 import AppKit
 
 struct HistoryEntry {
+    let id: String
     let ts: Date?
     let text: String
     let inserted: Bool
@@ -56,6 +57,7 @@ enum HistoryReader {
     private static func entry(from obj: [String: Any]) -> HistoryEntry {
         let iso = ISO8601DateFormatter()
         return HistoryEntry(
+            id: obj["utterance"] as? String ?? "",
             ts: (obj["ts"] as? String).flatMap { iso.date(from: $0) },
             text: obj["text"] as? String ?? "",
             inserted: obj["inserted"] as? Bool ?? false,
@@ -182,6 +184,12 @@ final class DashboardWindowController: NSWindowController {
     private let detailMeta = NSTextField(labelWithString: "")
     private let copyButton = NSButton()
     private let playButton = NSButton()
+    private let reinsertButton = NSButton()
+    private let deleteButton = NSButton()
+
+    /// Injected by the composition root: re-inserts text into the app that was frontmost before
+    /// the dashboard came forward (focus handling lives there, not here). Nil = no re-insert.
+    var onReinsert: ((String) -> Void)?
 
     convenience init() {
         let window = NSWindow(
@@ -264,14 +272,21 @@ final class DashboardWindowController: NSWindowController {
         detailMeta.lineBreakMode = .byTruncatingTail
 
         styleButton(copyButton, "Copy", primary: false, action: #selector(copySelected))
+        styleButton(reinsertButton, "Re-insert", primary: false, action: #selector(reinsertSelected))
         styleButton(playButton, "Play Recording", primary: true, action: #selector(playSelected))
+        styleButton(deleteButton, "Delete", primary: false, action: #selector(deleteSelected))
+        deleteButton.contentTintColor = .systemRed
         copyButton.isEnabled = false
+        reinsertButton.isEnabled = false
         playButton.isEnabled = false
+        deleteButton.isEnabled = false
 
         let exportButton = NSButton()
         styleButton(exportButton, "Export All…", primary: false, action: #selector(exportAll))
 
-        let actions = NSStackView(views: [copyButton, playButton, NSView(), exportButton])
+        let actions = NSStackView(views: [
+            copyButton, reinsertButton, playButton, NSView(), deleteButton, exportButton,
+        ])
         actions.orientation = .horizontal
         actions.spacing = 8
 
@@ -627,7 +642,9 @@ final class DashboardWindowController: NSWindowController {
             detailText.textColor = .secondaryLabelColor
             detailMeta.stringValue = ""
             copyButton.isEnabled = false
+            reinsertButton.isEnabled = false
             playButton.isEnabled = false
+            deleteButton.isEnabled = false
             playButton.title = "Play Recording"
             return
         }
@@ -647,7 +664,10 @@ final class DashboardWindowController: NSWindowController {
         }
         detailMeta.stringValue = bits.joined(separator: "  ·  ")
 
-        copyButton.isEnabled = !e.text.isEmpty && !e.isNonSpeech
+        let hasText = !e.text.isEmpty && !e.isNonSpeech
+        copyButton.isEnabled = hasText
+        reinsertButton.isEnabled = hasText && onReinsert != nil
+        deleteButton.isEnabled = !e.id.isEmpty && HistoryReader.store != nil
         let hasAudio = e.audioBlobId != nil && HistoryReader.store != nil
         playButton.isEnabled = hasAudio
         playButton.title = hasAudio ? "Play Recording" : "No Recording"
@@ -657,6 +677,26 @@ final class DashboardWindowController: NSWindowController {
         guard let e = selectedEntry() else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(e.text, forType: .string)
+    }
+
+    @objc private func reinsertSelected() {
+        guard let e = selectedEntry(), !e.text.isEmpty, !e.isNonSpeech else { return }
+        onReinsert?(e.text)
+    }
+
+    @objc private func deleteSelected() {
+        guard let e = selectedEntry(), !e.id.isEmpty, let store = HistoryReader.store else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete this dictation?"
+        alert.informativeText = "“\(e.text.prefix(80))”\n\nThis also removes its recording, if any. This can't be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        store.deleteUtterance(id: e.id)
+        selectedTs = nil
+        reload()
     }
 
     @objc private func playSelected() {

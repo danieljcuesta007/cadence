@@ -290,6 +290,23 @@ final class EffectRouter {
             clipboardRestored: result.clipboardRestored)
     }
 
+    /// Re-insert a past dictation into whatever is frontmost now (the dashboard's Re-insert;
+    /// the caller is responsible for focusing the target app first). Reuses the insertion
+    /// engine + guard, so a secure field or a refused target is handled exactly like a live
+    /// dictation. `done` reports whether text landed, on the main queue.
+    func reinsert(_ text: String, done: @escaping (Bool) -> Void) {
+        insertionQueue.async {
+            if let reason = self.insertionGuard?() {
+                self.log("re-insert refused by guard: \(reason)")
+                self.onUI { done(false) }
+                return
+            }
+            let result = self.insertionEngine.insert(text)
+            self.log("re-insert: inserted=\(result.inserted) \(result.elapsedMs) ms")
+            self.onUI { done(result.inserted) }
+        }
+    }
+
     func log(_ msg: String) {
         FileHandle.standardError.write(Data("[cadence] \(msg)\n".utf8))
         LogFile.append(msg)
