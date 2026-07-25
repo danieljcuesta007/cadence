@@ -194,6 +194,11 @@ pub enum Effect {
         utterance: UtteranceId,
         location: ProcessingLocation,
         inserted: bool,
+        /// The refined ASR text *before* cleanup, when we got that far. The shell only ever
+        /// sees the post-cleanup string it inserted, so without this the dashboard cannot
+        /// show what the model actually heard (§24 transcript_final).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        transcript_final: Option<String>,
     },
     /// Arm the single-keystroke undo for the exact inserted range (§7 F21).
     ArmUndo { utterance: UtteranceId },
@@ -248,6 +253,31 @@ mod tests {
         };
         let j = serde_json::to_string(&f).unwrap();
         assert_eq!(serde_json::from_str::<Effect>(&j).unwrap(), f);
+    }
+
+    #[test]
+    fn persist_utterance_carries_the_pre_cleanup_transcript_at_top_level() {
+        // The shell reads this effect as a flat dictionary and hands it straight to the store,
+        // so the key has to sit alongside `inserted` — and vanish when there is nothing to say.
+        let f = Effect::PersistUtterance {
+            utterance: UtteranceId("u1".into()),
+            location: ProcessingLocation::Local,
+            inserted: true,
+            transcript_final: Some("hello world".into()),
+        };
+        let v: serde_json::Value = serde_json::to_value(&f).unwrap();
+        assert_eq!(v["type"], "persist_utterance");
+        assert_eq!(v["transcript_final"], "hello world");
+        assert_eq!(serde_json::from_str::<Effect>(&v.to_string()).unwrap(), f);
+
+        let bare = Effect::PersistUtterance {
+            utterance: UtteranceId("u2".into()),
+            location: ProcessingLocation::Local,
+            inserted: false,
+            transcript_final: None,
+        };
+        let v: serde_json::Value = serde_json::to_value(&bare).unwrap();
+        assert!(v.get("transcript_final").is_none(), "null must be omitted");
     }
 
     #[test]

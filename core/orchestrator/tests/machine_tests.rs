@@ -114,6 +114,15 @@ fn happy_path_local_only() {
         e,
         Effect::PersistUtterance { inserted: true, .. }
     )));
+    // The record carries the pre-cleanup ASR text: the shell only ever saw "Hello world.",
+    // so this is the only way the dashboard can show what was actually heard.
+    assert!(has(&fx, |e| matches!(
+        e,
+        Effect::PersistUtterance {
+            transcript_final: Some(t),
+            ..
+        } if t == "hello world"
+    )));
 
     let p = m.last_privacy().unwrap();
     assert!(
