@@ -43,6 +43,10 @@ void cadence_engine_cancel(CadenceEngine *engine);
  * next decode; no model reload; survives idle unload. */
 void cadence_engine_set_language(CadenceEngine *engine, const char *lang);
 
+/* Personal dictionary: bias decoding toward terms (proper nouns/jargon/names), passed as
+ * whisper initial_prompt on the refined pass. "" clears it. Next decode; no reload. */
+void cadence_engine_set_vocabulary(CadenceEngine *engine, const char *terms);
+
 /* Confirm capture is stopped and the final audio buffer has been pushed. The core
  * holds the ASR window open for this (500 ms grace) so no trailing words are lost. */
 void cadence_engine_capture_stopped(CadenceEngine *engine);
