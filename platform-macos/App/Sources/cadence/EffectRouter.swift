@@ -290,10 +290,14 @@ final class EffectRouter {
             undoRecord = UndoRecord(app: app, text: text, at: Date(), armed: false)
             undoLock.unlock()
         }
+        // The app and the detail only made it into the store, so field-diagnosing a bad verdict
+        // meant decrypting history. A contradiction is the one outcome worth reading in the log.
         log(
             "insertion: \(strategy) inserted=\(result.inserted) "
                 + "verify=\(result.verification.rawValue) "
-                + "clipboardRestored=\(result.clipboardRestored) \(result.elapsedMs) ms")
+                + "clipboardRestored=\(result.clipboardRestored) \(result.elapsedMs) ms"
+                + (result.verification == .contradicted
+                    ? " app=\(app) chars=\(text.count) — \(result.detail)" : ""))
         engine()?.insertionResult(
             utterance: utterance, strategy: strategy, inserted: result.inserted,
             clipboardRestored: result.clipboardRestored)

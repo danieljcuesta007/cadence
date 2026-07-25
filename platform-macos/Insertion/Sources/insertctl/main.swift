@@ -84,7 +84,7 @@ case "key":
     }
     let combo = args[1].lowercased().split(separator: "-").map(String.init)
     var flags: CGEventFlags = []
-    var keyName: String = combo.last ?? ""
+    let keyName: String = combo.last ?? ""
     for part in combo.dropLast() {
         switch part {
         case "cmd": flags.insert(.maskCommand)
@@ -172,6 +172,32 @@ case "selftest":
         let refused = !snap.restore(to: pb, ifChangeCountStill: ourCount)
         let ok = refused && pb.string(forType: .string) == "third-party"
         checks.append(Check(name: "third_party_write_never_clobbered", pass: ok))
+    }
+
+    // 6-9. Readback folding (AC-20). These pin the live failure that made 14 of 40 real
+    // insertions report `contradicted` while the text had landed: the target re-flows what it
+    // was given, and an exact substring probe cannot survive that.
+    do {
+        // Measured shape of the live case: Terminal exposes the visible screen only, wrapped at
+        // ~93 columns, each continuation line carrying the TUI's "│ " gutter.
+        let dictated = "Let's patch this up and then call the project good, because it is close."
+        let probe = String(dictated.suffix(64))
+        let wrapped = "│ Let's patch this up and then call the project good, because\n│ it is close.\n"
+        checks.append(Check(name: "exact_probe_fails_on_wrapped_readback",
+                            pass: !wrapped.contains(probe)))
+        checks.append(Check(name: "folded_probe_survives_wrapped_readback",
+                            pass: foldForReadback(wrapped).contains(foldForReadback(probe))))
+
+        // Smart substitutions on entry (this machine has smart quotes on).
+        let curly = "│ Let's patch this up and then call the project good, because it is close."
+            .replacingOccurrences(of: "'", with: "\u{2019}")
+        checks.append(Check(name: "folded_probe_survives_smart_quotes",
+                            pass: foldForReadback(curly).contains(foldForReadback(probe))))
+
+        // The verdict this check exists for (Pages page-layout): text genuinely nowhere.
+        let swallowed = "│ > \n│ (no input)\n"
+        checks.append(Check(name: "genuine_swallow_still_contradicted",
+                            pass: !foldForReadback(swallowed).contains(foldForReadback(probe))))
     }
 
     struct SelfTestReport: Codable { var checks: [Check]; var pass: Bool }
