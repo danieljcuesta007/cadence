@@ -76,6 +76,9 @@ pub struct Engine {
     /// each decode. Language is a per-decode whisper parameter, so a flip is instant — no
     /// model reload.
     lang: Arc<Mutex<String>>,
+    /// Personal-dictionary bias (whisper initial_prompt) the shell sets from the stored
+    /// vocabulary. Shared with the ASR worker like `lang`; applied before each decode.
+    prompt: Arc<Mutex<String>>,
 }
 
 struct OrchLoop {
@@ -273,20 +276,24 @@ fn asr_worker(
     rx: Receiver<AsrJob>,
     tx: Sender<Control>,
     lang: Arc<Mutex<String>>,
+    prompt: Arc<Mutex<String>>,
 ) {
     let mut engine = Some(engine);
     warm_engine(engine.as_mut().expect("initial engine"));
 
-    // Apply the shell's language override (if any) to `e`. Called before every decode and
-    // after a reload so the choice survives idle unload. Empty = leave the engine as loaded.
-    let apply_lang = |e: &mut Box<dyn AsrEngine + Send>| {
+    // Apply the shell's runtime overrides (language + dictionary prompt) to `e`. Called before
+    // every decode and after a reload so the choices survive idle unload. Empty = leave as-is.
+    let apply_overrides = |e: &mut Box<dyn AsrEngine + Send>| {
         if let Ok(l) = lang.lock() {
             if !l.is_empty() {
                 e.set_language(&l);
             }
         }
+        if let Ok(p) = prompt.lock() {
+            e.set_prompt(&p); // empty clears the bias — always apply so removals take effect
+        }
     };
-    apply_lang(engine.as_mut().expect("initial engine"));
+    apply_overrides(engine.as_mut().expect("initial engine"));
 
     let mut last_utt: Option<UtteranceId> = None;
     loop {
@@ -313,7 +320,7 @@ fn asr_worker(
                 match factory() {
                     Ok(mut e) => {
                         warm_engine(&mut e);
-                        apply_lang(&mut e); // language choice survives idle unload
+                        apply_overrides(&mut e); // language + dictionary survive idle unload
                         debug_log(&format!("asr engine reloaded in {} ms", t.elapsed().as_millis()));
                         slot.insert(e)
                     }
@@ -345,8 +352,8 @@ fn asr_worker(
             engine.reset_stream();
             last_utt = Some(job.utterance().clone());
         }
-        // Pick up a language flip the shell made since the last decode (cheap; no reload).
-        apply_lang(engine);
+        // Pick up any language/dictionary change the shell made since the last decode.
+        apply_overrides(engine);
         match job {
             AsrJob::Partial { utterance, window } => {
                 let result = engine.transcribe_partial(&pcm_i16_to_f32(&window));
@@ -404,14 +411,16 @@ impl Engine {
         let (tx, rx) = channel::<Control>();
         let (asr_tx, asr_rx) = channel::<AsrJob>();
         let lang = Arc::new(Mutex::new(String::new()));
+        let prompt = Arc::new(Mutex::new(String::new()));
 
         let asr_thread = {
             let tx = tx.clone();
             let unload_after = unload_after_config();
             let lang = Arc::clone(&lang);
+            let prompt = Arc::clone(&prompt);
             std::thread::Builder::new()
                 .name("cadence-asr".into())
-                .spawn(move || asr_worker(asr, factory, unload_after, asr_rx, tx, lang))
+                .spawn(move || asr_worker(asr, factory, unload_after, asr_rx, tx, lang, prompt))
                 .expect("spawn asr thread")
         };
         let orch_thread = {
@@ -438,6 +447,7 @@ impl Engine {
             orch_thread: Some(orch_thread),
             asr_thread: Some(asr_thread),
             lang,
+            prompt,
         }
     }
 
@@ -449,6 +459,12 @@ impl Engine {
     fn set_language(&self, lang: &str) {
         if let Ok(mut l) = self.lang.lock() {
             *l = lang.trim().to_lowercase();
+        }
+    }
+
+    fn set_prompt(&self, prompt: &str) {
+        if let Ok(mut p) = self.prompt.lock() {
+            *p = prompt.trim().to_string();
         }
     }
 }
@@ -678,6 +694,16 @@ pub unsafe extern "C" fn cadence_engine_cancel(engine: *mut Engine) {
 pub unsafe extern "C" fn cadence_engine_set_language(engine: *mut Engine, lang: *const c_char) {
     with_engine!("cadence_engine_set_language", engine, {
         engine.set_language(&cstr_arg(lang).unwrap_or_default());
+    });
+}
+
+/// Set the personal-dictionary bias: a phrase/list of terms (proper nouns, jargon, names) fed
+/// to whisper as `initial_prompt` so they decode with the right spelling. "" clears the bias.
+/// Takes effect on the next refined decode; no model reload; survives idle unload.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_engine_set_vocabulary(engine: *mut Engine, terms: *const c_char) {
+    with_engine!("cadence_engine_set_vocabulary", engine, {
+        engine.set_prompt(&cstr_arg(terms).unwrap_or_default());
     });
 }
 

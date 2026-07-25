@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static let retentionChoices: [(String, Int64)] = [
         ("Forever", 0), ("90 Days", 90), ("30 Days", 30), ("7 Days", 7),
     ]
+    var dictionaryWindow: DictionaryWindowController?
     let languageItem = NSMenuItem(title: "Dictation Language", action: nil, keyEquivalent: "")
     /// Language menu: label → code passed to the core ("auto" detects per utterance).
     static let languageChoices: [(String, String)] = [
@@ -129,6 +130,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         languageItem.submenu = languageMenu
         menu.addItem(languageItem)
+        // Personal dictionary: proper nouns / jargon the user wants spelled their way.
+        let dictItem = NSMenuItem(
+            title: "Personal Dictionary…", action: #selector(showDictionary), keyEquivalent: "")
+        dictItem.target = self
+        menu.addItem(dictItem)
         // Daily-driver basics: the app should survive a reboot without being remembered.
         loginItem.action = #selector(toggleStartAtLogin)
         loginItem.target = self
@@ -223,6 +229,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     // Apply the saved language now that the engine exists (env default is
                     // "auto"; this makes a persisted English/Spanish choice stick across launches).
                     engine.setLanguage(self.dictationLanguage)
+                    // Restore the personal dictionary so custom spellings survive a relaunch.
+                    let vocab = Vocabulary.prompt(from: self.historyStore?.customVocabulary ?? "")
+                    if !vocab.isEmpty { engine.setVocabulary(vocab) }
                     let ms = Int(Date().timeIntervalSince(t0) * 1000)
                     self.router.log(
                         "core ready in \(ms) ms (core v\(CoreEngine.coreVersion)) — "
@@ -339,6 +348,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         engine?.setLanguage(code)  // instant — no model reload
         let label = Self.languageChoices.first { $0.1 == code }?.0 ?? code
         router.log("dictation language → \(label) (\(code))")
+    }
+
+    @objc func showDictionary() {
+        let current = historyStore?.customVocabulary ?? ""
+        let controller = DictionaryWindowController(initial: current) { [weak self] text in
+            guard let self else { return }
+            self.historyStore?.setCustomVocabulary(text)
+            let prompt = Vocabulary.prompt(from: text)
+            self.engine?.setVocabulary(prompt)  // instant — no model reload
+            let count = text.split(whereSeparator: \.isNewline).filter {
+                !$0.trimmingCharacters(in: .whitespaces).isEmpty
+            }.count
+            self.router.log("personal dictionary saved (\(count) terms)")
+        }
+        dictionaryWindow = controller
+        controller.showWindow(nil)
     }
 
     @objc func toggleBuiltInMic() {
