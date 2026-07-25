@@ -90,6 +90,8 @@ impl UtteranceRecord {
             "word_count",
             "latency_ms",
             "audio_blob_id",
+            "transcript_instant",
+            "transcript_final",
         ];
         let extra: serde_json::Map<String, serde_json::Value> = obj
             .iter()
@@ -106,8 +108,11 @@ impl UtteranceRecord {
             language: s("language"),
             duration_ms: n("capture_window_ms"),
             audio_blob_id: s("audio_blob_id"),
-            transcript_instant: None,
-            transcript_final: None,
+            // The shell sends the streaming pass alongside the final text so the dashboard can
+            // show what the instant decode heard vs. what shipped (they diverge on long
+            // utterances, where the instant pass only sees a sliding tail window).
+            transcript_instant: s("transcript_instant"),
+            transcript_final: s("transcript_final"),
             word_count: n("word_count").or_else(|| {
                 text.as_deref()
                     .map(|t| t.split_whitespace().count() as i64)
@@ -142,6 +147,8 @@ impl UtteranceRecord {
         put("capture_window_ms", self.duration_ms.into());
         put("audio_blob_id", self.audio_blob_id.clone().into());
         put("text", self.output_text.clone().into());
+        put("transcript_instant", self.transcript_instant.clone().into());
+        put("transcript_final", self.transcript_final.clone().into());
         put("inserted", self.inserted_ok.into());
         put("strategy", self.insertion_strategy.clone().into());
         put("word_count", self.word_count.into());
@@ -757,6 +764,29 @@ mod tests {
             .windows(b"EXTREMELY-DISTINCTIVE-PLAINTEXT".len())
             .any(|w| w == b"EXTREMELY-DISTINCTIVE-PLAINTEXT"));
         assert!(!raw.starts_with(b"SQLite format 3"), "unencrypted header");
+    }
+
+    #[test]
+    fn both_asr_passes_survive_the_shell_json_round_trip() {
+        // The dashboard shows instant-vs-final-vs-inserted, so both upstream passes have to
+        // reach their own columns (not extra_json) and come back out of the store.
+        let line = r#"{"utterance":"utt-3","ts":"2026-07-25T09:00:00Z","text":"Addisuna ships today.","transcript_instant":"Adesuna ships","transcript_final":"Addisuna ships today","inserted":true,"app":"Notes","type":"persist_utterance"}"#;
+        let rec = UtteranceRecord::from_json(line).unwrap();
+        assert_eq!(rec.transcript_instant.as_deref(), Some("Adesuna ships"));
+        assert_eq!(rec.transcript_final.as_deref(), Some("Addisuna ships today"));
+        assert_eq!(rec.output_text.as_deref(), Some("Addisuna ships today."));
+        // Own columns, not the catch-all.
+        assert!(!rec.extra_json.as_deref().unwrap_or("").contains("transcript_"));
+
+        let path = tmp("passes.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        store.insert_utterance(&rec).unwrap();
+        let back = store.recent_utterances(1).unwrap();
+        assert_eq!(back, vec![rec]);
+        let out = back[0].to_json();
+        assert_eq!(out["transcript_instant"], "Adesuna ships");
+        assert_eq!(out["transcript_final"], "Addisuna ships today");
     }
 
     #[test]
