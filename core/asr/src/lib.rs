@@ -45,6 +45,12 @@ pub trait AsrEngine {
     /// loaded model, so this takes effect on the next `transcribe`. Default no-op for engines
     /// (like the mock) that don't decode. Empty string is ignored by convention.
     fn set_language(&mut self, _lang: &str) {}
+
+    /// Bias decoding toward a set of terms the user cares about (proper nouns, jargon, names)
+    /// — whisper's `initial_prompt` mechanism (§ personal dictionary). The prompt is a plain
+    /// phrase/list; empty clears it. Takes effect on the next refined `transcribe`. Default
+    /// no-op for engines that don't decode.
+    fn set_prompt(&mut self, _prompt: &str) {}
 }
 
 /// Deterministic mock for tests and for machines without a model present.
@@ -95,6 +101,10 @@ pub mod whisper {
         /// "just work". An explicit ISO code ("en", "es") pins it. Resolved once from
         /// `CADENCE_LANG` at load; see [`resolve_language`].
         lang: String,
+        /// Personal-dictionary bias (§): fed to whisper as `initial_prompt` on the refined pass
+        /// so proper nouns / jargon the user added decode with the right spelling. Empty = no
+        /// bias. Set by the shell from the stored vocabulary.
+        prompt: String,
     }
 
     /// Language for the decode: `CADENCE_LANG` if set (e.g. "es" to force Spanish, "en" to
@@ -122,6 +132,7 @@ pub mod whisper {
                 partial_state: None,
                 partial_audio_ctx: 0,
                 lang: resolve_language(),
+                prompt: String::new(),
             })
         }
 
@@ -180,6 +191,11 @@ pub mod whisper {
             params.set_print_realtime(false);
             params.set_print_timestamps(false);
             params.set_suppress_blank(true);
+            // Personal-dictionary bias: proper nouns/jargon spell correctly (§). Refined pass
+            // only — the instant pass stays lean, and the refined text is authoritative.
+            if !self.prompt.is_empty() {
+                params.set_initial_prompt(&self.prompt);
+            }
             state
                 .full(params, pcm)
                 .map_err(|e| AsrError::Engine(format!("decode: {e}")))?;
@@ -230,6 +246,10 @@ pub mod whisper {
             if !lang.is_empty() {
                 self.lang = lang.to_lowercase();
             }
+        }
+
+        fn set_prompt(&mut self, prompt: &str) {
+            self.prompt = prompt.trim().to_string();
         }
     }
 
