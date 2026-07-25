@@ -12,3 +12,4 @@ Cargo.lock.orig
 *.log
 .env
 /dist
+/qa/fixtures/wer-es/*.wav

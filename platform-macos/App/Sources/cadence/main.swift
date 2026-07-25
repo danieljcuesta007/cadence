@@ -44,6 +44,7 @@ func parseArgs() -> Config {
         case "selftest-wav":
             c.mode = "selftest"
             c.wav = it.next()
+        case "selftest-stats": c.mode = "selftest-stats"
         case "--model": if let v = it.next() { c.model = v }
         case "--mock": c.mock = it.next() ?? "mock transcript"
         case "--expect-app": c.expectApp = it.next()
@@ -66,6 +67,8 @@ let config = parseArgs()
 switch config.mode {
 case "selftest":
     exit(runSelftest(config))
+case "selftest-stats":
+    exit(runStatsSelftest())
 default:
     runApp(config) // never returns
 }

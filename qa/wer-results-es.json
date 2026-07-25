@@ -1,0 +1,353 @@
+{
+ "generated": "2026-07-25T22:46:31Z",
+ "results": {
+  "models/artifacts/ggml-small.bin": {
+   "wer": 0.21495327102803738,
+   "errors": 46,
+   "ref_words": 214,
+   "asr_ms_mean": 556.1333333333333,
+   "asr_ms_max": 693,
+   "fixtures": [
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 13,
+     "errors": 0,
+     "wav": "e01.wav",
+     "hyp": "Hola, quer\u00eda confirmar la reuni\u00f3n de ma\u00f1ana por la tarde en la oficina.",
+     "asr_ms": 430
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 13,
+     "errors": 0,
+     "wav": "e02.wav",
+     "hyp": "Los resultados del trimestre son buenos, los ingresos subieron y la cancelaci\u00f3n bajo.",
+     "asr_ms": 463
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 12,
+     "errors": 0,
+     "wav": "e03.wav",
+     "hyp": "Por favor env\u00eda la factura al Departamento de Contabilidad antes del viernes.",
+     "asr_ms": 560
+    },
+    {
+     "wer": 0.07142857142857142,
+     "sub": 1,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 14,
+     "errors": 1,
+     "wav": "e04.wav",
+     "hyp": "Creo que el problema est\u00e1 entre la captura de audio y el buffer circular.",
+     "asr_ms": 523
+    },
+    {
+     "wer": 0.8,
+     "sub": 9,
+     "del": 3,
+     "ins": 0,
+     "ref_words": 15,
+     "errors": 12,
+     "wav": "e05.wav",
+     "hyp": "Anad Leche, Weavos, Pandimasa Madre, Y Das Agwakatsa Law List to Decompress.",
+     "asr_ms": 496
+    },
+    {
+     "wer": 0.25,
+     "sub": 3,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 16,
+     "errors": 4,
+     "wav": "e06.wav",
+     "hyp": "El Vulo Sale de Madrid por la Monya\u00f1a y Llegua Buenos Aires por la noche.",
+     "asr_ms": 511
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 14,
+     "errors": 0,
+     "wav": "e07.wav",
+     "hyp": "Vamos a programar la revisi\u00f3n de dise\u00f1o para el mi\u00e9rcoles en la sala grande.",
+     "asr_ms": 524
+    },
+    {
+     "wer": 0.4166666666666667,
+     "sub": 5,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 12,
+     "errors": 5,
+     "wav": "e08.wav",
+     "hyp": "El Modelo Nuevo Reduce La Latentia Why Manchin La Precesi\u00f3n Sin Cambias",
+     "asr_ms": 525
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 13,
+     "errors": 0,
+     "wav": "e09.wav",
+     "hyp": "Estimado equipo, gracias por el esfuerzo incre\u00edble en el lanzamiento de esta semana.",
+     "asr_ms": 693
+    },
+    {
+     "wer": 0.75,
+     "sub": 8,
+     "del": 0,
+     "ins": 1,
+     "ref_words": 12,
+     "errors": 9,
+     "wav": "e10.wav",
+     "hyp": "Adder configuracion. Luego prevaceted y segary.despoes microphono. y active at l-axiso.",
+     "asr_ms": 682
+    },
+    {
+     "wer": 0.0625,
+     "sub": 1,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 16,
+     "errors": 1,
+     "wav": "e11.wav",
+     "hyp": "La receta necesita 2 tazas de harina, una cucharadita de bicarbonato y una pizca de sal.",
+     "asr_ms": 682
+    },
+    {
+     "wer": 0.21428571428571427,
+     "sub": 3,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 14,
+     "errors": 3,
+     "wav": "e12.wav",
+     "hyp": "Honestament. Lo mas rapido es reverter el cambio y revisarlo el loons con calma.",
+     "asr_ms": 609
+    },
+    {
+     "wer": 0.5263157894736842,
+     "sub": 9,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 19,
+     "errors": 10,
+     "wav": "e13.wav",
+     "hyp": "Los Claves de Sefrado Vivon and El Lovero y la base de Datas N\u00famca Seguardo and Texto Plano.",
+     "asr_ms": 577
+    },
+    {
+     "wer": 0.06666666666666667,
+     "sub": 1,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 15,
+     "errors": 1,
+     "wav": "e14.wav",
+     "hyp": "El tren a Barcelona sale del and\u00e9n 9 y tarda unas tres horas en llegar.",
+     "asr_ms": 446
+    },
+    {
+     "wer": 0.0,
+     "sub": 0,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 16,
+     "errors": 0,
+     "wav": "e15.wav",
+     "hyp": "Necesito reservar una mesa para cuatro personas el s\u00e1bado por la noche cerca de la playa.",
+     "asr_ms": 621
+    }
+   ]
+  },
+  "models/artifacts/ggml-small.en.bin": {
+   "wer": 0.705607476635514,
+   "errors": 151,
+   "ref_words": 214,
+   "asr_ms_mean": 556.5333333333333,
+   "asr_ms_max": 636,
+   "fixtures": [
+    {
+     "wer": 0.38461538461538464,
+     "sub": 3,
+     "del": 1,
+     "ins": 1,
+     "ref_words": 13,
+     "errors": 5,
+     "wav": "e01.wav",
+     "hyp": "Hola, queria confirmar la reuni\u00f3n de mani\u00f3n a por la tarden la ouficina.",
+     "asr_ms": 628
+    },
+    {
+     "wer": 1.3846153846153846,
+     "sub": 13,
+     "del": 0,
+     "ins": 5,
+     "ref_words": 13,
+     "errors": 18,
+     "wav": "e02.wav",
+     "hyp": "The result of the three most recent winners, the increases in the number of people in the country.",
+     "asr_ms": 566
+    },
+    {
+     "wer": 0.4166666666666667,
+     "sub": 3,
+     "del": 1,
+     "ins": 1,
+     "ref_words": 12,
+     "errors": 5,
+     "wav": "e03.wav",
+     "hyp": "por favor en via la factura al departamento de contablidantes del buernes.",
+     "asr_ms": 519
+    },
+    {
+     "wer": 0.9285714285714286,
+     "sub": 13,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 14,
+     "errors": 13,
+     "wav": "e04.wav",
+     "hyp": "The problem is that the captor is the audio and the audio is circular.",
+     "asr_ms": 537
+    },
+    {
+     "wer": 0.5333333333333333,
+     "sub": 5,
+     "del": 3,
+     "ins": 0,
+     "ref_words": 15,
+     "errors": 8,
+     "wav": "e05.wav",
+     "hyp": "Anad Lache, huevos, pan dimasamadre y dos aguacuts a la lista decompress.",
+     "asr_ms": 628
+    },
+    {
+     "wer": 0.4375,
+     "sub": 7,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 16,
+     "errors": 7,
+     "wav": "e06.wav",
+     "hyp": "El Vulo Sal de Madrid por la manana y yaga bueno sire es por la noce.",
+     "asr_ms": 457
+    },
+    {
+     "wer": 0.9285714285714286,
+     "sub": 12,
+     "del": 0,
+     "ins": 1,
+     "ref_words": 14,
+     "errors": 13,
+     "wav": "e07.wav",
+     "hyp": "We will be programming the revision of the call for the miracle in the grande.",
+     "asr_ms": 628
+    },
+    {
+     "wer": 0.4166666666666667,
+     "sub": 5,
+     "del": 0,
+     "ins": 0,
+     "ref_words": 12,
+     "errors": 5,
+     "wav": "e08.wav",
+     "hyp": "el modell\u00f3n huevo reduce la latencia y manch\u00edn la precisione sin cambias",
+     "asr_ms": 536
+    },
+    {
+     "wer": 0.6153846153846154,
+     "sub": 6,
+     "del": 0,
+     "ins": 2,
+     "ref_words": 13,
+     "errors": 8,
+     "wav": "e09.wav",
+     "hyp": "Estimado e quipo, gracias por el esfuerso incredible en el anzamiento de estas e manne.",
+     "asr_ms": 626
+    },
+    {
+     "wer": 0.75,
+     "sub": 7,
+     "del": 0,
+     "ins": 2,
+     "ref_words": 12,
+     "errors": 9,
+     "wav": "e10.wav",
+     "hyp": "Aver configuration, luego prevasited y segari dot, despu\u00e9s microfano, y active at el axiso.",
+     "asr_ms": 601
+    },
+    {
+     "wer": 1.0,
+     "sub": 4,
+     "del": 12,
+     "ins": 0,
+     "ref_words": 16,
+     "errors": 16,
+     "wav": "e11.wav",
+     "hyp": "(speaking in foreign language)",
+     "asr_ms": 446
+    },
+    {
+     "wer": 0.2857142857142857,
+     "sub": 3,
+     "del": 1,
+     "ins": 0,
+     "ref_words": 14,
+     "errors": 4,
+     "wav": "e12.wav",
+     "hyp": "Honeistiment, lo mas rapidos revertar el cambio y revisarlo el lunes con calma.",
+     "asr_ms": 545
+    },
+    {
+     "wer": 0.47368421052631576,
+     "sub": 7,
+     "del": 1,
+     "ins": 1,
+     "ref_words": 19,
+     "errors": 9,
+     "wav": "e13.wav",
+     "hyp": "Las Claves de Cefrado Vivin en el la Vero y la Vaste de Dada Sn\u00famca Cebuarda en texto Plano",
+     "asr_ms": 636
+    },
+    {
+     "wer": 1.0,
+     "sub": 4,
+     "del": 11,
+     "ins": 0,
+     "ref_words": 15,
+     "errors": 15,
+     "wav": "e14.wav",
+     "hyp": "(speaking in foreign language)",
+     "asr_ms": 483
+    },
+    {
+     "wer": 1.0,
+     "sub": 4,
+     "del": 12,
+     "ins": 0,
+     "ref_words": 16,
+     "errors": 16,
+     "wav": "e15.wav",
+     "hyp": "(speaking in foreign language)",
+     "asr_ms": 512
+    }
+   ]
+  }
+ }
+}
