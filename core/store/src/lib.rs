@@ -461,6 +461,19 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// Delete a single utterance (and its retained audio blob, if any) by id — the dashboard's
+    /// per-row delete. Returns true if a row was removed.
+    pub fn delete_utterance(&self, id: &str) -> Result<bool, StoreError> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM audio_blobs WHERE id = (SELECT audio_blob_id FROM utterances WHERE id = ?1)",
+            [id],
+        )?;
+        let n = tx.execute("DELETE FROM utterances WHERE id = ?1", [id])?;
+        tx.commit()?;
+        Ok(n > 0)
+    }
+
     /// §24 retention job: hard-delete blobs whose `purge_after` deadline has passed and
     /// null out the dangling utterance references. Returns blobs purged. Runs at open.
     pub fn purge_expired_audio_blobs(&self) -> Result<usize, StoreError> {
