@@ -232,6 +232,25 @@ final class HistoryStore {
         }
     }
 
+    // MARK: personal dictionary (§; biases whisper toward the user's terms)
+
+    /// Custom terms, one per line, the user wants spelled correctly (proper nouns, jargon,
+    /// names). Stored verbatim; the engine gets them joined into one prompt phrase.
+    var customVocabulary: String {
+        guard let handle, let c = cadence_store_setting_get(handle, "custom_vocabulary")
+        else { return "" }
+        defer { cadence_string_free(c) }
+        return String(cString: c)
+    }
+
+    func setCustomVocabulary(_ text: String) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, "custom_vocabulary", text) {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("custom_vocabulary save failed: \(msg)")
+        }
+    }
+
     // MARK: retained audio (§24, opt-in; off by default)
 
     private static let retainAudioKey = "retain_audio"
