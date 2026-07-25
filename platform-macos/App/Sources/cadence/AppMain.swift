@@ -54,6 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Held during an utterance: App Nap must never throttle a decode mid-dictation
     // (§28 latency budgets; suspected cause of a one-off 30 s Metal stall in testing).
     var activity: NSObjectProtocol?
+    /// The last app that was frontmost before Cadence's own window came forward — the target
+    /// for the dashboard's Re-insert (we activate it, then paste). Updated on every app switch,
+    /// ignoring Cadence itself, so opening the dashboard doesn't overwrite it.
+    var lastActiveApp: NSRunningApplication?
 
     init(config: Config) {
         self.config = config
@@ -68,6 +72,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         renderState("idle")
+
+        // Remember the app the user was in before Cadence, so the dashboard's Re-insert has a
+        // real target. Ignore Cadence itself — activating our own window must not clobber it.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                app.processIdentifier != NSRunningApplication.current.processIdentifier
+            else { return }
+            self?.lastActiveApp = app
+        }
         let menu = NSMenu()
         stateMenuItem.isEnabled = false
         menu.addItem(stateMenuItem)
@@ -429,12 +444,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func showDashboard() {
-        if dashboard == nil { dashboard = DashboardWindowController() }
+        if dashboard == nil {
+            let d = DashboardWindowController()
+            d.onReinsert = { [weak self] text in self?.reinsertFromDashboard(text) }
+            dashboard = d
+        }
         // Accessory apps don't come forward on their own; activate so the window is
         // actually visible and focused rather than opening behind everything.
         NSApp.activate(ignoringOtherApps: true)
         dashboard?.showWindow(nil)
         dashboard?.window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Re-insert a past dictation: return focus to the app the user came from, then paste there.
+    /// Without a known target (or if it's Cadence) we can't safely place text, so we fall back
+    /// to leaving it on the clipboard and telling the user.
+    private func reinsertFromDashboard(_ text: String) {
+        guard let target = lastActiveApp,
+            target.processIdentifier != NSRunningApplication.current.processIdentifier
+        else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            router.log("re-insert: no prior app — left text on clipboard")
+            return
+        }
+        dashboard?.window?.orderOut(nil)
+        target.activate(options: [])
+        // Give the target a beat to become frontmost before the insertion engine reads it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.router.reinsert(text) { ok in
+                if !ok {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+            }
+        }
     }
 
     @objc func quit() {
