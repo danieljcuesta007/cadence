@@ -1119,6 +1119,34 @@ pub unsafe extern "C" fn cadence_store_audio_delete(
     .unwrap_or(false)
 }
 
+/// Delete a single utterance (and its audio blob) by id — the dashboard's per-row delete.
+/// Returns true if a row was removed.
+#[no_mangle]
+pub unsafe extern "C" fn cadence_store_delete_utterance(
+    store: *mut StoreHandle,
+    id: *const c_char,
+) -> bool {
+    if store.is_null() {
+        set_last_error("cadence_store_delete_utterance: store is NULL".into());
+        return false;
+    }
+    guarded("cadence_store_delete_utterance", || {
+        let Some(id) = cstr_arg(id) else {
+            set_last_error("id is NULL or not UTF-8".into());
+            return false;
+        };
+        let store = &*store;
+        match store.store.lock().unwrap().delete_utterance(&id) {
+            Ok(existed) => existed,
+            Err(e) => {
+                set_last_error(format!("delete utterance ({id}): {e}"));
+                false
+            }
+        }
+    })
+    .unwrap_or(false)
+}
+
 /// §24 retention job: purge audio blobs past their `purge_after` deadline. Returns blobs
 /// purged, or -1 on failure. The shell runs this at launch next to the utterance purge.
 #[no_mangle]

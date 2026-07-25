@@ -284,6 +284,14 @@ final class HistoryStore {
         return 0
     }
 
+    /// Delete a single dictation (and its audio) by utterance id — the dashboard's per-row
+    /// delete. Returns true if a row was removed.
+    @discardableResult
+    func deleteUtterance(id: String) -> Bool {
+        guard let handle else { return false }
+        return queue.sync { cadence_store_delete_utterance(handle, id) }
+    }
+
     /// Fetch a retained audio blob (the encrypted WAV) by id, for dashboard playback. Nil when
     /// absent (never retained, purged, or store unavailable).
     func audioBlob(id: String) -> Data? {
