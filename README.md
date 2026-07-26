@@ -4,7 +4,7 @@ Local-first, cloud-optional, system-wide AI voice dictation for macOS.
 
 Hold Right-Option, speak, release — the text lands in whatever field has focus. Transcription
 runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app makes no
-network connections at idle. Hold Right-Control instead and it dictates in your second
+network connections at idle. Hold Left-Option instead and it dictates in your second
 language, at the same speed.
 
 **Status:** Phase 1, in daily use on Apple Silicon. `platform-windows/` and `cloud/` are
@@ -21,7 +21,7 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
   so it never claims success for text that did not land.
 - **Two-pass ASR** — a fast partial appears in the overlay while you speak; a refined pass
   produces the text that gets inserted.
-- **Bilingual on two keys** — Right-Option dictates in one language, Right-Control in the
+- **Bilingual on two keys** — Right-Option dictates in one language, Left-Option in the
   other, each pinned. Switching languages costs a different finger rather than a menu trip or
   the ~160 ms that auto-detection adds to every utterance. Either key can be set to Automatic
   if you prefer detection, and the second key can be unbound entirely.

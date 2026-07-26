@@ -7,30 +7,47 @@ Updated: 2026-07-26 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEP
 The second pass left a decision open: default to Automatic (bilingual, but ~160 ms of detection
 on every utterance and 21.5 % Spanish WER) or to pinned English (faster and far better Spanish
 when pinned, but a menu trip to switch). Daniel's answer was to refuse the trade: bind a second
-key. **Right-Option and Right-Control are now both push-to-talk, each pinned to its own
+key. **Right-Option and Left-Option are now both push-to-talk, each pinned to its own
 language** — English and Spanish by default. Neither pays detection, Spanish gets the pinned
 13.6 % instead of 21.5 %, and switching languages costs a different finger instead of a menu.
-Either key can still be set to Automatic, and the second key can be set to Off if Right-Control
-is needed elsewhere.
+Either key can still be set to Automatic, and the second key can be set to Off if Left-Option is
+needed for typing.
 
-Right-Control is the pick because it is the least-claimed modifier on a Mac keyboard:
-Right-Shift types capitals and Right-Command is half of every right-handed ⌘ shortcut.
+The first attempt bound Right-Control and was **dead on arrival**: Apple laptops don't have
+one. The MacBook bottom row is fn / control / option / command / space / command / option /
+arrows — a single Control, on the left. Right-Shift types capitals and Right-Command is half of
+every right-handed ⌘ shortcut, which leaves the Option pair as the only two keys that are both
+present and unclaimed. Telling them apart needs the device-dependent modifier bits
+(NX_DEVICELALTKEYMASK / NX_DEVICERALTKEYMASK); the general `.maskAlternate` reports both Option
+keys as one.
+
+Left-Option is the more dangerous half of that pair, because it is the Option people actually
+use — ⌥e for an accent, ⌃⌥⌘Z to undo — which is what invariant 3 below exists for.
 
 **Defaults changed.** `dictation_language` unset now means `en`, not `auto`, and the new
 `secondary_language` unset means `es`. Daniel had never explicitly chosen a language — the log
 has no `dictation language →` line in nine days — so this changes a default he never picked
 rather than overriding a choice he made.
 
-**Two invariants are pinned by `cadence selftest-hotkeys`** (13 checks), because both fail
-silently rather than loudly:
+**Three invariants are pinned by `cadence selftest-hotkeys`** (24 checks), because all of them
+fail silently rather than loudly:
 - *One dictation at a time.* A second PTT pressed mid-utterance is ignored, and only the key
   that started an utterance can end it. Without this the two languages could interleave inside
   one utterance, or a stray release could cut a live dictation short.
 - *A chord is not a PTT.* If another real modifier is already down, the user is typing a
-  shortcut. Without this, ⌃⌥⌘Z — the undo-last-dictation chord — would start a dictation on its
-  way to undoing one, since it contains Control. Chord rejection deliberately applies to
-  **starts only**: a release arriving while another modifier is held must still stop the
-  dictation, or pressing a modifier mid-utterance would strand the app in capturing forever.
+  shortcut. Chord rejection deliberately applies to **starts only**: a release arriving while
+  another modifier is held must still stop the dictation, or pressing a modifier mid-utterance
+  would strand the app in capturing forever.
+- *A hold can be retracted.* The rule above only catches chords whose other modifier lands
+  first — and ⌃⌥⌘Z pressed with a left hand presses Option **first**, so the dictation has
+  already started by the time the chord is recognisable. So anything proving the user was not
+  speaking retracts it: a foreign modifier joining the hold, or any ordinary key being typed.
+  The second case is what makes ⌥e (é) safe — without it every accented character would leave
+  a stray empty utterance behind. Retraction fires within milliseconds, before there is speech
+  to lose, and exactly once; the eventual key release is then a no-op. The app cancels silently
+  (no overlay flash), since the user never meant to start a dictation, and clears its
+  swallowed-PTT flag — a retracted hold never delivers the `onPTTUp` that would normally
+  clear it, so a stale flag would eat the *next* dictation's release.
 
 The arbitration lives in a pure `PTTArbiter` struct so it can be exercised without synthesizing
 CGEvents — the same no-XCTest pattern as `insertctl selftest` and `selftest-stats`.
@@ -49,8 +66,9 @@ one; and `lsof` on the running process showed zero open files under the checkout
 `openssl-build/install/lib/{engines-3,ossl-modules}` strings baked into the binary are a red
 herring — those directories already did not exist and OpenSSL falls back to built-in providers.
 The rest of the absolute paths in the binary are `__FILE__` strings in ggml assertions, not
-runtime lookups. Cost of the reclaim: the next build recompiles whisper.cpp and SQLCipher from
-scratch (~10 min; the Swift half is 41 s).
+runtime lookups. Cost of the reclaim, measured rather than guessed: a full rebuild is ~52 s of
+Rust plus ~35 s of Swift, not the ~10 min first estimated — whisper.cpp and SQLCipher cache
+outside `target/`, so deleting it does not force their recompile.
 
 **README rewritten.** It was still the Phase 0 insertion-spike document — it described a
 prototype while the repo shipped a daily driver. Now covers what the app does, requirements
@@ -76,9 +94,8 @@ rebuild from empty `target/`, repackaged, reinstalled, relaunched — core ready
 **Still open, unchanged by this pass:** the `verify=contradicted` watch has only **one** live
 dictation since the readback-folding fix installed (17:56, verdict `verified`). One sample is
 not evidence; the log still shows 14 historical contradictions, all predating the fix. This
-stays open until a handful of real terminal dictations accumulate. The language-default decision
-(Automatic versus pinned English) is also still Daniel's to make — see the second-pass section
-below for the measurements.
+stays open until a handful of real terminal dictations accumulate. (The language-default
+decision that was open here is now resolved — see the two-key section above.)
 
 ## Latency + Spanish eval (2026-07-25, second pass)
 

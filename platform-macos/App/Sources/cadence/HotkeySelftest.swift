@@ -6,8 +6,9 @@
 //   cadence selftest-hotkeys
 //
 // What is worth pinning: the arbitration rules are invisible in normal use and fail silently.
-// A regression would not crash — it would let two languages interleave in one utterance, or
-// let ⌃⌥⌘Z quietly open a dictation while undoing one.
+// A regression would not crash — it would let two languages interleave in one utterance, let
+// ⌃⌥⌘Z quietly open a dictation while undoing one, or leave a stray empty utterance behind
+// every time the user types an accented character with ⌥.
 
 import CadenceHotkeys
 import Foundation
@@ -57,13 +58,44 @@ func runHotkeySelftest() -> Int32 {
         check("owner_release_stops", right == .stop(.primary), "got \(right)")
     }
 
-    // 4. A chord is not a PTT. Both keys must refuse to start while another modifier is down —
-    //    the ⌃⌥⌘Z case for Right-Control, and ⌘⌥/⇧⌥ shortcuts for Right-Option.
+    // 4. A chord is not a PTT, when the other modifier lands first.
     for key in [PTTKey.primary, PTTKey.secondary] {
         var a = PTTArbiter()
         let d = a.resolve(key: key, down: true, otherModifiers: true)
         check("\(key.rawValue)_chord_not_ptt", d == .ignore, "got \(d)")
         check("\(key.rawValue)_chord_leaves_idle", a.held == nil, "held is \(String(describing: a.held))")
+    }
+
+    // 4b. …and when it lands second, the hold is retracted. This is the ⌃⌥⌘Z case that
+    //     actually happens: a left hand presses Option before Control, so the dictation has
+    //     already started by the time the chord is recognisable.
+    do {
+        var a = PTTArbiter()
+        _ = a.resolve(key: .secondary, down: true, otherModifiers: false)
+        let r = a.retract()
+        check("late_chord_retracts", r == .cancel(.secondary), "got \(r)")
+        check("retract_clears_hold", a.held == nil, "held is \(String(describing: a.held))")
+        // The key release still arrives afterwards; it must not double-fire as a stop.
+        let up = a.resolve(key: .secondary, down: false, otherModifiers: false)
+        check("release_after_retract_is_noop", up == .ignore, "got \(up)")
+    }
+
+    // 4c. Retracting when nothing is held is a no-op — typing with no PTT down must not
+    //     manufacture a cancel for an utterance that never existed.
+    do {
+        var a = PTTArbiter()
+        let r = a.retract()
+        check("retract_while_idle_is_noop", r == .ignore, "got \(r)")
+    }
+
+    // 4d. Typing retracts too: ⌥e for an accent starts a hold on the Option press, and the
+    //     'e' is what proves it was never speech. Without this, every accented character
+    //     would leave a stray empty utterance behind.
+    do {
+        var a = PTTArbiter()
+        _ = a.resolve(key: .secondary, down: true, otherModifiers: false)
+        check("typing_retracts_hold", a.retract() == .cancel(.secondary))
+        check("typing_leaves_idle", a.held == nil, "held is \(String(describing: a.held))")
     }
 
     // 5. A release arriving with other modifiers still down must NOT be swallowed: the user
@@ -81,10 +113,10 @@ func runHotkeySelftest() -> Int32 {
     do {
         let both = AppDelegate.hintTitle(primary: "en", secondary: "es")
         check("hint_names_both_keys",
-              both.contains("Right-Option (English)") && both.contains("Right-Control (Spanish)"),
+              both.contains("Right-Option (English)") && both.contains("Left-Option (Spanish)"),
               both)
         let off = AppDelegate.hintTitle(primary: "en", secondary: "off")
-        check("hint_hides_unbound_key", !off.contains("Right-Control"), off)
+        check("hint_hides_unbound_key", !off.contains("Left-Option"), off)
         check("hint_keeps_cancel_and_undo", off.contains("Esc cancels") && off.contains("⌃⌥⌘Z"), off)
         let auto = AppDelegate.hintTitle(primary: "auto", secondary: "off")
         check("hint_labels_auto", auto.contains("Automatic"), auto)
