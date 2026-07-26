@@ -44,13 +44,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ("Forever", 0), ("90 Days", 90), ("30 Days", 30), ("7 Days", 7),
     ]
     var dictionaryWindow: DictionaryWindowController?
-    let languageItem = NSMenuItem(title: "Dictation Language", action: nil, keyEquivalent: "")
+    /// The keybinding hint, rebuilt on menu open so it always names the live language pairing.
+    let hintItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let languageItem = NSMenuItem(title: "Right-Option Speaks", action: nil, keyEquivalent: "")
+    let secondaryLanguageItem = NSMenuItem(
+        title: "Right-Control Speaks", action: nil, keyEquivalent: "")
     /// Language menu: label → code passed to the core ("auto" detects per utterance).
     static let languageChoices: [(String, String)] = [
         ("Automatic", "auto"), ("English", "en"), ("Spanish", "es"),
     ]
+    /// The second key adds "Off" — it can be unbound if the user needs Right-Control elsewhere.
+    static let secondaryLanguageChoices: [(String, String)] = [("Off", "off")] + languageChoices
     /// Cached so menuNeedsUpdate can tick the current choice without hitting the DB.
-    var dictationLanguage = "auto"
+    /// Both default to a *pinned* language rather than "auto" on purpose: detection costs
+    /// ~160 ms per utterance in both languages and, for Spanish, 8 points of WER (21.5 % auto
+    /// vs 13.6 % pinned, §30). Two keys mean the user never trades speed for bilingualism.
+    var dictationLanguage = "en"
+    var secondaryLanguage = "es"
+    /// What the engine currently has applied, so switching keys only crosses the FFI when the
+    /// language actually changes.
+    var appliedLanguage: String?
     // Held during an utterance: App Nap must never throttle a decode mid-dictation
     // (§28 latency budgets; suspected cause of a one-off 30 s Metal stall in testing).
     var activity: NSObjectProtocol?
@@ -86,10 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         stateMenuItem.isEnabled = false
         menu.addItem(stateMenuItem)
-        menu.addItem(
-            NSMenuItem(
-                title: "Hold Right-Option to dictate · Esc cancels · ⌃⌥⌘Z undoes",
-                action: nil, keyEquivalent: ""))
+        menu.addItem(hintItem)
         menu.addItem(.separator())
         let dashItem = NSMenuItem(
             title: "History & Metrics…", action: #selector(showDashboard), keyEquivalent: "d")
@@ -134,7 +144,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         voiceIsolationItem.action = #selector(toggleVoiceIsolation)
         voiceIsolationItem.target = self
         menu.addItem(voiceIsolationItem)
-        // Dictation language (auto-detect by default; Spanish needs the multilingual model).
+        // Dictation language, one binding per push-to-talk key. Pinning both beats
+        // auto-detection on speed and (for Spanish) accuracy, so bilingual dictation costs
+        // a different finger rather than a menu trip or 160 ms of detection.
         let languageMenu = NSMenu()
         for (label, code) in Self.languageChoices {
             let item = NSMenuItem(
@@ -145,6 +157,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         languageItem.submenu = languageMenu
         menu.addItem(languageItem)
+        let secondaryMenu = NSMenu()
+        for (label, code) in Self.secondaryLanguageChoices {
+            let item = NSMenuItem(
+                title: label, action: #selector(pickSecondaryLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = code
+            secondaryMenu.addItem(item)
+            if code == "off" { secondaryMenu.addItem(.separator()) }
+        }
+        secondaryLanguageItem.submenu = secondaryMenu
+        menu.addItem(secondaryLanguageItem)
         // Personal dictionary: proper nouns / jargon the user wants spelled their way.
         let dictItem = NSMenuItem(
             title: "Personal Dictionary…", action: #selector(showDictionary), keyEquivalent: "")
@@ -171,7 +194,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HistoryReader.store = store
         disabledApps = store?.disabledApps() ?? []
         retainAudio = store?.retainAudioEnabled ?? false
-        dictationLanguage = store?.dictationLanguage ?? "auto"
+        dictationLanguage = store?.dictationLanguage ?? "en"
+        secondaryLanguage = store?.secondaryLanguage ?? "es"
         router.retainAudioEnabled = { [weak self] in self?.retainAudio ?? false }
         capture.preferBuiltInMic = store?.preferBuiltInMic ?? true
         capture.voiceIsolation = store?.voiceIsolation ?? true
@@ -187,7 +211,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Hotkeys before anything heavy: if Accessibility is missing there's no product.
         hotkeys.isActive = { [weak self] in (self?.router.activeState ?? "idle") != "idle" }
-        hotkeys.onPTTDown = { [weak self] in
+        hotkeys.secondaryEnabled = { [weak self] in (self?.secondaryLanguage ?? "off") != "off" }
+        hotkeys.onPTTDown = { [weak self] key in
             guard let self else { return }
             // Per-app rule: dictation is off here — say so briefly, touch nothing else.
             let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
@@ -197,6 +222,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.overlay.scheduleFade(after: 0.9)
                 return
             }
+            // Pin the language this key speaks before capture starts. setLanguage is a cell
+            // the worker reads before each decode, so it lands ahead of both passes.
+            self.applyLanguage(self.language(for: key))
             self.pttDownAt = Date()
             if self.activity == nil {
                 self.activity = ProcessInfo.processInfo.beginActivity(
@@ -204,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             self.engine?.triggerDown(verbatim: self.config.verbatim)
         }
-        hotkeys.onPTTUp = { [weak self] in
+        hotkeys.onPTTUp = { [weak self] _ in
             guard let self else { return }
             // Symmetry with the gate above: a swallowed down means nothing to stop.
             if self.pttSwallowed {
@@ -241,16 +269,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let engine else { exit(1) }
                 DispatchQueue.main.async {
                     self.engine = engine
-                    // Apply the saved language now that the engine exists (env default is
-                    // "auto"; this makes a persisted English/Spanish choice stick across launches).
-                    engine.setLanguage(self.dictationLanguage)
+                    // Apply the primary key's language now that the engine exists (the env
+                    // default is "auto"), so a dictation that starts before any key-driven
+                    // switch is already pinned. Each PTT re-pins to its own key's language.
+                    self.applyLanguage(self.dictationLanguage)
                     // Restore the personal dictionary so custom spellings survive a relaunch.
                     let vocab = Vocabulary.prompt(from: self.historyStore?.customVocabulary ?? "")
                     if !vocab.isEmpty { engine.setVocabulary(vocab) }
                     let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                    let keys =
+                        self.secondaryLanguage == "off"
+                        ? "Right-Option=\(self.dictationLanguage)"
+                        : "Right-Option=\(self.dictationLanguage) Right-Control=\(self.secondaryLanguage)"
                     self.router.log(
-                        "core ready in \(ms) ms (core v\(CoreEngine.coreVersion)) — "
-                            + "hold Right-Option to dictate")
+                        "core ready in \(ms) ms (core v\(CoreEngine.coreVersion)) — \(keys)")
                     self.renderState("idle")
                 }
             }
@@ -354,15 +386,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for item in languageItem.submenu?.items ?? [] {
             item.state = (item.representedObject as? String) == dictationLanguage ? .on : .off
         }
+        for item in secondaryLanguageItem.submenu?.items ?? [] {
+            item.state = (item.representedObject as? String) == secondaryLanguage ? .on : .off
+        }
+        hintItem.title = Self.hintTitle(primary: dictationLanguage, secondary: secondaryLanguage)
+    }
+
+    /// "Hold Right-Option (English) · Right-Control (Spanish) · Esc cancels" — the second key
+    /// is dropped from the hint when it is unbound, so the line never advertises a dead key.
+    static func hintTitle(primary: String, secondary: String) -> String {
+        func name(_ code: String) -> String {
+            secondaryLanguageChoices.first { $0.1 == code }?.0 ?? code
+        }
+        var parts = ["Hold Right-Option (\(name(primary)))"]
+        if secondary != "off" { parts.append("Right-Control (\(name(secondary)))") }
+        parts.append("Esc cancels")
+        parts.append("⌃⌥⌘Z undoes")
+        return parts.joined(separator: " · ")
+    }
+
+    /// Which language a given push-to-talk key dictates in.
+    func language(for key: PTTKey) -> String {
+        key == .primary ? dictationLanguage : secondaryLanguage
+    }
+
+    /// Cross the FFI only when the language actually changes — holding the same key
+    /// repeatedly should cost nothing.
+    func applyLanguage(_ code: String) {
+        guard code != appliedLanguage else { return }
+        engine?.setLanguage(code)  // instant — no model reload
+        appliedLanguage = code
     }
 
     @objc func pickLanguage(_ sender: NSMenuItem) {
         guard let code = sender.representedObject as? String else { return }
         dictationLanguage = code
         historyStore?.setDictationLanguage(code)
-        engine?.setLanguage(code)  // instant — no model reload
+        applyLanguage(code)
         let label = Self.languageChoices.first { $0.1 == code }?.0 ?? code
-        router.log("dictation language → \(label) (\(code))")
+        router.log("Right-Option speaks → \(label) (\(code))")
+    }
+
+    @objc func pickSecondaryLanguage(_ sender: NSMenuItem) {
+        guard let code = sender.representedObject as? String else { return }
+        secondaryLanguage = code
+        historyStore?.setSecondaryLanguage(code)
+        let label = Self.secondaryLanguageChoices.first { $0.1 == code }?.0 ?? code
+        router.log("Right-Control speaks → \(label) (\(code))")
     }
 
     @objc func showDictionary() {

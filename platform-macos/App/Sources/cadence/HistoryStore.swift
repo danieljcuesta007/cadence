@@ -214,14 +214,15 @@ final class HistoryStore {
 
     // MARK: dictation language (auto-detect by default; multilingual model required for ES)
 
-    /// "auto" (detect per utterance), "en", or "es". Unset ⇒ "auto" — the bundled multilingual
-    /// model detects the spoken language, so bilingual dictation works with no configuration.
+    /// What Right-Option dictates in: "auto" (detect per utterance), "en", or "es".
+    /// Unset ⇒ "en", not "auto": detection costs ~160 ms per utterance and buys nothing when
+    /// the user can just hold the other key for their second language (§30).
     var dictationLanguage: String {
         guard let handle, let c = cadence_store_setting_get(handle, "dictation_language")
-        else { return "auto" }
+        else { return "en" }
         defer { cadence_string_free(c) }
         let v = String(cString: c)
-        return v.isEmpty ? "auto" : v
+        return v.isEmpty ? "en" : v
     }
 
     func setDictationLanguage(_ lang: String) {
@@ -229,6 +230,24 @@ final class HistoryStore {
         if !cadence_store_setting_set(handle, "dictation_language", lang) {
             let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
             LogFile.append("dictation_language save failed: \(msg)")
+        }
+    }
+
+    /// What Right-Control dictates in — same codes plus "off" to unbind the key entirely.
+    /// Unset ⇒ "es", which is the pairing that makes the two-key design worth having.
+    var secondaryLanguage: String {
+        guard let handle, let c = cadence_store_setting_get(handle, "secondary_language")
+        else { return "es" }
+        defer { cadence_string_free(c) }
+        let v = String(cString: c)
+        return v.isEmpty ? "es" : v
+    }
+
+    func setSecondaryLanguage(_ lang: String) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, "secondary_language", lang) {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("secondary_language save failed: \(msg)")
         }
     }
 

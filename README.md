@@ -4,7 +4,8 @@ Local-first, cloud-optional, system-wide AI voice dictation for macOS.
 
 Hold Right-Option, speak, release — the text lands in whatever field has focus. Transcription
 runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app makes no
-network connections at idle.
+network connections at idle. Hold Right-Control instead and it dictates in your second
+language, at the same speed.
 
 **Status:** Phase 1, in daily use on Apple Silicon. `platform-windows/` and `cloud/` are
 reserved by the blueprint and currently empty.
@@ -20,14 +21,17 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
   so it never claims success for text that did not land.
 - **Two-pass ASR** — a fast partial appears in the overlay while you speak; a refined pass
   produces the text that gets inserted.
-- **Bilingual** English/Spanish with per-utterance auto-detection, or pin a language from the
-  menu (pinning is both faster and more accurate — see the note under Known trade-offs).
+- **Bilingual on two keys** — Right-Option dictates in one language, Right-Control in the
+  other, each pinned. Switching languages costs a different finger rather than a menu trip or
+  the ~160 ms that auto-detection adds to every utterance. Either key can be set to Automatic
+  if you prefer detection, and the second key can be unbound entirely.
 - **Personal dictionary** for proper nouns, applied to the refined pass as a Whisper prompt.
 - **Encrypted history** in SQLCipher, with an optional retained-audio mode (off by default) and
   a retention window you choose.
 - **Dashboard** — time saved, words dictated, speaking pace, streak, per-day activity, and
   where you dictate, plus a searchable transcript history with copy, re-insert, and delete.
-- **Undo** the last insertion with Control-Option-Command-Z.
+- **Undo** the last insertion with Control-Option-Command-Z. Holding a modifier chord never
+  starts a dictation, so the undo shortcut cannot trip the push-to-talk keys.
 
 ## Requirements
 
@@ -97,7 +101,8 @@ property, but it does mean the key is worth knowing about before you clean out a
 cargo test --workspace                             # core: orchestrator, cleanup, store, models, ffi
 cargo test -p cadence-asr --features whisper       # ASR against real model files
 platform-macos/.build/release/insertctl selftest   # insertion + readback logic
-platform-macos/.build/release/cadence selftest-stats  # dashboard metric maths
+platform-macos/.build/release/cadence selftest-stats     # dashboard metric maths
+platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitration
 qa/wer-harness.sh                                  # word error rate + ASR latency together
 qa/spine-selftest.sh                               # end-to-end WAV to inserted text
 ```
@@ -120,9 +125,9 @@ Numbers from the harness and from real-use logs, not estimates. See `docs/STATUS
 ## Known trade-offs
 
 - **Automatic language detection costs about 160 ms per dictation** and is meaningfully less
-  accurate for Spanish than pinning it (21.5% versus 13.6% WER on synthesized fixtures).
-  Automatic is the default because it never fails catastrophically; pinning English or Spanish
-  from the menu is faster and better when you know which you are speaking.
+  accurate for Spanish than pinning it (21.5% versus 13.6% WER on synthesized fixtures). This
+  is why the default binds each key to a pinned language instead: you keep bilingual dictation
+  without paying detection on either. Automatic remains available per key.
 - The refined pass at ~500 ms means end-to-end sits above the blueprint's 700 ms target once
   insertion is included. Recorded as a miss rather than quietly restated.
 - Accuracy fixtures are synthesized with `say`, not human speech, so absolute WER is optimistic;

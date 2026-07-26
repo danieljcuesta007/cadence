@@ -1,7 +1,8 @@
 // cadence — the macOS menu-bar shell (§25 App/, §32 Phase 1 spine).
 //
 //   cadence run [--model path | --mock "text"] [--verbatim]
-//       Menu-bar agent: hold Right-Option to dictate into the focused field; Esc cancels.
+//       Menu-bar agent: hold Right-Option (or Right-Control for the second language) to
+//       dictate into the focused field; Esc cancels.
 //
 //   cadence selftest-wav <wav> [--model path | --mock "text"] [--expect-app Name]
 //       Full FFI pipeline (trigger → ring → ASR → cleanup → insertion) with the WAV
@@ -66,6 +67,7 @@ func parseArgs() -> Config {
             c.mode = "selftest"
             c.wav = it.next()
         case "selftest-stats": c.mode = "selftest-stats"
+        case "selftest-hotkeys": c.mode = "selftest-hotkeys"
         case "--model": if let v = it.next() { c.model = v }
         case "--mock": c.mock = it.next() ?? "mock transcript"
         case "--expect-app": c.expectApp = it.next()
@@ -90,6 +92,8 @@ case "selftest":
     exit(runSelftest(config))
 case "selftest-stats":
     exit(runStatsSelftest())
+case "selftest-hotkeys":
+    exit(runHotkeySelftest())
 default:
     runApp(config) // never returns
 }
