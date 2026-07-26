@@ -1,6 +1,39 @@
 # STATUS — Cadence build progress
 
-Updated: 2026-07-25 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+Updated: 2026-07-26 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+
+## Two-key push-to-talk (2026-07-26) — the language decision, dissolved
+
+The second pass left a decision open: default to Automatic (bilingual, but ~160 ms of detection
+on every utterance and 21.5 % Spanish WER) or to pinned English (faster and far better Spanish
+when pinned, but a menu trip to switch). Daniel's answer was to refuse the trade: bind a second
+key. **Right-Option and Right-Control are now both push-to-talk, each pinned to its own
+language** — English and Spanish by default. Neither pays detection, Spanish gets the pinned
+13.6 % instead of 21.5 %, and switching languages costs a different finger instead of a menu.
+Either key can still be set to Automatic, and the second key can be set to Off if Right-Control
+is needed elsewhere.
+
+Right-Control is the pick because it is the least-claimed modifier on a Mac keyboard:
+Right-Shift types capitals and Right-Command is half of every right-handed ⌘ shortcut.
+
+**Defaults changed.** `dictation_language` unset now means `en`, not `auto`, and the new
+`secondary_language` unset means `es`. Daniel had never explicitly chosen a language — the log
+has no `dictation language →` line in nine days — so this changes a default he never picked
+rather than overriding a choice he made.
+
+**Two invariants are pinned by `cadence selftest-hotkeys`** (13 checks), because both fail
+silently rather than loudly:
+- *One dictation at a time.* A second PTT pressed mid-utterance is ignored, and only the key
+  that started an utterance can end it. Without this the two languages could interleave inside
+  one utterance, or a stray release could cut a live dictation short.
+- *A chord is not a PTT.* If another real modifier is already down, the user is typing a
+  shortcut. Without this, ⌃⌥⌘Z — the undo-last-dictation chord — would start a dictation on its
+  way to undoing one, since it contains Control. Chord rejection deliberately applies to
+  **starts only**: a release arriving while another modifier is held must still stop the
+  dictation, or pressing a modifier mid-utterance would strand the app in capturing forever.
+
+The arbitration lives in a pure `PTTArbiter` struct so it can be exercised without synthesizing
+CGEvents — the same no-XCTest pattern as `insertctl selftest` and `selftest-stats`.
 
 ## Ship-ready pass (2026-07-25, third pass)
 
