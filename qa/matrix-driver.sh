@@ -1,6 +1,9 @@
 # Sourced helper for the automated insertion matrix. Requires Accessibility on the host shell.
-CTL=~/cadence/platform-macos/.build/debug/insertctl
-R=~/cadence/qa/matrix-results.jsonl
+# Sourced, so $0 belongs to the calling shell and dirname tricks don't apply — ask git for the
+# checkout root instead of naming one, and let either path be overridden.
+: "${CADENCE_REPO:=$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+CTL=${CADENCE_INSERTCTL:-$CADENCE_REPO/platform-macos/.build/debug/insertctl}
+R=${CADENCE_MATRIX_RESULTS:-$CADENCE_REPO/qa/matrix-results.jsonl}
 
 test_app() { # $1 = target label, $2 = payload, $3 = "expect-refuse" (optional), $EXPECT_APP set
   # Focus safety: never insert unless the expected app is actually frontmost (the user may

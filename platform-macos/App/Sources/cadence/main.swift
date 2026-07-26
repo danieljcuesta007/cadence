@@ -17,19 +17,40 @@ import CadenceInsertion
 import CadenceOverlay
 import Foundation
 
+// Bare dev binary runs from <repo>/platform-macos/.build/<config>/cadence, so the checkout
+// root is a few levels up. Walk to it from the executable rather than naming a checkout
+// path: the app is only self-contained if nothing assumes where the repo was cloned.
+private func devCheckoutModel() -> String? {
+    var dir = URL(fileURLWithPath: CommandLine.arguments[0])
+        .resolvingSymlinksInPath()
+        .deletingLastPathComponent()
+    for _ in 0..<5 {
+        let artifacts = dir.appendingPathComponent("models/artifacts")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: artifacts.path)) ?? []
+        if let pick = names.filter({ $0.hasPrefix("ggml-") && $0.hasSuffix(".bin") }).sorted().first {
+            return artifacts.appendingPathComponent(pick).path
+        }
+        dir = dir.deletingLastPathComponent()
+    }
+    return nil
+}
+
 struct Config {
     var mode = "run"
     var wav: String?
     // Resolution order: explicit env → bundled resource (Cadence.app ships its model,
     // self-contained; any ggml-*.bin — the tier is a packaging decision, §30) →
-    // dev-checkout path (bare binary run from the repo).
+    // dev-checkout path (bare binary run from the repo, located relative to the binary).
+    // The last arm is relative on purpose: if it is ever reached the model is genuinely
+    // missing, and a clear "no such file" beats pointing at somebody else's home dir.
     var model =
         ProcessInfo.processInfo.environment["CADENCE_MODEL"]
         ?? Bundle.main.paths(forResourcesOfType: "bin", inDirectory: "models")
             .filter { ($0 as NSString).lastPathComponent.hasPrefix("ggml-") }
             .sorted()
             .first
-        ?? NSString(string: "~/cadence/models/artifacts/ggml-base.en.bin").expandingTildeInPath
+        ?? devCheckoutModel()
+        ?? "models/artifacts/ggml-base.en.bin"
     var mock: String?
     var expectApp: String?
     var verbatim = false
