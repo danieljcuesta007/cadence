@@ -2,6 +2,51 @@
 
 Updated: 2026-07-25 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
+## Ship-ready pass (2026-07-25, third pass)
+
+Housekeeping so the repo matches the app, plus a disk reclaim. No dictation behaviour changed.
+
+**3.7 GB of build output deleted** (`target/` 2.2 G, `platform-macos/.build` 1.0 G, `dist/`
+474 M; repo 5.1 → 1.4 GB). `models/` was kept — slow to refetch and the WER harness runs against
+it. Before deleting, the installed app was re-verified self-contained, because the 7/19 cdylib
+trap is exactly this failure mode: `otool -L` shows only system frameworks and `/usr/lib`, no
+dev-tree dylib and no dev-tree `LC_RPATH`; the model resolves from the bundle's own
+`Contents/Resources/models/`; `dist/Cadence.app`'s binary was byte-identical to the installed
+one; and `lsof` on the running process showed zero open files under the checkout. The
+`openssl-build/install/lib/{engines-3,ossl-modules}` strings baked into the binary are a red
+herring — those directories already did not exist and OpenSSL falls back to built-in providers.
+The rest of the absolute paths in the binary are `__FILE__` strings in ggml assertions, not
+runtime lookups. Cost of the reclaim: the next build recompiles whisper.cpp and SQLCipher from
+scratch (~10 min; the Swift half is 41 s).
+
+**README rewritten.** It was still the Phase 0 insertion-spike document — it described a
+prototype while the repo shipped a daily driver. Now covers what the app does, requirements
+(including CMake, the one dependency a fresh clone does not get, since `tools/cmake-local/` is
+gitignored), why stable signing matters for TCC grants, where user data lives and what deleting
+the keychain item costs, every test entry point, the measured numbers, and the known trade-offs
+stated plainly rather than smoothed over.
+
+**Two hardcoded checkout paths removed** (§ works-anywhere). `main.swift`'s last-resort model
+fallback named `~/cadence/models/artifacts/ggml-base.en.bin`, so a clone anywhere else pointed
+at a path that does not exist — or, on a shared machine, at another user's home. It now walks up
+from the executable to locate the checkout, with a relative literal as the final arm so a
+genuine miss reports "no such file" instead of a misleading absolute path. Verified by running
+the bare binary from `/tmp` with no `CADENCE_MODEL` and no bundle: it resolved correctly.
+`qa/matrix-driver.sh` is sourced, so `dirname "$0"` belongs to the calling shell there; it asks
+git for the checkout root instead, and both paths take env overrides. Repo-wide grep for
+`danieljoshuacuesta`, `~/cadence`, `$HOME/cadence` across Swift/Rust/shell/TOML/Python is now
+clean. `Cargo.toml` said `license = "UNLICENSED"` while `LICENSE` is MIT; the manifest matches.
+
+**Verification:** 92 Rust tests, `insertctl selftest` 9/9, `cadence selftest-stats` 18/18, full
+rebuild from empty `target/`, repackaged, reinstalled, relaunched — core ready in 150 ms.
+
+**Still open, unchanged by this pass:** the `verify=contradicted` watch has only **one** live
+dictation since the readback-folding fix installed (17:56, verdict `verified`). One sample is
+not evidence; the log still shows 14 historical contradictions, all predating the fix. This
+stays open until a handful of real terminal dictations accumulate. The language-default decision
+(Automatic versus pinned English) is also still Daniel's to make — see the second-pass section
+below for the measurements.
+
 ## Latency + Spanish eval (2026-07-25, second pass)
 
 Follow-on to the audit: "make the thinking faster", plus the two gaps the audit left open
