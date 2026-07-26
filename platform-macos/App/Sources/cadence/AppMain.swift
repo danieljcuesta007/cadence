@@ -48,12 +48,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let hintItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let languageItem = NSMenuItem(title: "Right-Option Speaks", action: nil, keyEquivalent: "")
     let secondaryLanguageItem = NSMenuItem(
-        title: "Right-Control Speaks", action: nil, keyEquivalent: "")
+        title: "Left-Option Speaks", action: nil, keyEquivalent: "")
     /// Language menu: label → code passed to the core ("auto" detects per utterance).
     static let languageChoices: [(String, String)] = [
         ("Automatic", "auto"), ("English", "en"), ("Spanish", "es"),
     ]
-    /// The second key adds "Off" — it can be unbound if the user needs Right-Control elsewhere.
+    /// The second key adds "Off" — it can be unbound if the user needs Left-Option for typing.
     static let secondaryLanguageChoices: [(String, String)] = [("Off", "off")] + languageChoices
     /// Cached so menuNeedsUpdate can tick the current choice without hitting the DB.
     /// Both default to a *pinned* language rather than "auto" on purpose: detection costs
@@ -241,6 +241,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             self.engine?.triggerUp()
         }
+        // A hold retracted as a chord or as typing: throw the utterance away silently. No
+        // overlay flash — the user pressed ⌥e or ⌃⌥⌘Z and never meant to dictate, so telling
+        // them a dictation was cancelled would be noise about something they never started.
+        // Clearing pttSwallowed matters: a retracted hold never delivers its onPTTUp (the
+        // arbiter has already let go), so a swallowed flag left set would eat the *next*
+        // dictation's release. The activity assertion is freed by the usual route — cancel
+        // drives the router back to "idle", which ends it.
+        hotkeys.onPTTCancel = { [weak self] _ in
+            guard let self else { return }
+            self.pttSwallowed = false
+            self.engine?.cancel()
+        }
         hotkeys.onCancel = { [weak self] in self?.engine?.cancel() }
         hotkeys.onUndo = { [weak self] in self?.router.undoLastInsertion() }
         startHotkeysOrOnboard()
@@ -280,7 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     let keys =
                         self.secondaryLanguage == "off"
                         ? "Right-Option=\(self.dictationLanguage)"
-                        : "Right-Option=\(self.dictationLanguage) Right-Control=\(self.secondaryLanguage)"
+                        : "Right-Option=\(self.dictationLanguage) Left-Option=\(self.secondaryLanguage)"
                     self.router.log(
                         "core ready in \(ms) ms (core v\(CoreEngine.coreVersion)) — \(keys)")
                     self.renderState("idle")
@@ -392,14 +404,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hintItem.title = Self.hintTitle(primary: dictationLanguage, secondary: secondaryLanguage)
     }
 
-    /// "Hold Right-Option (English) · Right-Control (Spanish) · Esc cancels" — the second key
+    /// "Hold Right-Option (English) · Left-Option (Spanish) · Esc cancels" — the second key
     /// is dropped from the hint when it is unbound, so the line never advertises a dead key.
     static func hintTitle(primary: String, secondary: String) -> String {
         func name(_ code: String) -> String {
             secondaryLanguageChoices.first { $0.1 == code }?.0 ?? code
         }
         var parts = ["Hold Right-Option (\(name(primary)))"]
-        if secondary != "off" { parts.append("Right-Control (\(name(secondary)))") }
+        if secondary != "off" { parts.append("Left-Option (\(name(secondary)))") }
         parts.append("Esc cancels")
         parts.append("⌃⌥⌘Z undoes")
         return parts.joined(separator: " · ")
@@ -432,7 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         secondaryLanguage = code
         historyStore?.setSecondaryLanguage(code)
         let label = Self.secondaryLanguageChoices.first { $0.1 == code }?.0 ?? code
-        router.log("Right-Control speaks → \(label) (\(code))")
+        router.log("Left-Option speaks → \(label) (\(code))")
     }
 
     @objc func showDictionary() {

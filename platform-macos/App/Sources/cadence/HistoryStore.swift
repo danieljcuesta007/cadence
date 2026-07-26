@@ -233,7 +233,7 @@ final class HistoryStore {
         }
     }
 
-    /// What Right-Control dictates in — same codes plus "off" to unbind the key entirely.
+    /// What Left-Option dictates in — same codes plus "off" to unbind the key entirely.
     /// Unset ⇒ "es", which is the pairing that makes the two-key design worth having.
     var secondaryLanguage: String {
         guard let handle, let c = cadence_store_setting_get(handle, "secondary_language")
