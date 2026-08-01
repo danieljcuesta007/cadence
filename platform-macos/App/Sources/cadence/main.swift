@@ -18,6 +18,24 @@ import CadenceInsertion
 import CadenceOverlay
 import Foundation
 
+/// The model shipped inside Cadence.app. Prefers a multilingual model over an English-only
+/// `.en` tier when both are present: the old code sorted alphabetically and took the first,
+/// which ranks "ggml-base.en.bin" ahead of "ggml-small.bin" — so a bundle containing both
+/// would silently dictate English-only, and whisper gives no error for a language it cannot
+/// honour. Ties inside a tier still sort, so the choice stays deterministic.
+func bundledModel() -> String? {
+    let candidates = Bundle.main.paths(forResourcesOfType: "bin", inDirectory: "models")
+        .filter { ($0 as NSString).lastPathComponent.hasPrefix("ggml-") }
+        .sorted()
+    return candidates.first { !($0 as NSString).lastPathComponent.contains(".en.") }
+        ?? candidates.first
+}
+
+/// True when this model can only ever produce English, whatever language is requested.
+func isEnglishOnly(_ path: String) -> Bool {
+    (path as NSString).lastPathComponent.contains(".en.")
+}
+
 // Bare dev binary runs from <repo>/platform-macos/.build/<config>/cadence, so the checkout
 // root is a few levels up. Walk to it from the executable rather than naming a checkout
 // path: the app is only self-contained if nothing assumes where the repo was cloned.
@@ -46,10 +64,7 @@ struct Config {
     // missing, and a clear "no such file" beats pointing at somebody else's home dir.
     var model =
         ProcessInfo.processInfo.environment["CADENCE_MODEL"]
-        ?? Bundle.main.paths(forResourcesOfType: "bin", inDirectory: "models")
-            .filter { ($0 as NSString).lastPathComponent.hasPrefix("ggml-") }
-            .sorted()
-            .first
+        ?? bundledModel()
         ?? devCheckoutModel()
         ?? "models/artifacts/ggml-base.en.bin"
     var mock: String?
