@@ -224,7 +224,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             // Pin the language this key speaks before capture starts. setLanguage is a cell
             // the worker reads before each decode, so it lands ahead of both passes.
-            self.applyLanguage(self.language(for: key))
+            let lang = self.language(for: key)
+            self.applyLanguage(lang)
+            // Which key, and what it pinned. Without this line a "Spanish came out English"
+            // report is unfalsifiable from the log — the two candidate causes (wrong key
+            // pressed vs. right key resolving to the wrong language) look identical.
+            self.router.log("ptt down: \(key == .primary ? "Right-Option" : "Left-Option") → \(lang)")
             self.pttDownAt = Date()
             if self.activity == nil {
                 self.activity = ProcessInfo.processInfo.beginActivity(

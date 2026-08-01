@@ -199,6 +199,11 @@ pub enum Effect {
         /// show what the model actually heard (§24 transcript_final).
         #[serde(skip_serializing_if = "Option::is_none")]
         transcript_final: Option<String>,
+        /// Which language the decode actually ran in. None when the engine was left on
+        /// auto-detect. Without this the store's `language` column is null for every
+        /// utterance — the ASR knows, but nothing carried it to the shell.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        language: Option<String>,
     },
     /// Arm the single-keystroke undo for the exact inserted range (§7 F21).
     ArmUndo { utterance: UtteranceId },
@@ -264,10 +269,13 @@ mod tests {
             location: ProcessingLocation::Local,
             inserted: true,
             transcript_final: Some("hello world".into()),
+            language: Some("es".into()),
         };
         let v: serde_json::Value = serde_json::to_value(&f).unwrap();
         assert_eq!(v["type"], "persist_utterance");
         assert_eq!(v["transcript_final"], "hello world");
+        // The store keys off this exact name; a rename here silently blanks the Lang column.
+        assert_eq!(v["language"], "es");
         assert_eq!(serde_json::from_str::<Effect>(&v.to_string()).unwrap(), f);
 
         let bare = Effect::PersistUtterance {
@@ -275,9 +283,11 @@ mod tests {
             location: ProcessingLocation::Local,
             inserted: false,
             transcript_final: None,
+            language: None,
         };
         let v: serde_json::Value = serde_json::to_value(&bare).unwrap();
         assert!(v.get("transcript_final").is_none(), "null must be omitted");
+        assert!(v.get("language").is_none(), "auto-detect omits the key");
     }
 
     #[test]
