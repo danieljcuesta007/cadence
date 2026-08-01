@@ -123,6 +123,19 @@ fn happy_path_local_only() {
             ..
         } if t == "hello world"
     )));
+    // …and the language the decode ran in. This assertion exists because the field was once
+    // declared, emitted, and never assigned — which compiles clean and silently blanks the
+    // store's `language` column for every utterance. Only a value check catches that.
+    assert!(
+        has(&fx, |e| matches!(
+            e,
+            Effect::PersistUtterance {
+                language: Some(l),
+                ..
+            } if l == "en"
+        )),
+        "the persisted record must carry the ASR's reported language"
+    );
 
     let p = m.last_privacy().unwrap();
     assert!(

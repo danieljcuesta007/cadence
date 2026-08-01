@@ -37,6 +37,10 @@ fn main() {
     }
 
     let store = cadence_store::Store::open(&db, &key).expect("open store");
+    for k in ["custom_vocabulary", "dictation_language", "secondary_language"] {
+        println!("setting {k} = {:?}", store.get_setting(k).ok().flatten().unwrap_or_default());
+    }
+    println!("---");
     for u in store.recent_utterances(limit).expect("read") {
         println!(
             "{}  lang={:<6} app={:<16} ok={:<5} {:?}",
