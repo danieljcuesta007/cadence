@@ -11,7 +11,13 @@ cd "$(dirname "$0")/.."
 BIN=platform-macos/.build/release/cadence
 # Bundled model — override with CADENCE_BUNDLE_MODEL to ship a different tier (§30 WER
 # harness decides; base.en stays in models/artifacts as the golden rollback).
-MODEL=${CADENCE_BUNDLE_MODEL:-models/artifacts/ggml-base.en.bin}
+#
+# The default MUST be the multilingual model. It used to be ggml-base.en.bin — the *rollback* —
+# so any plain `package-app.sh --install` silently shipped an English-only build. Nothing
+# failed: English kept working (base.en is a fine English model), Spanish became word salad,
+# and the language pin looked correct the whole way down, because whisper's .en tiers accept a
+# language argument and ignore it. That shipped for six days before anyone noticed.
+MODEL=${CADENCE_BUNDLE_MODEL:-models/artifacts/ggml-small.bin}
 APP=dist/Cadence.app
 
 [[ -x "$BIN" ]] || { echo "build first: qa/build-shell.sh" >&2; exit 1; }
@@ -22,6 +28,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/models"
 
 cp "$BIN" "$APP/Contents/MacOS/Cadence"
 cp "$MODEL" "$APP/Contents/Resources/models/"
+# Say out loud what got bundled. The whole failure above was silent — the packager knew and
+# never printed it, so a wrong model looked exactly like a right one.
+case "$(basename "$MODEL")" in
+    *.en.bin) echo "model:     $(basename "$MODEL")  ENGLISH-ONLY — Spanish dictation will not work" ;;
+    *)        echo "model:     $(basename "$MODEL")  (multilingual)" ;;
+esac
 cp platform-macos/App/AppIcon/AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'

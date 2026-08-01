@@ -298,8 +298,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.secondaryLanguage == "off"
                         ? "Right-Option=\(self.dictationLanguage)"
                         : "Right-Option=\(self.dictationLanguage) Left-Option=\(self.secondaryLanguage)"
+                    let model = (self.config.model as NSString).lastPathComponent
                     self.router.log(
-                        "core ready in \(ms) ms (core v\(CoreEngine.coreVersion)) — \(keys)")
+                        "core ready in \(ms) ms (core v\(CoreEngine.coreVersion)) — "
+                            + "model=\(model) \(keys)")
+                    // An .en model accepts a language argument and ignores it, so a Spanish
+                    // binding on an English-only build fails silently and looks like a bad
+                    // model rather than a bad package. Say so once, at launch.
+                    if isEnglishOnly(self.config.model) {
+                        let pinned = [self.dictationLanguage, self.secondaryLanguage]
+                            .filter { $0 != "en" && $0 != "off" }
+                        if !pinned.isEmpty {
+                            self.router.log(
+                                "WARNING: \(model) is English-only — \(pinned.joined(separator: "/")) "
+                                    + "dictation cannot work. Repackage with "
+                                    + "CADENCE_BUNDLE_MODEL=models/artifacts/ggml-small.bin")
+                        }
+                    }
                     self.renderState("idle")
                 }
             }
