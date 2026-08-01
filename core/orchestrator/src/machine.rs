@@ -31,6 +31,8 @@ struct Utterance {
     pending: Option<Pending>,
     /// Refined (pre-cleanup) transcript, kept so cleanup failure can never lose words.
     refined: Option<String>,
+    /// Language the ASR reported for this utterance (None = decoded on auto-detect).
+    language: Option<String>,
     /// Final text handed to insertion, kept so insertion failure can never lose words.
     final_text: Option<String>,
     asr_location: Option<ProcessingLocation>,
@@ -116,6 +118,7 @@ impl Orchestrator {
             location,
             inserted,
             transcript_final: u.refined,
+            language: u.language,
         });
         effects.push(Effect::ScheduleFadeToIdle);
         self.state = State::Idle;
@@ -158,6 +161,7 @@ impl Orchestrator {
                     degraded: false,
                     pending: None,
                     refined: None,
+                    language: None,
                     final_text: None,
                     asr_location: None,
                     cleanup_location: None,
