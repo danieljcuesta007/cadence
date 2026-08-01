@@ -200,6 +200,10 @@ final class EffectRouter {
                 self.log("words preserved on clipboard (\(text.count) chars)")
             }
         case "persist_utterance":
+            // What the decode actually ran in, straight from the ASR — not what the shell
+            // asked for. When those two disagree the language never reached the engine, and
+            // the difference is invisible without printing both.
+            self.log("decoded language: \((obj["language"] as? String) ?? "auto (unpinned)")")
             let audio = takeRetainedAudio()
             if let store = historyStore {
                 store.persist(

@@ -284,6 +284,7 @@ impl Orchestrator {
                 let u = self.current.as_mut().unwrap();
                 u.asr_location = Some(location);
                 u.refined = Some(transcript.refined.clone());
+                u.language = transcript.language.clone();
                 let verbatim = u.mode == Mode::Verbatim;
                 let prefer = Self::prefer(u.policy, u.degraded);
                 u.pending = Some(Pending::Cleanup(prefer));
