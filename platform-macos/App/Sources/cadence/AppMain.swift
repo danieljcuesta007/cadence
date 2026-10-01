@@ -192,6 +192,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         historyStore = store
         router.historyStore = store
         HistoryReader.store = store
+        // Refresh ~/.cadence/stats.json for local readers (totals only; see StatsExport).
+        DispatchQueue.global(qos: .utility).async { StatsExport.write() }
         disabledApps = store?.disabledApps() ?? []
         retainAudio = store?.retainAudioEnabled ?? false
         dictationLanguage = store?.dictationLanguage ?? "en"
