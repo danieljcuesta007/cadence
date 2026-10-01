@@ -64,6 +64,11 @@ PLIST
 # requirement pins the certificate, so TCC grants survive rebuilds. Ad-hoc fallback
 # resets grants on every build — dev convenience only.
 IDENTITY="Cadence Dev Signing"
+# Check the signing keychain opens before every build, and repair it if not. A
+# locked or broken keychain still LISTS the identity, so without this codesign dies with
+# errSecInternalComponent and nothing says why. The helper unlocks it, or moves a broken
+# one aside and makes a fresh identity.
+"$(dirname "$0")/setup-signing.sh" >&2 || echo "note: signing setup failed — see above" >&2
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
     codesign --force --sign "$IDENTITY" --identifier dev.cadence.app "$APP"
     SIGNED="$IDENTITY"
