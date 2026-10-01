@@ -212,6 +212,7 @@ final class EffectRouter {
             } else {
                 History.append(record: obj, text: lastInsertedText, metrics: takeMetrics())
             }
+            StatsExport.write()
         case "arm_undo":
             undoLock.lock()
             undoRecord?.armed = true
