@@ -7,16 +7,31 @@
 # The dedicated keychain uses a fixed password: it guards a local self-signed dev key
 # with no external trust, and a known password is what makes signing scriptable
 # (set-key-partition-list pre-authorizes codesign, so no GUI prompts per build).
-# Idempotent: safe to re-run; does nothing if the identity already exists.
+# Idempotent and self-healing: safe to re-run. Does nothing when the identity exists AND
+# its keychain still opens with the known password. If the keychain no longer opens (its
+# password stopped matching on 1 Oct 2026 and every build failed errSecInternalComponent),
+# it is moved aside — never deleted — and a fresh identity is made. A fresh certificate is
+# a new signer to macOS, so Accessibility / Input Monitoring must be re-granted once.
 set -euo pipefail
 
 IDENTITY="Cadence Dev Signing"
 KEYCHAIN="$HOME/Library/Keychains/cadence-signing.keychain-db"
 KC_PASS="cadence-signing"
 
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
-    echo "identity already present: $IDENTITY"
-    exit 0
+if [[ -f "$KEYCHAIN" ]] && security unlock-keychain -p "$KC_PASS" "$KEYCHAIN" 2>/dev/null; then
+    security set-keychain-settings "$KEYCHAIN"   # re-assert no auto-lock
+    if security find-identity -v -p codesigning "$KEYCHAIN" 2>/dev/null | grep -q "$IDENTITY"; then
+        echo "identity healthy: $IDENTITY"
+        exit 0
+    fi
+elif [[ -f "$KEYCHAIN" ]]; then
+    BROKEN="$KEYCHAIN.broken-$(date +%Y%m%d-%H%M%S)"
+    echo "keychain won't open with its password; moving it aside to $(basename "$BROKEN")" >&2
+    # Drop it from the search list first so codesign stops finding the locked identity.
+    KEEP=$(security list-keychains -d user | tr -d '" ' | grep -v "cadence-signing.keychain-db" || true)
+    security list-keychains -d user -s ${(f)KEEP}
+    mv "$KEYCHAIN" "$BROKEN"
+    REGRANT=1
 fi
 
 WORK=$(mktemp -d)
@@ -41,8 +56,8 @@ security import "$WORK/identity.p12" -k "$KEYCHAIN" -P "$KC_PASS" -T /usr/bin/co
 security set-key-partition-list -S "apple-tool:,apple:,codesign:" -s -k "$KC_PASS" \
     "$KEYCHAIN" > /dev/null
 
-# Keep the login keychain first in the search list; append ours.
-EXISTING=$(security list-keychains -d user | tr -d '" ')
+# Keep the login keychain first in the search list; append ours (once).
+EXISTING=$(security list-keychains -d user | tr -d '" ' | grep -v "cadence-signing.keychain-db" || true)
 security list-keychains -d user -s ${(f)EXISTING} "$KEYCHAIN"
 
 # Trust the cert for code signing (user trust domain — no admin needed). This one step
@@ -57,3 +72,7 @@ security find-identity -v -p codesigning | grep "$IDENTITY" || {
     echo "WARNING: identity not yet valid for codesigning — trust step may need the GUI" >&2
     exit 1
 }
+if [[ "${REGRANT:-0}" == 1 ]]; then
+    echo "NEW CERTIFICATE: after the next install, re-grant Cadence in System Settings >" >&2
+    echo "Privacy & Security > Accessibility and Input Monitoring (remove it, then add it back)." >&2
+fi
