@@ -848,6 +848,7 @@ final class DashboardWindowController: NSWindowController {
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         store.deleteUtterance(id: e.id)
+        StatsExport.write()
         selectedTs = nil
         reload()
     }
