@@ -145,6 +145,38 @@ func runStatsSelftest() -> Int32 {
                   && s.topApps.isEmpty && s.perDay.count == 7)
     }
 
+    // 12. The stats.json export carries totals only — never a transcript — and matches the
+    //     dashboard's own arithmetic, so the two surfaces can't disagree.
+    do {
+        var secret = entry(minutesAgo: 5, words: 0, captureMs: 30_000)
+        secret = HistoryEntry(
+            id: secret.id, ts: secret.ts, text: "zebra quartz confidential", inserted: true,
+            app: "Notes", strategy: secret.strategy, language: "en", location: "local",
+            audioBlobId: nil, captureStartMs: nil, captureWindowMs: 30_000, insertionMs: nil,
+            transcriptInstant: "zebra instant", transcriptFinal: "zebra final")
+        let rows = [secret, entry(minutesAgo: 6, words: 80, captureMs: 30_000)]
+        let body = StatsExport.payload(rows)
+        let json = (try? JSONSerialization.data(withJSONObject: body))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        check("export_is_valid_json", !json.isEmpty)
+        check("export_never_contains_transcript_text", !json.contains("zebra"),
+              "transcript text leaked into stats.json")
+        check("export_schema_versioned", body["schema"] as? Int == StatsExport.schema)
+        let all = body["all"] as? [String: Any]
+        let dash = Stats.compute(rows, range: .all)
+        check("export_matches_dashboard",
+              all?["words"] as? Int == dash.words
+                  && all?["time_saved_min"] as? Int == dash.timeSavedMin
+                  && all?["wpm"] as? Int == dash.wpm,
+              "export \(String(describing: all)) vs dashboard \(dash.words)/\(dash.timeSavedMin)/\(dash.wpm)")
+        let perDay = body["per_day"] as? [[String: Any]] ?? []
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        check("export_per_day_ends_today",
+              perDay.count == 7 && perDay.last?["date"] as? String == fmt.string(from: Date()),
+              "got \(perDay.map { $0["date"] ?? "" })")
+    }
+
     struct Report: Codable { var checks: [StatsCheck]; var pass: Bool }
     let allPass = checks.allSatisfy { $0.pass }
     let enc = JSONEncoder()
