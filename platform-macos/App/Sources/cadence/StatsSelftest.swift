@@ -175,6 +175,14 @@ func runStatsSelftest() -> Int32 {
         check("export_per_day_ends_today",
               perDay.count == 7 && perDay.last?["date"] as? String == fmt.string(from: Date()),
               "got \(perDay.map { $0["date"] ?? "" })")
+        let year = body["year"] as? [[String: Any]] ?? []
+        let yearWords = Dictionary(uniqueKeysWithValues: year.compactMap { d in
+            (d["date"] as? String).map { ($0, d["words"] as? Int ?? 0) } })
+        check("export_year_agrees_with_per_day",
+              perDay.allSatisfy { d in (d["words"] as? Int ?? 0) == (yearWords[d["date"] as? String ?? ""] ?? 0) },
+              "year \(yearWords) vs per_day \(perDay)")
+        check("export_year_is_dates_and_totals_only",
+              year.allSatisfy { Set($0.keys) == ["date", "words"] })
     }
 
     struct Report: Codable { var checks: [StatsCheck]; var pass: Bool }
