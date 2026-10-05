@@ -43,6 +43,14 @@ enum StatsExport {
         }
         let real = entries.filter { !$0.isNonSpeech && $0.ts != nil }
 
+        // Words per day over the last year (days with words only), for the Command Center's
+        // contribution skyline. A sum per calendar day, so still totals only.
+        let yearStart = cal.date(byAdding: .day, value: -370, to: today)!
+        var byDay: [String: Int] = [:]
+        for e in real where e.ts! >= yearStart { byDay[dayFmt.string(from: e.ts!), default: 0] += e.words }
+        let year: [[String: Any]] = byDay.filter { $0.value > 0 }.sorted { $0.key < $1.key }
+            .map { ["date": $0.key, "words": $0.value] }
+
         return [
             "schema": schema,
             "generated_at": iso.string(from: now),
@@ -55,6 +63,7 @@ enum StatsExport {
             "week": block(.week),
             "all": block(.all),
             "per_day": perDay,
+            "year": year,
         ]
     }
 
