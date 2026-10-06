@@ -9,6 +9,9 @@
 //       injected in capture-sized chunks instead of the mic. With --expect-app, insertion
 //       is frontmost-guarded — the harness safety lesson from Phase 0 is mandatory here.
 //
+//   cadence selftest-appearance [--out dir]
+//       Offscreen light/dark render checks for the dashboard; --out keeps the PNGs.
+//
 // Default model path matches the headless tool; CADENCE_MODEL overrides.
 
 import AppKit
@@ -57,6 +60,8 @@ private func devCheckoutModel() -> String? {
 struct Config {
     var mode = "run"
     var wav: String?
+    /// selftest-appearance: where to keep the renders (optional).
+    var outDir: String?
     // Resolution order: explicit env → bundled resource (Cadence.app ships its model,
     // self-contained; any ggml-*.bin — the tier is a packaging decision, §30) →
     // dev-checkout path (bare binary run from the repo, located relative to the binary).
@@ -83,6 +88,8 @@ func parseArgs() -> Config {
             c.wav = it.next()
         case "selftest-stats": c.mode = "selftest-stats"
         case "selftest-hotkeys": c.mode = "selftest-hotkeys"
+        case "selftest-appearance": c.mode = "selftest-appearance"
+        case "--out": c.outDir = it.next()
         case "--model": if let v = it.next() { c.model = v }
         case "--mock": c.mock = it.next() ?? "mock transcript"
         case "--expect-app": c.expectApp = it.next()
@@ -109,6 +116,8 @@ case "selftest-stats":
     exit(runStatsSelftest())
 case "selftest-hotkeys":
     exit(runHotkeySelftest())
+case "selftest-appearance":
+    exit(runAppearanceSelftest(outDir: config.outDir))
 default:
     runApp(config) // never returns
 }
