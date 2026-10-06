@@ -8,13 +8,19 @@
 // a fixed width over-constrains the stack and AppKit resolves it by clipping a label
 // (this is exactly how the level bars vanished on the first live run). The level label
 // keeps a constant 10-glyph width while visible so per-chunk updates never relayout.
+//
+// While listening, the state glyph's dot is the ListeningOrb (SwiftUI, hosted). It is
+// paused in every other state and after the fade, so it only draws while you dictate.
 
 import AppKit
+import SwiftUI
 
 public final class OverlayHUD {
     private let panel: NSPanel
     private let content: NSVisualEffectView
     private let glyphLabel = NSTextField(labelWithString: "")
+    private let orbModel = OrbModel()
+    private let orbView: NSHostingView<ListeningOrb>
     private let levelLabel = NSTextField(labelWithString: "")
     private let partialLabel = NSTextField(labelWithString: "")
     private let chipLabel = NSTextField(labelWithString: "")
@@ -24,6 +30,7 @@ public final class OverlayHUD {
     private var levelHistory = String(repeating: "▁", count: 10)
 
     public init() {
+        orbView = NSHostingView(rootView: ListeningOrb(model: orbModel))
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 260, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -63,8 +70,12 @@ public final class OverlayHUD {
         partialLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 320).isActive = true
         levelLabel.isHidden = true
         partialLabel.isHidden = true
+        orbView.translatesAutoresizingMaskIntoConstraints = false
+        orbView.widthAnchor.constraint(equalToConstant: 22).isActive = true
+        orbView.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        orbView.isHidden = true
 
-        let stack = NSStackView(views: [glyphLabel, levelLabel, partialLabel, chipLabel])
+        let stack = NSStackView(views: [orbView, glyphLabel, levelLabel, partialLabel, chipLabel])
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 10
@@ -91,7 +102,7 @@ public final class OverlayHUD {
         fadeWork = nil
         let glyph: String
         switch state {
-        case "listening": glyph = "● listening"
+        case "listening": glyph = "listening"  // the orb is the dot
         case "thinking": glyph = "✦ thinking"
         case "inserting": glyph = "↳ inserting"
         case "done": glyph = "✓ done"
@@ -102,7 +113,11 @@ public final class OverlayHUD {
         }
         glyphLabel.stringValue = glyph
         chipLabel.stringValue = chip == "cloud" ? "cloud" : "local"
-        if state == "listening" {
+        let listening = state == "listening"
+        orbView.isHidden = !listening
+        orbModel.paused = !listening
+        if !listening { orbModel.level = 0 }
+        if listening {
             levelHistory = String(repeating: "▁", count: 10)
             levelLabel.stringValue = levelHistory
             levelLabel.isHidden = false
@@ -129,6 +144,13 @@ public final class OverlayHUD {
         levelHistory.removeFirst()
         levelHistory.append(Self.bars[idx])
         levelLabel.stringValue = levelHistory
+        guard !orbModel.paused else { return }
+        // Fast attack, slow release, so the orb swells on a word and settles between them.
+        // Publish only visible moves: each publish redraws the hosted SwiftUI view.
+        let target = CGFloat(min(1, max(0, level)))
+        let old = orbModel.level
+        let next = target > old ? target : old * 0.85 + target * 0.15
+        if abs(next - old) > 0.02 { orbModel.level = next }
     }
 
     /// Main thread only. Instant-pass text (§12.3): tail-anchored, head-truncated —
@@ -151,6 +173,7 @@ public final class OverlayHUD {
             } completionHandler: {
                 self.panel.orderOut(nil)
                 self.panel.alphaValue = 1
+                self.orbModel.paused = true
             }
         }
         fadeWork = work
@@ -160,6 +183,7 @@ public final class OverlayHUD {
     public func hide() {
         fadeWork?.cancel()
         panel.orderOut(nil)
+        orbModel.paused = true
     }
 
     private func fitAndPosition() {
