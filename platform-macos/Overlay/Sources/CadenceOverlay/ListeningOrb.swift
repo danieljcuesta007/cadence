@@ -1,5 +1,6 @@
 // ListeningOrb — the pill's "listening" indicator: a small "Siri orb" (layered conic
-// gradients turning at different speeds, blurred together) in the Cadence greens. It
+// gradients turning at different speeds, blurred together) in greys that follow the
+// text colour, as the old dot did: graphite on a light pill, silver on a dark one. It
 // replaces the old "●" dot and swells with the mic level, so it doubles as a second
 // "mic is hearing you" signal next to the bars.
 //
@@ -32,14 +33,24 @@ private func hex(_ v: UInt32) -> Color {
 /// Cadence greens: the brand #3F8A4F, a darker forest for depth, a pale mint that shows as
 /// the moving light, and a deep pine base so the orb reads on light and dark HUD material.
 /// Spread wide on purpose: at 22 pt the blur averages close shades into one flat green.
+/// Kept for a quick switch back: Daniel tried it green first (6 Oct) and preferred grey.
 let cadenceOrb = OrbPalette(base: hex(0x123A1E), c1: hex(0x3F8A4F), c2: hex(0xD2F5D6),
                             c3: hex(0x1F6B33))
 
+/// The greys: same roles as the greens (dark base, mid tone, a light that moves, a shade for
+/// depth), so the orb has the old dot's weight in either appearance.
+let graphiteOrb = OrbPalette(base: hex(0x232326), c1: hex(0x55555B), c2: hex(0xC9C9CF),
+                             c3: hex(0x3A3A3F))
+let silverOrb = OrbPalette(base: hex(0xBDBDC3), c1: hex(0x8A8A91), c2: hex(0xFFFFFF),
+                           c3: hex(0xA2A2A9))
+
 struct ListeningOrb: View {
     @ObservedObject var model: OrbModel
-    var p: OrbPalette = cadenceOrb
+    @Environment(\.colorScheme) private var scheme
     var size: CGFloat = 10.5  // the old dot's diameter at 13 pt medium
-    var period: Double = 6  // faster than Vitals' 24 s: this one should feel alive
+    var period: Double = 14  // a calm turn; the breath and the swell carry the liveliness
+
+    private var p: OrbPalette { scheme == .dark ? silverOrb : graphiteOrb }
 
     /// The hosting frame leaves room for the swell, so it never clips.
     static let frameSize: CGFloat = 14
