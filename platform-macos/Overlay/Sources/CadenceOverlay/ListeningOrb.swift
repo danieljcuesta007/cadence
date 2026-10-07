@@ -40,9 +40,11 @@ let cadenceOrb = OrbPalette(base: hex(0x123A1E), c1: hex(0x3F8A4F), c2: hex(0xD2
 /// The greys: same roles as the greens (dark base, mid tone, a light that moves, a shade for
 /// depth), so the orb has the old dot's weight in either appearance.
 /// Graphite sits near the old dot's near-black (labelColor on a light pill), with only a
-/// dim sheen moving through it. Daniel asked for it darker after trying #55555B/#C9C9CF.
-let graphiteOrb = OrbPalette(base: hex(0x141416), c1: hex(0x2E2E32), c2: hex(0x8A8A90),
-                             c3: hex(0x1F1F22))
+/// dim sheen moving through it. Daniel asked for it darker twice (after #55555B/#C9C9CF,
+/// then #2E2E32/#8A8A90): the sheen, highlight and rim are what made it read lighter than
+/// the flat dot, so on a light pill all three are turned down (see `glow`).
+let graphiteOrb = OrbPalette(base: hex(0x0C0C0E), c1: hex(0x1E1E21), c2: hex(0x55555B),
+                             c3: hex(0x151517))
 let silverOrb = OrbPalette(base: hex(0xBDBDC3), c1: hex(0x8A8A91), c2: hex(0xFFFFFF),
                            c3: hex(0xA2A2A9))
 
@@ -53,6 +55,8 @@ struct ListeningOrb: View {
     var period: Double = 14  // a calm turn; the breath and the swell carry the liveliness
 
     private var p: OrbPalette { scheme == .dark ? silverOrb : graphiteOrb }
+    /// Highlight and rim strength: full on silver, about half on graphite so it stays dark.
+    private var glow: Double { scheme == .dark ? 1 : 0.5 }
 
     /// The hosting frame leaves room for the swell, so it never clips.
     static let frameSize: CGFloat = 14
@@ -79,14 +83,14 @@ struct ListeningOrb: View {
                 .saturation(1.2)
                 .contrast(1.1)
                 // the orb's soft highlight
-                RadialGradient(colors: [.white.opacity(0.22), .white.opacity(0.06), .clear],
+                RadialGradient(colors: [.white.opacity(0.22 * glow), .white.opacity(0.06 * glow), .clear],
                                center: UnitPoint(x: 0.42, y: 0.38), startRadius: 0,
                                endRadius: size * 0.6)
                     .blendMode(.overlay)
             }
             .clipShape(Circle())
             // a hairline glass rim, like a bead under the HUD material
-            .overlay(Circle().strokeBorder(.white.opacity(0.28), lineWidth: 0.5))
+            .overlay(Circle().strokeBorder(.white.opacity(0.28 * glow), lineWidth: 0.5))
             .drawingGroup()
             .frame(width: size, height: size)
             .scaleEffect(breath)
