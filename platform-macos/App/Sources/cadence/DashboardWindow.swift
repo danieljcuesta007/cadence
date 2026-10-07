@@ -219,8 +219,12 @@ final class DashboardWindowController: NSWindowController {
             backing: .buffered, defer: false)
         window.title = "Cadence"
         window.minSize = NSSize(width: 620, height: 520)
+        // Layer colours are baked at build time; rebuild them whenever light/dark flips.
+        let root = AppearanceAwareView()
+        window.contentView = root
         self.init(window: window)
-        buildChrome()
+        root.onAppearanceChange = { [weak self] in self?.appearanceChanged() }
+        resolvingColors { buildChrome() }
         reload()
         window.center()
     }
@@ -274,8 +278,10 @@ final class DashboardWindowController: NSWindowController {
         ])
     }
 
+    private let dockBox = NSView()
+
     private func buildDetailDock() -> NSView {
-        let box = NSView()
+        let box = dockBox
         box.translatesAutoresizingMaskIntoConstraints = false
         box.wantsLayer = true
         box.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
@@ -389,7 +395,25 @@ final class DashboardWindowController: NSWindowController {
 
     // MARK: reload → rebuild the document stack
 
+    private func appearanceChanged() {
+        resolvingColors {
+            dockBox.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        }
+        reload()
+    }
+
+    /// `.cgColor` freezes a dynamic NSColor under whatever appearance is current, which outside
+    /// drawing isn't necessarily the window's. Resolve against the window's own.
+    private func resolvingColors(_ body: () -> Void) {
+        (window?.effectiveAppearance ?? NSApp.effectiveAppearance)
+            .performAsCurrentDrawingAppearance(body)
+    }
+
     private func reload() {
+        resolvingColors { rebuild() }
+    }
+
+    private func rebuild() {
         entries = HistoryReader.load()
         applyFilter()
 
@@ -443,10 +467,27 @@ final class DashboardWindowController: NSWindowController {
         seg.selectedSegment = [.today: 0, .week: 1, .all: 2][range] ?? 1
         seg.segmentStyle = .rounded
 
-        let row = NSStackView(views: [left, NSView(), seg])
+        let theme = NSButton()
+        theme.bezelStyle = .rounded
+        theme.image = NSImage(
+            systemSymbolName: Appearance.current.symbol,
+            accessibilityDescription: "Appearance: \(Appearance.current.label)")
+        theme.imagePosition = .imageOnly
+        theme.toolTip = "Appearance: \(Appearance.current.label) — click for \(Appearance.current.next.label)"
+        theme.target = self
+        theme.action = #selector(cycleAppearance)
+
+        let row = NSStackView(views: [left, NSView(), seg, theme])
         row.orientation = .horizontal
         row.alignment = .centerY
         return row
+    }
+
+    /// System → Light → Dark. The flip itself triggers the rebuild (AppearanceAwareView); this
+    /// reload covers Light ↔ System when macOS is already light, where nothing visibly flips.
+    @objc private func cycleAppearance() {
+        Appearance.choose(Appearance.current.next)
+        reload()
     }
 
     @objc private func rangeChanged(_ sender: NSSegmentedControl) {
@@ -1073,7 +1114,16 @@ final class HistoryRowView: NSView {
         bg.frame = bounds.insetBy(dx: 2, dy: 1)
     }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateBG()
+    }
+
     private func updateBG() {
+        effectiveAppearance.performAsCurrentDrawingAppearance { resolveBG() }
+    }
+
+    private func resolveBG() {
         bg.backgroundColor = isSelected
             ? BrandColor.green.withAlphaComponent(0.16).cgColor
             : (hovering ? NSColor.separatorColor.withAlphaComponent(0.4).cgColor : NSColor.clear.cgColor)
