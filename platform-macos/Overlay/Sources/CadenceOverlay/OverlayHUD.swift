@@ -71,14 +71,17 @@ public final class OverlayHUD {
         levelLabel.isHidden = true
         partialLabel.isHidden = true
         orbView.translatesAutoresizingMaskIntoConstraints = false
-        orbView.widthAnchor.constraint(equalToConstant: 22).isActive = true
-        orbView.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        orbView.widthAnchor.constraint(equalToConstant: ListeningOrb.frameSize).isActive = true
+        orbView.heightAnchor.constraint(equalToConstant: ListeningOrb.frameSize).isActive = true
         orbView.isHidden = true
 
         let stack = NSStackView(views: [orbView, glyphLabel, levelLabel, partialLabel, chipLabel])
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 10
+        // The orb's frame has ~1.75 pt of swell room each side; this keeps the visible gap
+        // to "listening" what the old "● " had (~5 pt).
+        stack.setCustomSpacing(3, after: orbView)
         stack.edgeInsets = NSEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
