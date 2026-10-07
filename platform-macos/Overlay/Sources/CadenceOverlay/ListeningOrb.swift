@@ -45,6 +45,11 @@ let cadenceOrb = OrbPalette(base: hex(0x123A1E), c1: hex(0x3F8A4F), c2: hex(0xD2
 /// the flat dot, so on a light pill all three are turned down (see `glow`).
 let graphiteOrb = OrbPalette(base: hex(0x0C0C0E), c1: hex(0x1E1E21), c2: hex(0x55555B),
                              c3: hex(0x151517))
+
+/// Black: what Daniel tried after graphite (7 Oct). True black with the faintest sheen,
+/// so the turn is still just visible and the breath and swell carry the life.
+let blackOrb = OrbPalette(base: hex(0x000000), c1: hex(0x0B0B0C), c2: hex(0x2C2C30),
+                          c3: hex(0x050506))
 let silverOrb = OrbPalette(base: hex(0xBDBDC3), c1: hex(0x8A8A91), c2: hex(0xFFFFFF),
                            c3: hex(0xA2A2A9))
 
@@ -54,7 +59,7 @@ struct ListeningOrb: View {
     var size: CGFloat = 10.5  // the old dot's diameter at 13 pt medium
     var period: Double = 14  // a calm turn; the breath and the swell carry the liveliness
 
-    private var p: OrbPalette { scheme == .dark ? silverOrb : graphiteOrb }
+    private var p: OrbPalette { scheme == .dark ? silverOrb : blackOrb }
     /// Highlight and rim strength: full on silver, about half on graphite so it stays dark.
     private var glow: Double { scheme == .dark ? 1 : 0.5 }
 
