@@ -30,6 +30,8 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
   a retention window you choose.
 - **Dashboard** — time saved, words dictated, speaking pace, streak, per-day activity, and
   where you dictate, plus a searchable transcript history with copy, re-insert, and delete.
+- **Light and dark** — follows macOS by default; pin Light or Dark from the menu (Appearance)
+  or the switch in the dashboard header. The choice is kept in the encrypted settings.
 - **Undo** the last insertion with Control-Option-Command-Z. Holding a modifier chord never
   starts a dictation, so the undo shortcut cannot trip the push-to-talk keys.
 
@@ -103,6 +105,7 @@ cargo test -p cadence-asr --features whisper       # ASR against real model file
 platform-macos/.build/release/insertctl selftest   # insertion + readback logic
 platform-macos/.build/release/cadence selftest-stats     # dashboard metric maths
 platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitration
+platform-macos/.build/release/cadence selftest-appearance [--out dir]  # light/dark renders
 qa/wer-harness.sh                                  # word error rate + ASR latency together
 qa/spine-selftest.sh                               # end-to-end WAV to inserted text
 ```

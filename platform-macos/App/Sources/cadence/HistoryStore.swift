@@ -251,6 +251,24 @@ final class HistoryStore {
         }
     }
 
+    // MARK: appearance (System / Light / Dark)
+
+    /// The app's appearance pick. Unset or unknown ⇒ .system (follow macOS).
+    var appearance: Appearance {
+        guard let handle, let c = cadence_store_setting_get(handle, "appearance")
+        else { return .system }
+        defer { cadence_string_free(c) }
+        return Appearance(rawValue: String(cString: c)) ?? .system
+    }
+
+    func setAppearance(_ choice: Appearance) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, "appearance", choice.rawValue) {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("appearance save failed: \(msg)")
+        }
+    }
+
     // MARK: personal dictionary (§; biases whisper toward the user's terms)
 
     /// Custom terms, one per line, the user wants spelled correctly (proper nouns, jargon,

@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let voiceIsolationItem = NSMenuItem(
         title: "Voice Isolation (Experimental)", action: nil, keyEquivalent: "")
     let retentionItem = NSMenuItem(title: "Keep History", action: nil, keyEquivalent: "")
+    let appearanceItem = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
     /// §24 retention choices surfaced in the menu (days; 0 = forever).
     static let retentionChoices: [(String, Int64)] = [
         ("Forever", 0), ("90 Days", 90), ("30 Days", 30), ("7 Days", 7),
@@ -173,6 +174,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             title: "Personal Dictionary…", action: #selector(showDictionary), keyEquivalent: "")
         dictItem.target = self
         menu.addItem(dictItem)
+        // Light / dark: follow macOS by default, or pin one. The dashboard has the same switch.
+        let appearanceMenu = NSMenu()
+        for choice in Appearance.allCases {
+            let item = NSMenuItem(
+                title: choice.label, action: #selector(pickAppearance(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = choice.rawValue
+            appearanceMenu.addItem(item)
+            if choice == .system { appearanceMenu.addItem(.separator()) }
+        }
+        appearanceItem.submenu = appearanceMenu
+        menu.addItem(appearanceItem)
         // Daily-driver basics: the app should survive a reboot without being remembered.
         loginItem.action = #selector(toggleStartAtLogin)
         loginItem.target = self
@@ -198,6 +211,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         retainAudio = store?.retainAudioEnabled ?? false
         dictationLanguage = store?.dictationLanguage ?? "en"
         secondaryLanguage = store?.secondaryLanguage ?? "es"
+        Appearance.apply(store?.appearance ?? .system)
+        Appearance.persist = { [weak self] choice in
+            self?.historyStore?.setAppearance(choice)
+            self?.router.log("appearance → \(choice.rawValue)")
+        }
         router.retainAudioEnabled = { [weak self] in self?.retainAudio ?? false }
         capture.preferBuiltInMic = store?.preferBuiltInMic ?? true
         capture.voiceIsolation = store?.voiceIsolation ?? true
@@ -420,6 +438,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for item in languageItem.submenu?.items ?? [] {
             item.state = (item.representedObject as? String) == dictationLanguage ? .on : .off
         }
+        for item in appearanceItem.submenu?.items ?? [] {
+            item.state = (item.representedObject as? String) == Appearance.current.rawValue ? .on : .off
+        }
         for item in secondaryLanguageItem.submenu?.items ?? [] {
             item.state = (item.representedObject as? String) == secondaryLanguage ? .on : .off
         }
@@ -524,6 +545,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let store = historyStore else { return }
         store.setRetentionDays(Int64(sender.tag))
         router.log("history retention → \(sender.tag == 0 ? "forever" : "\(sender.tag) days")")
+    }
+
+    @objc func pickAppearance(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+            let choice = Appearance(rawValue: raw)
+        else { return }
+        Appearance.choose(choice)
     }
 
     @objc func toggleStartAtLogin() {
