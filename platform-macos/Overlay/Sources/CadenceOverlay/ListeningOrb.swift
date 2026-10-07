@@ -39,8 +39,10 @@ let cadenceOrb = OrbPalette(base: hex(0x123A1E), c1: hex(0x3F8A4F), c2: hex(0xD2
 
 /// The greys: same roles as the greens (dark base, mid tone, a light that moves, a shade for
 /// depth), so the orb has the old dot's weight in either appearance.
-let graphiteOrb = OrbPalette(base: hex(0x232326), c1: hex(0x55555B), c2: hex(0xC9C9CF),
-                             c3: hex(0x3A3A3F))
+/// Graphite sits near the old dot's near-black (labelColor on a light pill), with only a
+/// dim sheen moving through it. Daniel asked for it darker after trying #55555B/#C9C9CF.
+let graphiteOrb = OrbPalette(base: hex(0x141416), c1: hex(0x2E2E32), c2: hex(0x8A8A90),
+                             c3: hex(0x1F1F22))
 let silverOrb = OrbPalette(base: hex(0xBDBDC3), c1: hex(0x8A8A91), c2: hex(0xFFFFFF),
                            c3: hex(0xA2A2A9))
 
