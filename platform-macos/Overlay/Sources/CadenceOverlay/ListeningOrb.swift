@@ -3,9 +3,10 @@
 // replaces the old "●" dot and swells with the mic level, so it doubles as a second
 // "mic is hearing you" signal next to the bars.
 //
-// Ported from the Vitals widget's Orb (ai-search-tracker/vitals-widget/Vitals.swift) and
-// scaled down for a ~22 pt circle: blur and highlight radii are fractions of the size, so
-// the gradients stay legible instead of melting into one flat green.
+// Same footprint as the "●" it replaced (~10.5 pt), so the pill looks as it always has; the
+// life is in the motion: a slow breath while you pause, a swell on every word. Ported from
+// the Vitals widget's Orb (ai-search-tracker/vitals-widget/Vitals.swift); blur and highlight
+// radii are fractions of the size so the gradients stay legible at this scale.
 //
 // CPU contract: the TimelineView is paused whenever the pill isn't listening (and after it
 // fades), so the orb costs nothing between dictations. 12 fps is enough for a slow drift.
@@ -37,13 +38,18 @@ let cadenceOrb = OrbPalette(base: hex(0x123A1E), c1: hex(0x3F8A4F), c2: hex(0xD2
 struct ListeningOrb: View {
     @ObservedObject var model: OrbModel
     var p: OrbPalette = cadenceOrb
-    var size: CGFloat = 22
+    var size: CGFloat = 10.5  // the old dot's diameter at 13 pt medium
     var period: Double = 6  // faster than Vitals' 24 s: this one should feel alive
+
+    /// The hosting frame leaves room for the swell, so it never clips.
+    static let frameSize: CGFloat = 14
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 12, paused: model.paused)) { ctx in
-            let a = ctx.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: period) / period * 360
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let a = t.truncatingRemainder(dividingBy: period) / period * 360
+            // a slow breath (2.4 s), so it is alive even between words
+            let breath = 1 + 0.05 * sin(t * 2 * .pi / 2.4)
             ZStack {
                 p.base
                 ZStack {
@@ -66,11 +72,15 @@ struct ListeningOrb: View {
                     .blendMode(.overlay)
             }
             .clipShape(Circle())
+            // a hairline glass rim, like a bead under the HUD material
+            .overlay(Circle().strokeBorder(.white.opacity(0.28), lineWidth: 0.5))
             .drawingGroup()
+            .frame(width: size, height: size)
+            .scaleEffect(breath)
         }
-        .frame(width: size, height: size)
-        // Breathes with the voice: a quiet room sits at 82%, a loud word fills the circle.
-        .scaleEffect(0.82 + 0.18 * model.level)
+        .frame(width: Self.frameSize, height: Self.frameSize)
+        // Swells with the voice: silence is the old dot's size, a loud word about 125%.
+        .scaleEffect(1 + 0.25 * model.level)
         .brightness(0.10 * model.level)
         .animation(.easeOut(duration: 0.12), value: model.level)
     }
