@@ -1,0 +1,20 @@
+# Runs the Rust test suite on every pull request and on pushes to dev/main.
+# Tests that need the (gitignored) Whisper model skip themselves when it is absent.
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+jobs:
+  cargo-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+      - run: cargo test --workspace --locked
