@@ -55,13 +55,15 @@ let silverOrb = OrbPalette(base: hex(0xBDBDC3), c1: hex(0x8A8A91), c2: hex(0xFFF
 
 struct ListeningOrb: View {
     @ObservedObject var model: OrbModel
-    @Environment(\.colorScheme) private var scheme
     var size: CGFloat = 10.5  // the old dot's diameter at 13 pt medium
     var period: Double = 14  // a calm turn; the breath and the swell carry the liveliness
 
-    private var p: OrbPalette { scheme == .dark ? silverOrb : blackOrb }
-    /// Highlight and rim strength: full on silver, about half on graphite so it stays dark.
-    private var glow: Double { scheme == .dark ? 1 : 0.5 }
+    /// Black in both appearances. It used to switch to `silverOrb` on a dark pill, and that
+    /// hid every colour change from Daniel: Cadence's own appearance switch can pin the pill
+    /// dark while macOS is light, so he kept seeing the untouched silver (7 Oct).
+    private var p: OrbPalette { blackOrb }
+    /// Highlight and rim at half strength so the black stays black.
+    private var glow: Double { 0.5 }
 
     /// The hosting frame leaves room for the swell, so it never clips.
     static let frameSize: CGFloat = 14
