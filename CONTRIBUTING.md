@@ -21,7 +21,7 @@ This is the working philosophy behind every repo Daniel Cuesta builds, with Clau
 - **Tests ship with the change.** New behaviour gets a test in the same PR, and a bug fix gets the test that would have caught it. Tests are living documentation, and the safety net grows with every bug.
 - Built-in runners come first (Python `unittest`, Node `node:test`, `cargo test`), so a fresh clone can test with nothing extra installed.
 - **CI runs the tests on every pull request.** A red check is fixed before merge, not after.
-- **Every release is reviewed.** Before a dev → main merge, the diff gets a code review: an automated pass by Claude, then a human read and a submitted review. A review is a conversation about the code, never about the person.
+- **Every pull request is reviewed before it merges**, features and releases alike. Claude runs the code review and posts it on the PR as "Review by Claude", so it's always clear an AI reviewed it. Real findings get fixed before merge, and anything risky goes to a human first. Whoever merges owns the result. A review is a conversation about the code, never about the person.
 
 ### How we test (JP Burford, week 5)
 - **Unit tests** check one thing in isolation. They have no side effects (no database, network or files), run in milliseconds, and point straight at what broke. Pure logic lives in pure functions so it can be tested this way.
