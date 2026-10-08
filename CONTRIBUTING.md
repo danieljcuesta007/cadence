@@ -23,6 +23,15 @@ This is the working philosophy behind every repo Daniel Cuesta builds, with Clau
 - **CI runs the tests on every pull request.** A red check is fixed before merge, not after.
 - **Every release is reviewed.** Before a dev → main merge, the diff gets a code review: an automated pass by Claude, then a human read and a submitted review. A review is a conversation about the code, never about the person.
 
+### How we test (JP Burford, week 5)
+- **Unit tests** check one thing in isolation. They have no side effects (no database, network or files), run in milliseconds, and point straight at what broke. Pure logic lives in pure functions so it can be tested this way.
+- **Dependency injection.** Code receives what it depends on (the database, settings, a clock, an HTTP client) as a parameter instead of creating it, so a test can hand it a fake.
+- **Mock at the boundaries, not inside.** Fake the network, third-party services and I/O, never our own logic. Use real implementations for pure functions and utilities, and verify that a mock was called the way we expected. Too many mocks make tests that pass while the product is broken.
+- **Only test our code.** We assume third-party libraries work, and we keep as few of them as we can: built-in runners and the standard library first, every dependency earning its place.
+- **Integration tests** use real pieces working together (for example the real API on a throwaway local database). They create what they need and clean it up, even when they fail.
+- **End-to-end tests** drive a real browser through a whole user journey. They give the most confidence and cost the most, so we keep them to the few journeys that matter.
+- **Every bug gets the test that would have caught it**, and a test is only trusted once we've watched it fail.
+
 ## Plan in sprints
 - Work lives on one GitHub Project board. Every card has a Priority (1 to 4), a Size (XS ≤4h, S 1 day, M 2–3 days, L 1 week, XL 1 sprint, XXL 2 sprints), a Why and a Due date.
 - Sprints are two weeks long:
