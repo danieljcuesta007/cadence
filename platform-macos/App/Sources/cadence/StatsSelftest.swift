@@ -185,6 +185,38 @@ func runStatsSelftest() -> Int32 {
               year.allSatisfy { Set($0.keys) == ["date", "words"] })
     }
 
+    // 9. Recovered days (lost store key) fold in: exact counts, estimated words, labelled.
+    do {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let cal = Calendar.current
+        let today = fmt.string(from: Date())
+        let yesterday = fmt.string(from: cal.date(byAdding: .day, value: -1, to: Date())!)
+        let old = fmt.string(from: cal.date(byAdding: .day, value: -30, to: Date())!)
+        let rec = [RecoveredDay(date: old, dictations: 4, speechSec: 120),        // 260 words
+                   RecoveredDay(date: yesterday, dictations: 1, speechSec: 60),   // 130 words
+                   RecoveredDay(date: today, dictations: 2, speechSec: 30)]       // 65 words
+        let live = [entry(minutesAgo: 1, words: 10, captureMs: 5_000)]
+        let body = StatsExport.payload(live, recovered: rec)
+        let allWords = (body["all"] as? [String: Any])?["words"] as? Int
+        check("recovered_words_added_to_all", allWords == 10 + 260 + 130 + 65, "got \(String(describing: allWords))")
+        check("recovered_dictations_exact", body["dictations"] as? Int == 1 + 7,
+              "got \(String(describing: body["dictations"]))")
+        check("recovered_today_counted", body["words_today"] as? Int == 10 + 65,
+              "got \(String(describing: body["words_today"]))")
+        let weekWords = (body["week"] as? [String: Any])?["words"] as? Int
+        check("recovered_week_excludes_old_days", weekWords == 10 + 130 + 65, "got \(String(describing: weekWords))")
+        check("recovered_streak_spans_both_sources", body["streak_days"] as? Int == 2,
+              "got \(String(describing: body["streak_days"]))")
+        let yearWords = Dictionary(uniqueKeysWithValues: (body["year"] as? [[String: Any]] ?? []).compactMap { d in
+            (d["date"] as? String).map { ($0, d["words"] as? Int ?? 0) } })
+        check("recovered_in_year_series", yearWords[old] == 260 && yearWords[today] == 75, "got \(yearWords)")
+        let r = body["recovered"] as? [String: Any]
+        check("recovered_is_labelled", r?["words_estimated"] as? Int == 455 && r?["dictations"] as? Int == 7,
+              "got \(String(describing: r))")
+        check("no_recovered_block_without_recovery", StatsExport.payload(live)["recovered"] == nil)
+    }
+
     struct Report: Codable { var checks: [StatsCheck]; var pass: Bool }
     let allPass = checks.allSatisfy { $0.pass }
     let enc = JSONEncoder()

@@ -1,9 +1,10 @@
 // HistoryStore — Swift face of the encrypted store (§24) plus its keychain key.
 //
-// Key custody: a 32-byte random key lives in the login keychain (generic password,
-// service "dev.cadence.app", account "store-key"), created on first launch. The core only
-// ever sees the raw bytes at open; SQLCipher encrypts everything at rest at
-// ~/.cadence/store.db. Blueprint "local data at rest": DB encrypted, key in OS keychain.
+// Key custody: a 32-byte random key in the login keychain (generic password, service
+// "dev.cadence.app", account "store-key") AND a 0600 copy at ~/.cadence/store.key, created on
+// first launch. The core only ever sees the raw bytes at open; SQLCipher encrypts
+// ~/.cadence/store.db. If no copy opens the store, it is renamed aside (never deleted) and a
+// fresh one starts. Disk-level protection is FileVault's job.
 //
 // AC-22 (no words ever lost): if the store cannot open or a persist fails, callers fall
 // back to the append-only JSONL exactly as before — the store is an upgrade, never a gate.
@@ -15,42 +16,111 @@ import Security
 enum StoreKey {
     static let service = "dev.cadence.app"
     static let account = "store-key"
+    /// Second copy of the key, beside the store (0600). The login keychain can be replaced out
+    /// from under us (it was, 11 Oct 2026, and a year of history became unreadable), so the
+    /// keychain is no longer the only copy. FileVault still encrypts the disk underneath.
+    static let fileURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".cadence/store.key")
 
-    /// Fetch the store key, creating and persisting it on first use. Nil only if the
-    /// keychain refuses both read and write (locked/denied) — callers then skip the store.
-    static func resolve() -> Data? {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-        ]
+    struct Found {
+        var keys: [Data]        // every distinct key we hold, keychain first
+        var keychainKnown: Bool // false = keychain locked/denied, so its copy is unknown
+    }
+
+    private static var baseQuery: [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: account]
+    }
+
+    static func find() -> Found {
+        var query = baseQuery
+        query[kSecReturnData as String] = true
         var out: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &out)
-        if status == errSecSuccess, let data = out as? Data, data.count == 32 {
-            return data
-        }
-        guard status == errSecItemNotFound else {
+        var keys: [Data] = []
+        if status == errSecSuccess, let data = out as? Data, data.count == 32 { keys.append(data) }
+        if status != errSecSuccess && status != errSecItemNotFound {
             LogFile.append("store key: keychain read failed (\(status))")
-            return nil
         }
+        if let file = try? Data(contentsOf: fileURL), file.count == 32, !keys.contains(file) {
+            keys.append(file)
+        }
+        return Found(keys: keys, keychainKnown: status == errSecSuccess || status == errSecItemNotFound)
+    }
+
+    /// Write `data` readable by this user only: created 0600 (never briefly 0644), then
+    /// renamed into place so a reader never sees a half-written key.
+    @discardableResult
+    static func writePrivate(_ data: Data, to url: URL) -> Bool {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let tmp = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).\(getpid()).tmp")
+        guard fm.createFile(atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600]) else { return false }
+        if rename(tmp.path, url.path) != 0 { try? fm.removeItem(at: tmp); return false }
+        return true
+    }
+
+    static func create() -> Data? {
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
             LogFile.append("store key: SecRandomCopyBytes failed")
             return nil
         }
-        let key = Data(bytes)
-        query.removeValue(forKey: kSecReturnData as String)
-        query[kSecValueData as String] = key
-        // This Mac only: history is local-first (§10); no iCloud keychain sync for the key.
-        query[kSecAttrSynchronizable as String] = false
-        let add = SecItemAdd(query as CFDictionary, nil)
-        guard add == errSecSuccess else {
-            LogFile.append("store key: keychain write failed (\(add))")
-            return nil
+        LogFile.append("store key: created")
+        return Data(bytes)
+    }
+
+    /// Make both copies hold `key` (the one that opened the store). Best-effort per copy.
+    static func remember(_ key: Data) {
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        var out: CFTypeRef?
+        let read = SecItemCopyMatching(query as CFDictionary, &out)
+        if read == errSecSuccess {
+            if (out as? Data) != key {
+                let status = SecItemUpdate(baseQuery as CFDictionary,
+                                           [kSecValueData as String: key] as CFDictionary)
+                if status != errSecSuccess { LogFile.append("store key: keychain update failed (\(status))") }
+            }
+        } else if read == errSecItemNotFound {
+            var add = baseQuery
+            add[kSecValueData as String] = key
+            // This Mac only: history is local-first (§10); no iCloud keychain sync for the key.
+            add[kSecAttrSynchronizable as String] = false
+            let status = SecItemAdd(add as CFDictionary, nil)
+            if status != errSecSuccess { LogFile.append("store key: keychain write failed (\(status))") }
         }
-        LogFile.append("store key: created in login keychain")
-        return key
+        if (try? Data(contentsOf: fileURL)) != key {
+            if writePrivate(key, to: fileURL) {
+                LogFile.append("store key: file copy saved")
+            } else {
+                LogFile.append("store key: file copy failed")
+            }
+        }
+    }
+}
+
+/// What to do with the keys we hold. Pure, so `selftest-store` can pin every branch.
+enum StorePlan: Equatable {
+    case use(Data)    // this key opened the store (or there is no store yet: create with it)
+    case reset(Data)  // a store exists and no key opens it: move it aside, start fresh with this
+    case wait         // keychain locked/denied, or the store failed for a reason other than
+                      // the key (busy, disk, migration): its key may be fine, touch nothing
+
+    enum OpenFailure { case wrongKey, other }
+
+    /// `opens` returns nil on success, else why that key failed.
+    static func decide(keys: [Data], keychainKnown: Bool, dbExists: Bool,
+                       opens: (Data) -> OpenFailure?) -> StorePlan {
+        var allWrongKey = true
+        for k in keys {
+            guard let failure = opens(k) else { return .use(k) }
+            if failure != .wrongKey { allWrongKey = false }
+        }
+        guard keychainKnown, let k = keys.first else { return .wait }
+        if !dbExists { return .use(k) }
+        return allWrongKey ? .reset(k) : .wait
     }
 }
 
@@ -59,21 +129,88 @@ final class HistoryStore {
         .appendingPathComponent(".cadence/store.db")
 
     private var handle: OpaquePointer?
+
+    private static func open(_ key: Data) -> OpaquePointer? {
+        key.withUnsafeBytes { raw in
+            guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return nil }
+            return cadence_store_open(dbURL.path, base, raw.count)
+        }
+    }
+
+    /// Rename store.db (and any WAL/SHM beside it) to store.locked-<stamp>.db*.
+    private static func moveAside() -> URL? {
+        let fm = FileManager.default
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        let aside = dbURL.deletingLastPathComponent()
+            .appendingPathComponent("store.locked-\(f.string(from: Date())).db")
+        // All or nothing: a fresh store.db must never sit beside the old store's WAL.
+        var moved: [(URL, URL)] = []
+        do {
+            for ext in ["", "-wal", "-shm"] {
+                let from = URL(fileURLWithPath: dbURL.path + ext)
+                let to = URL(fileURLWithPath: aside.path + ext)
+                if ext.isEmpty || fm.fileExists(atPath: from.path) {
+                    try fm.moveItem(at: from, to: to)
+                    moved.append((from, to))
+                }
+            }
+            return aside
+        } catch {
+            for (from, to) in moved.reversed() { try? fm.moveItem(at: to, to: from) }
+            LogFile.append("store: could not move the locked store aside: \(error.localizedDescription)")
+            return nil
+        }
+    }
     private let queue = DispatchQueue(label: "cadence.store", qos: .utility)
 
-    /// Nil when the key or the open fails — callers keep the JSONL path.
+    /// Nil when no key opens the store — callers keep the JSONL path.
     init?() {
-        guard let key = StoreKey.resolve() else { return nil }
-        let opened: OpaquePointer? = key.withUnsafeBytes { raw in
-            guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return nil }
-            return cadence_store_open(Self.dbURL.path, base, raw.count)
+        let found = StoreKey.find()
+        var keys = found.keys
+        if keys.isEmpty {
+            // Keychain locked/denied and no file copy: wait, never mint a key over a store.
+            guard found.keychainKnown, let fresh = StoreKey.create() else { return nil }
+            keys = [fresh]
         }
-        guard let opened else {
+        var opened: (Data, OpaquePointer)?
+        let plan = StorePlan.decide(
+            keys: keys, keychainKnown: found.keychainKnown,
+            dbExists: FileManager.default.fileExists(atPath: Self.dbURL.path)
+        ) { k in
+            guard let h = Self.open(k) else {
+                let msg = cadence_last_error().map { String(cString: $0) } ?? ""
+                return msg.contains("wrong key or not a cadence store") ? .wrongKey : .other
+            }
+            opened = (k, h)
+            return nil
+        }
+        switch plan {
+        case .wait:
+            return nil
+        case .use(let k):
+            if opened == nil { opened = Self.open(k).map { (k, $0) } }
+        case .reset(let k):
+            // No key we hold opens it: the key is gone. Keep the old file (renamed, never
+            // deleted, in case its key turns up) and start a fresh store, instead of
+            // silently living on JSONL forever.
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            if let aside = Self.moveAside() {
+                // Every key we held goes with it, so remember() below can't erase the one
+                // that might still open it.
+                StoreKey.writePrivate(keys.reduce(Data(), +),
+                                      to: aside.deletingPathExtension().appendingPathExtension("keys"))
+                LogFile.append("store: no key opens store.db (\(msg)); kept it as \(aside.lastPathComponent), starting a fresh store")
+                opened = Self.open(k).map { (k, $0) }
+            }
+        }
+        guard let (key, db) = opened else {
             let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
             LogFile.append("store open failed — staying on JSONL: \(msg)")
             return nil
         }
-        handle = opened
+        StoreKey.remember(key)
+        handle = db
         importLegacyJSONLIfPresent()
         applyRetention()
     }
