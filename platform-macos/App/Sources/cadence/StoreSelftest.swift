@@ -2,6 +2,7 @@
 // minting a key over a store or leaving dictation on JSONL forever (11 Oct 2026).
 
 import Foundation
+import Security
 
 func runStoreSelftest() -> Int32 {
     var failed = 0
@@ -32,5 +33,40 @@ func runStoreSelftest() -> Int32 {
           StorePlan.decide(keys: [b], keychainKnown: false, dbExists: true, opens: only(b)), .use(b))
     check("no_keys_at_all_waits",
           StorePlan.decide(keys: [], keychainKnown: false, dbExists: true) { _ in nil }, .wait)
+
+    // One prompt at most: every keychain read can be a "Cadence wants to use your keychain"
+    // prompt, and reading it twice per launch was two prompts every launch (12 Oct 2026).
+    func expect<T: Equatable>(_ name: String, _ got: T, _ want: T) {
+        let ok = got == want
+        if !ok { failed += 1 }
+        print("\(ok ? "PASS" : "FAIL") \(name)\(ok ? "" : ": got \(got), want \(want)")")
+    }
+    func probe(file: Data?, dbExists: Bool, opens: @escaping (Data) -> Bool,
+               keychain: StoreKey.KeychainRead) -> (StoreKey.Found, Int) {
+        var reads = 0
+        let found = StoreKey.find(file: file, dbExists: dbExists, opens: opens) { reads += 1; return keychain }
+        return (found, reads)
+    }
+    let kcA = StoreKey.KeychainRead(key: a, status: errSecSuccess)
+    var (f, reads) = probe(file: b, dbExists: true, opens: { $0 == b }, keychain: kcA)
+    expect("file_copy_opens_store_without_asking_keychain", reads, 0)
+    expect("file_copy_opens_store_keys", f.keys, [b])
+    (f, reads) = probe(file: b, dbExists: false, opens: { _ in false }, keychain: kcA)
+    expect("no_store_yet_file_copy_needs_no_keychain", reads, 0)
+    (f, reads) = probe(file: b, dbExists: true, opens: { $0 == a }, keychain: kcA)
+    expect("file_copy_fails_keychain_read_once", reads, 1)
+    expect("file_copy_fails_keychain_key_first", f.keys, [a, b])
+    (f, reads) = probe(file: nil, dbExists: true, opens: { _ in true }, keychain: kcA)
+    expect("no_file_copy_keychain_read_once", reads, 1)
+    let denied = StoreKey.KeychainRead(key: nil, status: errSecAuthFailed)
+    (f, reads) = probe(file: nil, dbExists: true, opens: { _ in true }, keychain: denied)
+    expect("denied_keychain_is_unknown", f.keychainKnown, false)
+
+    expect("unasked_keychain_is_left_alone", StoreKey.keychainWrite(nil, key: a), .none)
+    expect("keychain_already_holds_key", StoreKey.keychainWrite(kcA, key: a), .none)
+    expect("keychain_holds_other_key_is_updated", StoreKey.keychainWrite(kcA, key: b), .update)
+    expect("keychain_missing_key_is_added",
+           StoreKey.keychainWrite(.init(key: nil, status: errSecItemNotFound), key: a), .add)
+    expect("denied_keychain_is_not_written", StoreKey.keychainWrite(denied, key: a), .none)
     return failed == 0 ? 0 : 1
 }
