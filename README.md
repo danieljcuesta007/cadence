@@ -93,9 +93,14 @@ Clicking the Dock tile or reopening the app opens the dashboard.
 | `~/.cadence/store.db` | Encrypted history (SQLCipher), plus optional retained audio |
 | `~/.cadence/logs/cadence.log` | Diagnostics, trimmed at 2 MB |
 | login keychain, `dev.cadence.app/store-key` | The 32-byte database key, non-syncing |
+| `~/.cadence/store.key` | A second copy of that key (0600), so a replaced keychain can't lock you out |
+| `~/.cadence/store.locked-*.db` | A store no key could open, kept (never deleted) in case its key turns up |
+| `~/.cadence/recovered.json` | Per-day counts rebuilt from the log by `tools/recover_from_log.py` |
 
-Deleting the keychain item makes the history permanently unreadable — that is the intended
-property, but it does mean the key is worth knowing about before you clean out a keychain.
+The key exists in two places because macOS can replace the login keychain (it did on
+11 Oct 2026, and a keychain-only key took months of history with it). Losing *both* copies
+still makes the history unreadable, so back up `~/.cadence` (Time Machine does).
+Disk-level protection is FileVault's job.
 
 ## Tests
 
