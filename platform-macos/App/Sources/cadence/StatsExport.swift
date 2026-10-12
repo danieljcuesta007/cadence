@@ -24,7 +24,29 @@ struct RecoveredDay {
     var speechSec: Double
     var estimatedWords: Int { Int((speechSec / 60 * Self.speakingWPM).rounded()) }
 
+    /// yyyy-MM-dd in the Gregorian calendar whatever the Mac is set to: recovered.json is
+    /// written that way, and every key compared against it must be too.
+    static let dayKey: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static var cache: (stamp: Date, days: [RecoveredDay])?
+
+    /// Cached by modification date: the dashboard reloads often, the file almost never changes.
     static func load() -> [RecoveredDay] {
+        let stamp = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
+        guard let stamp else { return [] }
+        if let c = cache, c.stamp == stamp { return c.days }
+        let days = parse()
+        cache = (stamp, days)
+        return days
+    }
+
+    private static func parse() -> [RecoveredDay] {
         guard let data = try? Data(contentsOf: url),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let days = obj["days"] as? [[String: Any]] else { return [] }
@@ -48,8 +70,7 @@ enum StatsExport {
                         recovered: [RecoveredDay] = []) -> [String: Any] {
         let cal = Calendar.current
         let iso = ISO8601DateFormatter()
-        let dayFmt = DateFormatter()
-        dayFmt.dateFormat = "yyyy-MM-dd"
+        let dayFmt = RecoveredDay.dayKey
 
         func block(_ range: Stats.Range) -> [String: Any] {
             let s = Stats.compute(entries, range: range, recovered: recovered, now: now)
@@ -105,7 +126,7 @@ enum StatsExport {
             "dictations": real.count + recovered.reduce(0) { $0 + $1.dictations },
             "streak_days": all.streak,
             "words_today": all.wordsToday,
-            "typing_wpm_assumed": 40,
+            "typing_wpm_assumed": Int(typingWPM),
             "today": block(.today),
             "week": block(.week),
             "all": block(.all),

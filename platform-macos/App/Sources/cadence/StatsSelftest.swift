@@ -217,13 +217,20 @@ func runStatsSelftest() -> Int32 {
         check("no_recovered_block_without_recovery", StatsExport.payload(live)["recovered"] == nil)
         // The in-app dashboard sees exactly what stats.json sees.
         let dash = Stats.compute(live, range: .all, recovered: rec)
-        check("dashboard_agrees_with_export", dash.words == allWords && dash.streak == 2,
-              "dashboard \(dash.words)/\(dash.streak) vs export \(String(describing: allWords))")
+        check("dashboard_counts_recovered_words", dash.words == 10 + 260 + 130 + 65 && dash.streak == 2,
+              "got \(dash.words)/\(dash.streak)")
         check("dashboard_labels_recovered_words", dash.recoveredWords == 455, "got \(dash.recoveredWords)")
         let plain = Stats.compute(live, range: .all)
         check("recovered_words_never_skew_pace", dash.wpm == plain.wpm, "\(dash.wpm) vs \(plain.wpm)")
         let dashWeek = Stats.compute(live, range: .week, recovered: rec)
-        check("dashboard_week_matches_export", dashWeek.words == weekWords, "got \(dashWeek.words)")
+        check("dashboard_week_counts_recent_recovered", dashWeek.words == 10 + 130 + 65, "got \(dashWeek.words)")
+        // Saved time: live and recovered clamp apart. A slow live dictation (10 words in 5 min)
+        // saves 0, not minus 5 off the 390 recovered words' saving.
+        let slow = [entry(minutesAgo: 1, words: 10, captureMs: 300_000)]
+        let recOnly = Stats.compute([], range: .all, recovered: rec).timeSavedMin
+        check("recovered_saving_not_eaten_by_slow_live",
+              Stats.compute(slow, range: .all, recovered: rec).timeSavedMin == recOnly,
+              "got \(Stats.compute(slow, range: .all, recovered: rec).timeSavedMin) vs \(recOnly)")
         check("dashboard_chart_has_recovered_today", dash.perDay.last?.words == 10 + 65,
               "got \(String(describing: dash.perDay.last?.words))")
     }

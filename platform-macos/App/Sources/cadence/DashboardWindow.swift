@@ -83,7 +83,11 @@ enum HistoryReader {
 
 /// Words-per-minute we assume a person types at; time saved is measured against it. 40 wpm is
 /// a common average sustained typing speed — deliberately conservative so the number is honest.
-private let typingWPM = 40.0
+let typingWPM = 40.0
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
+}
 
 struct Stats {
     var timeSavedMin: Int          // over the selected range
@@ -105,8 +109,7 @@ struct Stats {
                         recovered: [RecoveredDay] = [], now: Date = Date()) -> Stats {
         let cal = Calendar.current
         let real = entries.filter { !$0.isNonSpeech && $0.ts != nil }
-        let dayKey = DateFormatter()
-        dayKey.dateFormat = "yyyy-MM-dd"
+        let dayKey = RecoveredDay.dayKey
         let todayKey = dayKey.string(from: now)
         let weekFloor = dayKey.string(from: now.addingTimeInterval(-7 * 86_400))
         let recScoped = recovered.filter { d in
@@ -120,15 +123,22 @@ struct Stats {
         func inRange(_ e: HistoryEntry) -> Bool {
             guard let ts = e.ts else { return false }
             switch range {
-            case .today: return cal.isDateInToday(ts)
+            case .today: return cal.isDate(ts, inSameDayAs: now)
             case .week: return ts >= now.addingTimeInterval(-7 * 86_400)
             case .all: return true
             }
         }
         let scoped = real.filter(inRange)
 
+        // Live rows and recovered days are clamped apart, so slow live dictation never eats
+        // into the recovered saving (or the other way round).
         func savedMinutes(_ es: [HistoryEntry], _ rec: [RecoveredDay]) -> Int {
-            let words = es.reduce(0) { $0 + $1.words } + rec.reduce(0) { $0 + $1.estimatedWords }
+            let recWords = Double(rec.reduce(0) { $0 + $1.estimatedWords })
+            let recSaved = max(0, Int((recWords / typingWPM - rec.reduce(0.0) { $0 + $1.speechSec } / 60).rounded()))
+            return liveSaved(es) + recSaved
+        }
+        func liveSaved(_ es: [HistoryEntry]) -> Int {
+            let words = es.reduce(0) { $0 + $1.words }
             // Actual dictation time from capture windows where we have them; estimate the rest
             // at a typical 130 wpm speaking pace so a missing metric never zeroes the saving.
             var speakMin = 0.0
@@ -136,7 +146,6 @@ struct Stats {
                 if let ms = e.captureWindowMs { speakMin += Double(ms) / 60_000 }
                 else { speakMin += Double(e.words) / 130 }
             }
-            speakMin += rec.reduce(0.0) { $0 + $1.speechSec } / 60
             return max(0, Int((Double(words) / typingWPM - speakMin).rounded()))
         }
 
@@ -563,8 +572,9 @@ final class DashboardWindowController: NSWindowController {
     private func makeHighlights(_ s: Stats) -> NSView {
         let cards = [
             statCard("WORDS DICTATED", "\(s.words.formatted())", nil,
-                note: s.recoveredWords > 0 ? "incl. ~\(s.recoveredWords.formatted()) recovered (est.)"
-                    : s.wordsToday > 0 ? "+\(s.wordsToday) today" : "in range",
+                note: [s.wordsToday > 0 ? "+\(s.wordsToday) today" : nil,
+                       s.recoveredWords > 0 ? "~\(s.recoveredWords.formatted()) recovered (est.)" : nil]
+                    .compactMap { $0 }.joined(separator: " · ").nonEmpty ?? "in range",
                 noteBold: s.recoveredWords == 0),
             statCard("SPEAKING PACE", s.wpm > 0 ? "\(s.wpm)" : "—", s.wpm > 0 ? "wpm" : nil,
                 note: s.wpm > 0 ? String(format: "%.1f× faster than typing", Double(s.wpm) / typingWPM) : "no timing yet",
