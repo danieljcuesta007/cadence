@@ -215,6 +215,17 @@ func runStatsSelftest() -> Int32 {
         check("recovered_is_labelled", r?["words_estimated"] as? Int == 455 && r?["dictations"] as? Int == 7,
               "got \(String(describing: r))")
         check("no_recovered_block_without_recovery", StatsExport.payload(live)["recovered"] == nil)
+        // The in-app dashboard sees exactly what stats.json sees.
+        let dash = Stats.compute(live, range: .all, recovered: rec)
+        check("dashboard_agrees_with_export", dash.words == allWords && dash.streak == 2,
+              "dashboard \(dash.words)/\(dash.streak) vs export \(String(describing: allWords))")
+        check("dashboard_labels_recovered_words", dash.recoveredWords == 455, "got \(dash.recoveredWords)")
+        let plain = Stats.compute(live, range: .all)
+        check("recovered_words_never_skew_pace", dash.wpm == plain.wpm, "\(dash.wpm) vs \(plain.wpm)")
+        let dashWeek = Stats.compute(live, range: .week, recovered: rec)
+        check("dashboard_week_matches_export", dashWeek.words == weekWords, "got \(dashWeek.words)")
+        check("dashboard_chart_has_recovered_today", dash.perDay.last?.words == 10 + 65,
+              "got \(String(describing: dash.perDay.last?.words))")
     }
 
     struct Report: Codable { var checks: [StatsCheck]; var pass: Bool }

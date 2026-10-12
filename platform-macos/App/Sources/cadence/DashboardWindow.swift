@@ -94,13 +94,28 @@ struct Stats {
     var streak: Int                // consecutive days ending today/most-recent with a dictation
     var perDay: [(label: String, words: Int, isToday: Bool)]   // last 7 days
     var topApps: [(name: String, words: Int, frac: Double)]    // up to 5, frac of the top
+    var recoveredWords = 0         // estimated words from recovered days inside `words`
 
     enum Range { case today, week, all }
 
-    static func compute(_ entries: [HistoryEntry], range: Range) -> Stats {
+    /// `recovered`: days rebuilt from the log after a lost store key (RecoveredDay). They add
+    /// words (estimated), time saved and streak days; not pace (their words come from a pace)
+    /// or apps (the log never knew).
+    static func compute(_ entries: [HistoryEntry], range: Range,
+                        recovered: [RecoveredDay] = [], now: Date = Date()) -> Stats {
         let cal = Calendar.current
-        let now = Date()
         let real = entries.filter { !$0.isNonSpeech && $0.ts != nil }
+        let dayKey = DateFormatter()
+        dayKey.dateFormat = "yyyy-MM-dd"
+        let todayKey = dayKey.string(from: now)
+        let weekFloor = dayKey.string(from: now.addingTimeInterval(-7 * 86_400))
+        let recScoped = recovered.filter { d in
+            switch range {
+            case .today: return d.date == todayKey
+            case .week: return d.date > weekFloor   // 7 calendar days incl. today
+            case .all: return true
+            }
+        }
 
         func inRange(_ e: HistoryEntry) -> Bool {
             guard let ts = e.ts else { return false }
@@ -112,8 +127,8 @@ struct Stats {
         }
         let scoped = real.filter(inRange)
 
-        func savedMinutes(_ es: [HistoryEntry]) -> Int {
-            let words = es.reduce(0) { $0 + $1.words }
+        func savedMinutes(_ es: [HistoryEntry], _ rec: [RecoveredDay]) -> Int {
+            let words = es.reduce(0) { $0 + $1.words } + rec.reduce(0) { $0 + $1.estimatedWords }
             // Actual dictation time from capture windows where we have them; estimate the rest
             // at a typical 130 wpm speaking pace so a missing metric never zeroes the saving.
             var speakMin = 0.0
@@ -121,11 +136,15 @@ struct Stats {
                 if let ms = e.captureWindowMs { speakMin += Double(ms) / 60_000 }
                 else { speakMin += Double(e.words) / 130 }
             }
+            speakMin += rec.reduce(0.0) { $0 + $1.speechSec } / 60
             return max(0, Int((Double(words) / typingWPM - speakMin).rounded()))
         }
 
-        let words = scoped.reduce(0) { $0 + $1.words }
-        let wordsToday = real.filter { cal.isDateInToday($0.ts!) }.reduce(0) { $0 + $1.words }
+        let recoveredWords = recScoped.reduce(0) { $0 + $1.estimatedWords }
+        let words = scoped.reduce(0) { $0 + $1.words } + recoveredWords
+        let wordsToday = real.filter { cal.isDate($0.ts!, inSameDayAs: now) }.reduce(0) { $0 + $1.words }
+            + recovered.filter { $0.date == todayKey }.reduce(0) { $0 + $1.estimatedWords }
+        let recByDay = Dictionary(recovered.map { ($0.date, $0.estimatedWords) }, uniquingKeysWith: +)
 
         // Pace: words over measured dictation minutes (only rows with a capture window).
         let paced = scoped.filter { $0.captureWindowMs != nil }
@@ -134,12 +153,13 @@ struct Stats {
         let wpm = pacedMin > 0.05 ? Int((Double(pacedWords) / pacedMin).rounded()) : 0
 
         // Streak: consecutive calendar days with ≥1 dictation, counting back from today.
-        let days = Set(real.map { cal.startOfDay(for: $0.ts!) })
+        let days = Set(real.map { dayKey.string(from: $0.ts!) })
+            .union(recovered.filter { $0.dictations > 0 }.map(\.date))
         var streak = 0
         var cursor = cal.startOfDay(for: now)
         // Grace: if nothing today yet, start the count from yesterday so an active streak holds.
-        if !days.contains(cursor) { cursor = cal.date(byAdding: .day, value: -1, to: cursor)! }
-        while days.contains(cursor) {
+        if !days.contains(dayKey.string(from: cursor)) { cursor = cal.date(byAdding: .day, value: -1, to: cursor)! }
+        while days.contains(dayKey.string(from: cursor)) {
             streak += 1
             cursor = cal.date(byAdding: .day, value: -1, to: cursor)!
         }
@@ -151,6 +171,7 @@ struct Stats {
         for offset in stride(from: 6, through: 0, by: -1) {
             let day = cal.date(byAdding: .day, value: -offset, to: cal.startOfDay(for: now))!
             let w = real.filter { cal.isDate($0.ts!, inSameDayAs: day) }.reduce(0) { $0 + $1.words }
+                + (recByDay[dayKey.string(from: day)] ?? 0)
             perDay.append((dfDay.string(from: day), w, offset == 0))
         }
 
@@ -164,10 +185,10 @@ struct Stats {
         }
 
         return Stats(
-            timeSavedMin: savedMinutes(scoped),
-            timeSavedAllMin: savedMinutes(real),
+            timeSavedMin: savedMinutes(scoped, recScoped),
+            timeSavedAllMin: savedMinutes(real, recovered),
             words: words, wordsToday: wordsToday, wpm: wpm, streak: streak,
-            perDay: perDay, topApps: Array(topApps))
+            perDay: perDay, topApps: Array(topApps), recoveredWords: recoveredWords)
     }
 }
 
@@ -418,7 +439,7 @@ final class DashboardWindowController: NSWindowController {
         applyFilter()
 
         doc.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let stats = Stats.compute(entries, range: range)
+        let stats = Stats.compute(entries, range: range, recovered: RecoveredDay.load())
 
         doc.addArrangedSubview(makeHeader())
         doc.addArrangedSubview(makeHero(stats))
@@ -542,7 +563,9 @@ final class DashboardWindowController: NSWindowController {
     private func makeHighlights(_ s: Stats) -> NSView {
         let cards = [
             statCard("WORDS DICTATED", "\(s.words.formatted())", nil,
-                note: s.wordsToday > 0 ? "+\(s.wordsToday) today" : "in range", noteBold: true),
+                note: s.recoveredWords > 0 ? "incl. ~\(s.recoveredWords.formatted()) recovered (est.)"
+                    : s.wordsToday > 0 ? "+\(s.wordsToday) today" : "in range",
+                noteBold: s.recoveredWords == 0),
             statCard("SPEAKING PACE", s.wpm > 0 ? "\(s.wpm)" : "—", s.wpm > 0 ? "wpm" : nil,
                 note: s.wpm > 0 ? String(format: "%.1f× faster than typing", Double(s.wpm) / typingWPM) : "no timing yet",
                 noteBold: false),

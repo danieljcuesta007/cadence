@@ -52,7 +52,7 @@ enum StatsExport {
         dayFmt.dateFormat = "yyyy-MM-dd"
 
         func block(_ range: Stats.Range) -> [String: Any] {
-            let s = Stats.compute(entries, range: range)
+            let s = Stats.compute(entries, range: range, recovered: recovered, now: now)
             return [
                 "time_saved_min": s.timeSavedMin,
                 "words": s.words,
@@ -61,7 +61,7 @@ enum StatsExport {
             ]
         }
 
-        let all = Stats.compute(entries, range: .all)
+        let all = Stats.compute(entries, range: .all, recovered: recovered, now: now)
         let today = cal.startOfDay(for: now)
         let perDay: [[String: Any]] = all.perDay.enumerated().map { i, d in
             let date = cal.date(byAdding: .day, value: i - 6, to: today)!
@@ -77,47 +77,16 @@ enum StatsExport {
         let year: [[String: Any]] = byDay.filter { $0.value > 0 }.sorted { $0.key < $1.key }
             .map { ["date": $0.key, "words": $0.value] }
 
-        // Fold recovered days in (estimated words, exact counts), so totals don't read as zero
-        // after a lost key. Every touched figure is listed under "recovered" for labelling.
+        // Recovered days (lost store key) are already in every Stats.compute figure above;
+        // the year series gets them here, and "recovered" says which totals are estimates.
         var out: [String: Any] = [:]
-        var allB = block(.all), weekB = block(.week), todayB = block(.today)
-        var perDayOut = perDay, yearOut = year
-        var streak = all.streak, wordsToday = all.wordsToday
+        var yearOut = year
         if !recovered.isEmpty {
-            let todayKey = dayFmt.string(from: today)
-            let weekFloor = dayFmt.string(from: now.addingTimeInterval(-7 * 86_400))
-            func add(_ b: inout [String: Any], _ days: [RecoveredDay]) {
-                let w = days.reduce(0) { $0 + $1.estimatedWords }
-                let speakMin = days.reduce(0.0) { $0 + $1.speechSec } / 60
-                b["words"] = (b["words"] as? Int ?? 0) + w
-                b["time_saved_min"] = (b["time_saved_min"] as? Int ?? 0)
-                    + max(0, Int((Double(w) / 40 - speakMin).rounded()))
-            }
-            add(&allB, recovered)
-            add(&weekB, recovered.filter { $0.date > weekFloor })   // 7 calendar days incl. today
-            add(&todayB, recovered.filter { $0.date == todayKey })
-            wordsToday += recovered.filter { $0.date == todayKey }.reduce(0) { $0 + $1.estimatedWords }
-            let rw = Dictionary(recovered.map { ($0.date, $0.estimatedWords) }, uniquingKeysWith: +)
-            perDayOut = perDay.map { d in
-                var d = d
-                d["words"] = (d["words"] as? Int ?? 0) + (rw[d["date"] as? String ?? ""] ?? 0)
-                return d
-            }
             var merged = byDay
             let yearFloor = dayFmt.string(from: yearStart)
-            for (k, v) in rw where k >= yearFloor { merged[k, default: 0] += v }
+            for d in recovered where d.date >= yearFloor { merged[d.date, default: 0] += d.estimatedWords }
             yearOut = merged.filter { $0.value > 0 }.sorted { $0.key < $1.key }
                 .map { ["date": $0.key, "words": $0.value] }
-            // Same streak rule as Stats.compute, over both sources.
-            var days = Set(real.map { dayFmt.string(from: $0.ts!) })
-            days.formUnion(recovered.filter { $0.dictations > 0 }.map(\.date))
-            streak = 0
-            var cursor = today
-            if !days.contains(dayFmt.string(from: cursor)) { cursor = cal.date(byAdding: .day, value: -1, to: cursor)! }
-            while days.contains(dayFmt.string(from: cursor)) {
-                streak += 1
-                cursor = cal.date(byAdding: .day, value: -1, to: cursor)!
-            }
             let dates = recovered.map(\.date).sorted()
             out["recovered"] = [
                 "dictations": recovered.reduce(0) { $0 + $1.dictations },
@@ -134,13 +103,13 @@ enum StatsExport {
             "generated_at": iso.string(from: now),
             "last_dictation_at": real.compactMap(\.ts).max().map { iso.string(from: $0) } as Any,
             "dictations": real.count + recovered.reduce(0) { $0 + $1.dictations },
-            "streak_days": streak,
-            "words_today": wordsToday,
+            "streak_days": all.streak,
+            "words_today": all.wordsToday,
             "typing_wpm_assumed": 40,
-            "today": todayB,
-            "week": weekB,
-            "all": allB,
-            "per_day": perDayOut,
+            "today": block(.today),
+            "week": block(.week),
+            "all": block(.all),
+            "per_day": perDay,
             "year": yearOut,
         ]) { a, _ in a }
     }
