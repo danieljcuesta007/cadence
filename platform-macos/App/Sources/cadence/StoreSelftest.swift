@@ -41,7 +41,7 @@ func runStoreSelftest() -> Int32 {
         if !ok { failed += 1 }
         print("\(ok ? "PASS" : "FAIL") \(name)\(ok ? "" : ": got \(got), want \(want)")")
     }
-    func probe(file: Data?, dbExists: Bool, opens: @escaping (Data) -> Bool,
+    func probe(file: Data?, dbExists: Bool, opens: (Data) -> Bool,
                keychain: StoreKey.KeychainRead) -> (StoreKey.Found, Int) {
         var reads = 0
         let found = StoreKey.find(file: file, dbExists: dbExists, opens: opens) { reads += 1; return keychain }
@@ -53,6 +53,7 @@ func runStoreSelftest() -> Int32 {
     expect("file_copy_opens_store_keys", f.keys, [b])
     (f, reads) = probe(file: b, dbExists: false, opens: { _ in false }, keychain: kcA)
     expect("no_store_yet_file_copy_needs_no_keychain", reads, 0)
+    expect("no_store_yet_uses_file_copy", f.keys, [b])
     (f, reads) = probe(file: b, dbExists: true, opens: { $0 == a }, keychain: kcA)
     expect("file_copy_fails_keychain_read_once", reads, 1)
     expect("file_copy_fails_keychain_key_first", f.keys, [a, b])

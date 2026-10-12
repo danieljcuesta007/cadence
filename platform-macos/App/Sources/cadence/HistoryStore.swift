@@ -32,8 +32,10 @@ enum StoreKey {
 
     struct Found {
         var keys: [Data]          // every distinct key we hold, keychain first
-        var keychainKnown: Bool   // false = keychain locked/denied, so its copy is unknown
+        var keychainKnown: Bool   // false = keychain locked/denied; true also when never asked,
+                                  // because the file copy already settles it
         var keychain: KeychainRead? // nil = never asked: the file copy opened the store
+        var file: Data?           // the file copy as read, so remember() needn't read it again
     }
 
     private static var baseQuery: [String: Any] {
@@ -67,13 +69,13 @@ enum StoreKey {
     static func find(file: Data?, dbExists: Bool, opens: (Data) -> Bool,
                      keychain: () -> KeychainRead) -> Found {
         if let f = file, !dbExists || opens(f) {
-            return Found(keys: [f], keychainKnown: true, keychain: nil)
+            return Found(keys: [f], keychainKnown: true, keychain: nil, file: f)
         }
         let kc = keychain()
         var keys: [Data] = []
         if let k = kc.key { keys.append(k) }
         if let f = file, !keys.contains(f) { keys.append(f) }
-        return Found(keys: keys, keychainKnown: kc.known, keychain: kc)
+        return Found(keys: keys, keychainKnown: kc.known, keychain: kc, file: file)
     }
 
     enum KeychainWrite: Equatable { case none, update, add }
@@ -113,7 +115,7 @@ enum StoreKey {
 
     /// Make both copies hold `key` (the one that opened the store). Best-effort per copy.
     /// Reuses `find`'s keychain read rather than reading again (a second read = a second prompt).
-    static func remember(_ key: Data, keychain read: KeychainRead?) {
+    static func remember(_ key: Data, keychain read: KeychainRead?, file: Data?) {
         switch keychainWrite(read, key: key) {
         case .none: break
         case .update:
@@ -128,7 +130,7 @@ enum StoreKey {
             let status = SecItemAdd(add as CFDictionary, nil)
             if status != errSecSuccess { LogFile.append("store key: keychain write failed (\(status))") }
         }
-        if (try? Data(contentsOf: fileURL)) != key {
+        if file != key {
             if writePrivate(key, to: fileURL) {
                 LogFile.append("store key: file copy saved")
             } else {
@@ -248,7 +250,7 @@ final class HistoryStore {
             LogFile.append("store open failed — staying on JSONL: \(msg)")
             return nil
         }
-        StoreKey.remember(key, keychain: found.keychain)
+        StoreKey.remember(key, keychain: found.keychain, file: found.file)
         handle = db
         importLegacyJSONLIfPresent()
         applyRetention()
