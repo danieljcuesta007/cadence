@@ -21,6 +21,13 @@ KC_PASS="cadence-signing"
 if [[ -f "$KEYCHAIN" ]] && security unlock-keychain -p "$KC_PASS" "$KEYCHAIN" 2>/dev/null; then
     security set-keychain-settings "$KEYCHAIN"   # re-assert no auto-lock
     if security find-identity -v -p codesigning "$KEYCHAIN" 2>/dev/null | grep -q "$IDENTITY"; then
+        # A replaced login keychain (11 Oct 2026) resets the user search list, and codesign only
+        # sees identities on it, so a healthy keychain can still be invisible: re-attach it.
+        if ! security list-keychains -d user | grep -q "cadence-signing.keychain-db"; then
+            EXISTING=$(security list-keychains -d user | tr -d '" ')
+            security list-keychains -d user -s ${(f)EXISTING} "$KEYCHAIN"
+            echo "re-attached $(basename "$KEYCHAIN") to the keychain search list"
+        fi
         echo "identity healthy: $IDENTITY"
         exit 0
     fi
