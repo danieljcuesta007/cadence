@@ -94,7 +94,7 @@ enum StatsExport {
                     + max(0, Int((Double(w) / 40 - speakMin).rounded()))
             }
             add(&allB, recovered)
-            add(&weekB, recovered.filter { $0.date >= weekFloor })
+            add(&weekB, recovered.filter { $0.date > weekFloor })   // 7 calendar days incl. today
             add(&todayB, recovered.filter { $0.date == todayKey })
             wordsToday += recovered.filter { $0.date == todayKey }.reduce(0) { $0 + $1.estimatedWords }
             let rw = Dictionary(recovered.map { ($0.date, $0.estimatedWords) }, uniquingKeysWith: +)

@@ -24,7 +24,7 @@ if [[ -f "$KEYCHAIN" ]] && security unlock-keychain -p "$KC_PASS" "$KEYCHAIN" 2>
         # A replaced login keychain (11 Oct 2026) resets the user search list, and codesign only
         # sees identities on it, so a healthy keychain can still be invisible: re-attach it.
         if ! security list-keychains -d user | grep -q "cadence-signing.keychain-db"; then
-            EXISTING=$(security list-keychains -d user | tr -d '" ')
+            EXISTING=$(security list-keychains -d user | sed -e 's/^[[:space:]]*"//' -e 's/"[[:space:]]*$//')
             security list-keychains -d user -s ${(f)EXISTING} "$KEYCHAIN"
             echo "re-attached $(basename "$KEYCHAIN") to the keychain search list"
         fi

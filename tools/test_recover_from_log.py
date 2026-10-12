@@ -50,6 +50,20 @@ class RecoverTests(unittest.TestCase):
             self.assertEqual(sum(d['dictations'] for d in body['days']), 3)
             self.assertNotIn('text', json.dumps(body['days']))
 
+    def test_reset_line_is_also_a_cutoff(self):
+        log = LOG.replace('store open failed — staying on JSONL: wrong key',
+                          'store: no key opens store.db (wrong key); kept it as store.locked-x.db')
+        _, cutoff = recover.recover(log.splitlines())
+        self.assertEqual(cutoff, '2026-10-11T19:32:10')
+
+    def test_healthy_log_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / '.cadence/logs').mkdir(parents=True)
+            (home / '.cadence/logs/cadence.log').write_text(LOG.split('2026-10-11 19:32')[0])
+            self.assertEqual(recover.main([], home=home), 1)
+            self.assertFalse((home / '.cadence/recovered.json').exists())
+
     def test_missing_log_is_an_error_not_a_crash(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(recover.main([], home=Path(tmp)), 1)

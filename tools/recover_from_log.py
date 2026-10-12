@@ -8,7 +8,7 @@ and how long you spoke. Word counts are estimated later, by the reader, and labe
     python3 tools/recover_from_log.py            # writes ~/.cadence/recovered.json
     python3 tools/recover_from_log.py --dry-run  # print instead
 
-Only dictations before the first "store open failed" line count: anything after that is in
+Only dictations before the first "store open failed" / "store: no key opens" line count: anything after that is in
 the new store, and counting it here would double it.
 """
 import datetime as dt
@@ -33,7 +33,7 @@ def recover(lines, cutoff=None):
             continue
         date, time, msg = m.groups()
         stamp = f'{date}T{time}'
-        if cutoff is None and msg.startswith('store open failed'):
+        if cutoff is None and (msg.startswith('store open failed') or msg.startswith('store: no key opens')):
             cutoff = stamp
         if cutoff is not None and stamp >= cutoff:
             break
@@ -58,6 +58,11 @@ def main(argv, home=Path.home()):
         return 1
     with log.open(encoding='utf-8', errors='replace') as f:
         days, cutoff = recover(f)
+    if cutoff is None:
+        # Nothing was lost (or the failure was trimmed out of the log): everything logged is
+        # still in the store, and recovering it would double every total.
+        print('no lost-store line in the log; nothing to recover', file=sys.stderr)
+        return 1
     body = {'schema': 1, 'source': 'cadence.log', 'cutoff': cutoff,
             'generated_at': dt.datetime.now().isoformat(timespec='seconds'),
             'note': 'Dictation counts and speaking time from the log; text was not recoverable.',
