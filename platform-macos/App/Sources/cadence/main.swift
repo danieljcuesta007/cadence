@@ -12,6 +12,9 @@
 //   cadence selftest-appearance [--out dir]
 //       Offscreen light/dark render checks for the dashboard; --out keeps the PNGs.
 //
+//   Cadence.app/Contents/MacOS/Cadence login-item [--register]
+//       Start at Login status as the system reports it, no admin needed (LoginItem.swift).
+//
 // Default model path matches the headless tool; CADENCE_MODEL overrides.
 
 import AppKit
@@ -75,6 +78,7 @@ struct Config {
     var mock: String?
     var expectApp: String?
     var verbatim = false
+    var register = false
 }
 
 func parseArgs() -> Config {
@@ -90,6 +94,9 @@ func parseArgs() -> Config {
         case "selftest-store": c.mode = "selftest-store"
         case "selftest-hotkeys": c.mode = "selftest-hotkeys"
         case "selftest-appearance": c.mode = "selftest-appearance"
+        case "login-item": c.mode = "login-item"
+        // Only after login-item: anywhere else it would be silently ignored.
+        case "--register" where c.mode == "login-item": c.register = true
         case "--out": c.outDir = it.next()
         case "--model": if let v = it.next() { c.model = v }
         case "--mock": c.mock = it.next() ?? "mock transcript"
@@ -121,6 +128,8 @@ case "selftest-hotkeys":
     exit(runHotkeySelftest())
 case "selftest-appearance":
     exit(runAppearanceSelftest(outDir: config.outDir))
+case "login-item":
+    exit(runLoginItemCommand(register: config.register))
 default:
     runApp(config) // never returns
 }

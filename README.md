@@ -141,6 +141,9 @@ qa/spine-selftest.sh                               # end-to-end WAV to inserted 
 python3 -B -m unittest qa.test_make_dmg            # release disk image guards
 ```
 
+Is Start at Login really registered? Ask the installed bundle, not the menu checkmark
+(`sfltool dumpbtm` needs an admin password): `~/Applications/Cadence.app/Contents/MacOS/Cadence login-item`.
+
 The Swift layer has no XCTest (Command Line Tools do not ship it), so pure logic is covered by
 the two `selftest` subcommands above instead.
 
