@@ -35,8 +35,8 @@ Center (free) or a startup lawyer before charging money.
 
 ## Release checklist
 
-1. `qa/package-app.sh` then `qa/make-dmg.sh 0.1.0` (asset must stay named `Cadence.dmg`).
-2. Tag, push, `gh release create v0.1.0 dist/Cadence.dmg`.
+1. `qa/package-app.sh` then `qa/make-dmg.sh <version>` (asset must stay named `Cadence.dmg`).
+2. Tag, push, `gh release create v<version> dist/Cadence.dmg`.
 3. PR the cask + site checksum; deploy the site to Cloudflare Pages project
    `cadence-dictation` (free name as of 13 Oct 2026).
 4. Download it on another account and walk through Open Anyway once.
