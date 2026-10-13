@@ -50,10 +50,11 @@ const FILLER_PHRASES: &[&str] = &["you know", "i mean"];
 
 /// Words whose immediate repeat is an ASR-captured stutter ("the the", "I I think"). A short
 /// allow-list on purpose: doubles like "no no", "ha ha", "that that", "had had" and "is is"
-/// are real speech or real grammar, so anything not listed here is left alone.
+/// are real speech or real grammar, and so are particle and pronoun doubles ("turn it on on
+/// Monday", "log in in", "told you you were") — anything not listed here is left alone.
 const STUTTER_WORDS: &[&str] = &[
-    "the", "a", "an", "to", "of", "in", "on", "at", "for", "with", "and", "or", "but", "i",
-    "i'm", "we", "you", "it", "it's", "my", "our", "your", "el", "de", "en",
+    "the", "a", "an", "to", "of", "for", "with", "and", "or", "but", "i", "i'm", "we", "it's",
+    "my", "our", "your", "el", "de",
 ];
 
 pub struct RuleCleanup {
@@ -127,14 +128,25 @@ fn is_terminator(c: char) -> bool {
     matches!(c, '.' | '!' | '?')
 }
 
+/// Titles and Latin shorthands whose '.' is not a clause end.
+const ABBREVIATIONS: &[&str] = &[
+    "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "vs", "e.g", "i.e", "etc", "approx",
+];
+
 /// Split at clause punctuation followed by whitespace or the end — so "3.30", "google.com"
-/// and "U.S" stay inside their clause.
+/// and "U.S" stay inside their clause, and so does "Mr." in "Mr. Jones".
 fn split_clauses(s: &str) -> Vec<Clause> {
     let chars: Vec<char> = s.chars().collect();
     let mut out = Vec::new();
     let mut cur = String::new();
     for (i, &c) in chars.iter().enumerate() {
+        let abbreviation = c == '.'
+            && cur
+                .split_whitespace()
+                .last()
+                .is_some_and(|w| ABBREVIATIONS.contains(&w.to_lowercase().as_str()));
         let closes = matches!(c, ',' | '.' | ';' | ':' | '!' | '?')
+            && !abbreviation
             && chars.get(i + 1).map_or(true, |n| n.is_whitespace());
         if closes {
             out.push(Clause { text: cur.trim().to_string(), end: Some(c) });
@@ -190,10 +202,16 @@ fn drop_filler_phrases(s: &str) -> (String, usize) {
     let mut out: Vec<Clause> = Vec::with_capacity(clauses.len());
     let mut removed = 0;
     for c in clauses {
+        let phrase = phrase_of(&c.text);
         let set_off = c.end == Some(',') || out.last().is_some_and(|p| p.end == Some(','));
-        if set_off && FILLER_PHRASES.contains(&phrase_of(&c.text).as_str()) {
+        // "If you know, you know." repeats the phrase on purpose.
+        let echoed = out.last().is_some_and(|p| phrase_of(&p.text).ends_with(&phrase));
+        if set_off && !echoed && FILLER_PHRASES.contains(&phrase.as_str()) {
             if let Some(prev) = out.last_mut() {
-                prev.end = merged_end(prev.end, c.end, true);
+                // A tag's "?" or "!" is the filler's tone, not the statement's: "it's fast,
+                // you know?" is a statement.
+                let own = c.end.map(|e| if matches!(e, '?' | '!') { '.' } else { e });
+                prev.end = merged_end(prev.end, own, true);
             }
             removed += c.text.split_whitespace().count();
             continue;
@@ -209,25 +227,27 @@ fn drop_filler_phrases(s: &str) -> (String, usize) {
 /// Spoken self-corrections (§7 F17). Each removes the clause before it.
 const SCRATCH_COMMANDS: &[&str] = &["scratch that", "delete that"];
 
-/// Apply "scratch that" / "delete that". A command counts only as a clause of its own — the
-/// ASR closed the clause before it and wrote punctuation after it (or it ends the
-/// utterance) — and only when there is a clause before it to remove. Anything else is
-/// content ("I'll scratch that idea", an unpunctuated run-on), per the blueprint §526
-/// "prefer content" policy. Removes one clause per command, never more.
+/// Apply "scratch that" / "delete that". A command counts only when it is a whole clause
+/// of its own (the ASR punctuated around it) with a real clause before it to remove;
+/// anything else is content ("I'll scratch that idea", an unpunctuated run-on), per the
+/// blueprint §526 "prefer content" policy. Filler clauses in between ("John, um, scratch
+/// that") go with it — the speaker meant the clause before the "um". Removes one content
+/// clause per command, never more.
 pub fn apply_commands(transcript: &str) -> (String, Vec<Edit>) {
     let clauses = split_clauses(transcript);
     let mut out: Vec<Clause> = Vec::with_capacity(clauses.len());
     let mut removed = 0;
-    for (i, c) in clauses.iter().enumerate() {
-        let own_clause = i > 0 && clauses[i - 1].end.is_some();
-        let is_command = SCRATCH_COMMANDS.contains(&phrase_of(&c.text).as_str());
-        if own_clause && is_command {
-            if let Some(victim) = out.pop() {
+    for c in &clauses {
+        if SCRATCH_COMMANDS.contains(&phrase_of(&c.text).as_str()) {
+            if let Some(v) = out.iter().rposition(|k| !is_filler_clause(&k.text)) {
+                let gone: usize = out
+                    .drain(v..)
+                    .map(|k| k.text.split_whitespace().count())
+                    .sum();
                 if let Some(prev) = out.last_mut() {
                     prev.end = merged_end(prev.end, c.end, false);
                 }
-                removed += victim.text.split_whitespace().count()
-                    + c.text.split_whitespace().count();
+                removed += gone + c.text.split_whitespace().count();
                 continue;
             }
         }
@@ -237,6 +257,16 @@ pub fn apply_commands(transcript: &str) -> (String, Vec<Edit>) {
         return (transcript.to_string(), Vec::new());
     }
     (join_clauses(&out), vec![Edit { rule: "scratch_that", words_removed: removed }])
+}
+
+/// A clause that is nothing but filler ("um", "you know").
+fn is_filler_clause(text: &str) -> bool {
+    let phrase = phrase_of(text);
+    FILLER_PHRASES.contains(&phrase.as_str())
+        || phrase.split_whitespace().all(|w| {
+            let bare: String = w.chars().filter(|c| c.is_alphanumeric()).collect();
+            FILLERS.contains(&bare.as_str())
+        })
 }
 
 /// Collapse an immediate repeat of a STUTTER_WORDS word. The first copy must carry no
@@ -621,6 +651,21 @@ mod tests {
         assert_eq!(clean("i mean it"), "I mean it.");
         assert_eq!(clean("she knows what i mean"), "She knows what I mean.");
         assert_eq!(clean("you know."), "You know.");
+        // The idiom repeats the phrase on purpose.
+        assert_eq!(clean("if you know, you know."), "If you know, you know.");
+    }
+
+    #[test]
+    fn a_filler_tag_does_not_turn_a_statement_into_a_question() {
+        assert_eq!(clean("it's really fast, you know?"), "It's really fast.");
+        assert_eq!(clean("it works, i mean!"), "It works.");
+    }
+
+    #[test]
+    fn particle_and_pronoun_doubles_are_grammar() {
+        assert_eq!(clean("turn it on on monday"), "Turn it on on monday.");
+        assert_eq!(clean("log in in the morning"), "Log in in the morning.");
+        assert_eq!(clean("i told you you were right"), "I told you you were right.");
     }
 
     #[test]
@@ -681,6 +726,23 @@ mod tests {
             guarded("send it to john scratch that send it to mary").text,
             "Send it to john scratch that send it to mary."
         );
+    }
+
+    #[test]
+    fn scratch_that_skips_filler_to_reach_the_clause_meant() {
+        // Review #22: the filler clause right before the command was being "scratched".
+        assert_eq!(guarded("Send it to John, um, scratch that, send it to Mary.").text, "Send it to Mary.");
+        assert_eq!(
+            guarded("Send it to John, you know, scratch that, send it to Mary.").text,
+            "Send it to Mary."
+        );
+        // Only filler before it: nothing meant to remove, so it is content.
+        assert_eq!(guarded("Um, scratch that.").text, "Scratch that.");
+    }
+
+    #[test]
+    fn abbreviations_do_not_split_the_scratched_clause() {
+        assert_eq!(guarded("Call Mr. Jones, scratch that, call Ann.").text, "Call Ann.");
     }
 
     #[test]

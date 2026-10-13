@@ -352,18 +352,13 @@ impl Orchestrator {
                     return fx;
                 }
                 if text.trim().is_empty() {
-                    // Every word was taken back ("…, scratch that"). Nothing to insert —
-                    // an empty paste would still replace a selection — so close it out like
-                    // a cancel.
-                    self.current = None;
-                    self.state = State::Idle;
+                    // Every word was taken back ("…, scratch that"). Nothing to insert — an
+                    // empty paste would still replace a selection — but it is still recorded,
+                    // uninserted, so the raw words stay recoverable from history.
                     fx.push(Effect::PlaySound {
                         sound: Sound::CaptureCancel,
                     });
-                    fx.push(Effect::ShowOverlay {
-                        state: State::Idle,
-                        location_chip: None,
-                    });
+                    self.finish(&mut fx, State::Cancelled, false);
                     return fx;
                 }
                 let u = self.current.as_mut().unwrap();

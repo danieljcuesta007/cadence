@@ -153,6 +153,9 @@ final class EffectRouter {
         }
         switch type {
         case "start_capture":
+            // Persist reads lastInsertedText; an utterance that never inserts (fully
+            // scratched, or refused by the guard) must not inherit the previous one's words.
+            lastInsertedText = nil
             onUI { self.startCapture() }
         case "stop_capture":
             onUI { self.stopCapture() }

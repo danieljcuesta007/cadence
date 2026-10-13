@@ -374,6 +374,12 @@ fn fully_scratched_utterance_inserts_nothing() {
             sound: Sound::CaptureCancel
         }
     )));
+    // Still recorded, uninserted, with the raw words: a command must be reversible.
+    assert!(has(&fx, |e| matches!(
+        e,
+        Effect::PersistUtterance { inserted: false, transcript_final: Some(t), .. }
+            if t == "Meet Tuesday. Scratch that."
+    )));
     // The next dictation starts clean.
     m.handle(Event::TriggerDown {
         mode: Mode::Dictation,
