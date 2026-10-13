@@ -95,14 +95,24 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   runInNewContext(js, { document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
     setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   assert.deepEqual(words.map(w => w.style.animationDelay), ['0.60s', '0.77s', '0.94s']);
-  // Out of order: the older click is slow and fails, the newer one succeeds first.
-  const older = copy.listeners.click(), newer = copy.listeners.click();
-  writes[1].ok(); await newer;
-  assert.equal(copy.textContent, 'Copied');
-  writes[0].fail(new Error('denied')); await older;
-  assert.equal(copy.textContent, 'Copied', 'a stale failure must not overwrite the newer success');
-  assert.equal(written.length, 2);
-  assert.equal(timers.size, 1, 'only the newest reset timer is left running');
+  const click = () => { const done = copy.listeners.click(); const w = writes.at(-1); return { ok: async () => { w.ok(); await done; }, fail: async () => { w.fail(new Error('denied')); await done; } }; };
+  // A late failure never hides an earlier success: the command is on the clipboard.
+  let first = click(), second = click();
+  await first.ok(); assert.equal(copy.textContent, 'Copied');
+  await second.fail(); assert.equal(copy.textContent, 'Copied');
+  // The reverse order ends the same way, and a pending click doesn't blank the label.
+  [...timers.values()].at(-1)(); timers.clear();
+  first = click(); second = click();
+  assert.equal(copy.textContent, 'Copy');
+  await second.fail(); assert.equal(copy.textContent, 'Copy', 'no failure shown while another copy may still land');
+  await first.ok(); assert.equal(copy.textContent, 'Copied');
+  // Every copy failing says so.
+  [...timers.values()].at(-1)(); timers.clear();
+  await click().fail(); assert.equal(copy.textContent, 'Copy failed');
+  [...timers.values()].at(-1)(); timers.clear();
+  await click().ok(); assert.equal(copy.textContent, 'Copied', 'a fresh success after the reset');
+  assert.deepEqual(written, Array(6).fill('brew install --cask cadence'));
+  assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = { dataset: { copy: 'x' }, remove() { this.removed = true; } };
