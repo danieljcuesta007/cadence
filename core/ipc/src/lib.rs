@@ -209,6 +209,9 @@ pub enum Effect {
     ArmUndo { utterance: UtteranceId },
     /// Fade the overlay back to idle after the Done confirmation (§12.2: 400–700 ms).
     ScheduleFadeToIdle,
+    /// A diagnostic line for the shell's log. Never carries transcript words — the log is
+    /// plaintext; the words live only in the encrypted store.
+    LogNote { message: String },
 }
 
 /// Earcons (§12.6).

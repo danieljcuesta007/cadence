@@ -3,8 +3,8 @@
 Local-first, cloud-optional, system-wide AI voice dictation for macOS.
 
 Hold Right-Option, speak, release — the text lands in whatever field has focus. Transcription
-runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app makes no
-network connections at idle. Hold Left-Option instead and it dictates in your second
+runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app contains no
+networking code. Hold Left-Option instead and it dictates in your second
 language, at the same speed.
 
 **Status:** Phase 1, in daily use on Apple Silicon. `platform-windows/` and `cloud/` are
@@ -25,6 +25,10 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
   other, each pinned. Switching languages costs a different finger rather than a menu trip or
   the ~160 ms that auto-detection adds to every utterance. Either key can be set to Automatic
   if you prefer detection, and the second key can be unbound entirely.
+- **Cleanup you can predict** — fillers ("um", and "you know" / "I mean" when set off by
+  commas) and stutters ("the the") are removed; "no no" and "had had" are not. Say "scratch
+  that" or "delete that" as its own phrase to drop the clause before it. Every removal is
+  logged by count only, and the raw transcript stays in history.
 - **Personal dictionary** for proper nouns, applied to the refined pass as a Whisper prompt.
 - **Encrypted history** in SQLCipher, with an optional retained-audio mode (off by default) and
   a retention window you choose.
@@ -34,8 +38,26 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
   or the switch in the dashboard header. The choice is kept in the encrypted settings.
 - **Undo** the last insertion with Control-Option-Command-Z. Holding a modifier chord never
   starts a dictation, so the undo shortcut cannot trip the push-to-talk keys.
+- **Verbatim mode** (menu, or Control-Option-Command-V anywhere) inserts exactly what was
+  heard, with no cleanup — for paths, flags, commands and code. It stays on until you turn it
+  off, and the setting is kept in the encrypted store.
 
-## Requirements
+## Install
+
+From the first release (v0.1.0) on, download `Cadence.dmg` from [the latest release](https://github.com/danieljcuesta007/cadence/releases/latest)
+or the site, https://cadence-dictation.pages.dev, or use Homebrew:
+
+```sh
+brew tap danieljcuesta007/cadence https://github.com/danieljcuesta007/cadence
+brew install --cask cadence
+```
+
+Cadence isn't notarized by Apple (that costs $99 a year, and Cadence is free), so the first
+open needs **System Settings › Privacy & Security › Open Anyway**. Releases:
+`qa/package-app.sh && qa/make-dmg.sh <version>` (it refuses a wrong model, missing licenses
+or a broken signature, and fills in the checksum for the cask and site).
+
+## Requirements (to build it yourself)
 
 No Homebrew or admin rights needed. Everything below is user-local.
 
@@ -111,11 +133,16 @@ platform-macos/.build/release/insertctl selftest   # insertion + readback logic
 platform-macos/.build/release/cadence selftest-stats     # dashboard metric maths
 platform-macos/.build/release/cadence selftest-store     # store key: keep, rescue, or reset
 python3 -m unittest discover -s tools -p 'test_*.py'      # log recovery (tools/recover_from_log.py)
-platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitration
+platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitration + app chords
 platform-macos/.build/release/cadence selftest-appearance [--out dir]  # light/dark renders
 qa/wer-harness.sh                                  # word error rate + ASR latency together
 qa/spine-selftest.sh                               # end-to-end WAV to inserted text
+(cd site && npm run build && npm test)             # website: links, CSP, honesty, checksums
+python3 -B -m unittest qa.test_make_dmg            # release disk image guards
 ```
+
+Is Start at Login really registered? Ask the installed bundle, not the menu checkmark
+(`sfltool dumpbtm` needs an admin password): `~/Applications/Cadence.app/Contents/MacOS/Cadence login-item`.
 
 The Swift layer has no XCTest (Command Line Tools do not ship it), so pure logic is covered by
 the two `selftest` subcommands above instead.

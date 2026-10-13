@@ -153,6 +153,9 @@ final class EffectRouter {
         }
         switch type {
         case "start_capture":
+            // Persist reads lastInsertedText; an utterance that never inserts (fully
+            // scratched, or refused by the guard) must not inherit the previous one's words.
+            lastInsertedText = nil
             onUI { self.startCapture() }
         case "stop_capture":
             onUI { self.stopCapture() }
@@ -224,6 +227,9 @@ final class EffectRouter {
                 self.statusUpdate?("idle")
                 self.onIdle?(self.lastInsertedText)
             }
+        case "log_note":
+            // Content-free by contract (core/ipc LogNote): counts and rule names only.
+            if let message = obj["message"] as? String { log(message) }
         default:
             log("unknown effect type: \(type)")
         }

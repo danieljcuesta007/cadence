@@ -249,7 +249,8 @@ impl<'a> Pipeline<'a> {
             | Effect::NotifyTextOnClipboard { .. }
             | Effect::PersistUtterance { .. }
             | Effect::ArmUndo { .. }
-            | Effect::ScheduleFadeToIdle => {}
+            | Effect::ScheduleFadeToIdle
+            | Effect::LogNote { .. } => {}
         }
     }
 }

@@ -351,6 +351,44 @@ fn silence_produces_no_insertion_and_gentle_feedback() {
 }
 
 #[test]
+fn fully_scratched_utterance_inserts_nothing() {
+    // "Meet Tuesday. Scratch that." — the user took back every word. Inserting an empty
+    // string would still paste over a selection and report a phantom insertion.
+    let mut m = to_thinking(ProcessingPolicy::LocalOnly, Mode::Dictation);
+    m.handle(Event::AsrFinal {
+        utterance: utt(1),
+        transcript: transcript("Meet Tuesday. Scratch that."),
+        location: ProcessingLocation::Local,
+    });
+    let fx = m.handle(Event::CleanupDone {
+        utterance: utt(1),
+        text: "  ".into(),
+        location: ProcessingLocation::Local,
+        guard_fallback: false,
+    });
+    assert_eq!(m.state(), State::Idle);
+    assert!(!has(&fx, |e| matches!(e, Effect::RunInsertion { .. })));
+    assert!(has(&fx, |e| matches!(
+        e,
+        Effect::PlaySound {
+            sound: Sound::CaptureCancel
+        }
+    )));
+    // Still recorded, uninserted, with the raw words: a command must be reversible.
+    assert!(has(&fx, |e| matches!(
+        e,
+        Effect::PersistUtterance { inserted: false, transcript_final: Some(t), .. }
+            if t == "Meet Tuesday. Scratch that."
+    )));
+    // The next dictation starts clean.
+    m.handle(Event::TriggerDown {
+        mode: Mode::Dictation,
+        policy: ProcessingPolicy::LocalOnly,
+    });
+    assert_eq!(m.state(), State::Listening);
+}
+
+#[test]
 fn local_cleanup_failure_inserts_raw_transcript() {
     // P6/§29: cleanup failure must never cost the user their words.
     let mut m = to_thinking(ProcessingPolicy::LocalOnly, Mode::Dictation);

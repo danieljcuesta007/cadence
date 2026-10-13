@@ -373,6 +373,23 @@ final class HistoryStore {
         }
     }
 
+    /// §7 F15 verbatim: insert the literal transcript, no cleanup. Default OFF; stored as
+    /// "on" only while enabled, so a store without the key reads as cleanup-on.
+    var verbatimMode: Bool {
+        guard let handle, let c = cadence_store_setting_get(handle, "verbatim_mode")
+        else { return false }
+        defer { cadence_string_free(c) }
+        return String(cString: c) == "on"
+    }
+
+    func setVerbatimMode(_ on: Bool) {
+        guard let handle else { return }
+        if !cadence_store_setting_set(handle, "verbatim_mode", on ? "on" : "off") {
+            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
+            LogFile.append("verbatim_mode save failed: \(msg)")
+        }
+    }
+
     /// Apple voice processing (noise suppression) on capture; default OFF — experimental
     /// (AUVoiceIO teardown deadlocked the app live 2026-07-19; opt-in until trustworthy).
     var voiceIsolation: Bool {
