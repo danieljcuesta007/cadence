@@ -107,7 +107,7 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   slow = click(); fast = click();
   await fast.fail(); assert.equal(copy.textContent, 'Copy'); assert.deepEqual(selected, []);
   await slow.ok(); assert.equal(copy.textContent, 'Copied');
-  assert.equal(status.textContent, 'Copied to clipboard', 'the reset cleared the status, so the result is announced fresh');
+  assert.equal(status.textContent, 'Copied to clipboard', 'our reset cleared our own message, so this one is announced fresh');
   // A lone failure selects the command and says so.
   fire(); await click().fail();
   assert.equal(copy.textContent, 'Copy failed'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /copy it yourself/);
@@ -123,6 +123,22 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   assert.equal(lone.removed, true);
 });
 
+test('two copy buttons share the status line without wiping each other', async () => {
+  const timers = [];
+  const mk = () => ({ textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } });
+  const a = mk(), b = mk(); const status = { textContent: '' };
+  let fail = false;
+  runInNewContext(js, { getSelection: () => ({ selectAllChildren() {} }), document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [a, b] : [] },
+    navigator: { clipboard: { writeText: async () => { if (fail) throw new Error('denied'); } } }, setTimeout: fn => timers.push(fn), clearTimeout() {} });
+  await a.listeners.click();
+  fail = true; await b.listeners.click();
+  const said = status.textContent;
+  timers[0]();  // A's reset fires after B spoke
+  assert.equal(a.textContent, 'Copy'); assert.equal(status.textContent, said, "B's message survives A's reset");
+  timers[1]();  // B's own reset clears B's message
+  assert.equal(status.textContent, '', 'no stale result left behind');
+});
+
 test('the page has the status line copy results are announced in', () => {
   const tags = home.match(/<[^>]*data-copy-status[^>]*>/g) || [];
   assert.equal(tags.length, 1, 'exactly one status line');
@@ -136,7 +152,7 @@ test('copy degrades: no selection API gives an honest message; no status line ke
   runInNewContext(js, { getSelection: () => { throw new Error('no selection here'); }, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
     navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
   await copy.listeners.click();
-  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /by hand/); assert.doesNotMatch(status.textContent, /above/);
+  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /copy the command manually/); assert.doesNotMatch(status.textContent, /above|selected/);
   const kept = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
   runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [kept] : [] }, navigator: { clipboard: { writeText: async () => {} } }, setTimeout() {}, clearTimeout() {} });
   await kept.listeners.click();
