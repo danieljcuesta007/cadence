@@ -11,6 +11,7 @@
 // every time the user types an accented character with ⌥.
 
 import CadenceHotkeys
+import CoreGraphics
 import Foundation
 
 private struct HotkeyCheck: Encodable {
@@ -120,6 +121,24 @@ func runHotkeySelftest() -> Int32 {
         check("hint_keeps_cancel_and_undo", off.contains("Esc cancels") && off.contains("⌃⌥⌘Z"), off)
         let auto = AppDelegate.hintTitle(primary: "auto", secondary: "off")
         check("hint_labels_auto", auto.contains("Automatic"), auto)
+    }
+
+    // 7. The app's chords. Both need all of ⌃⌥⌘: a looser match would let plain ⌘V (paste)
+    //    or ⌥V (a typed character) silently flip verbatim on, and every later dictation would
+    //    lose its cleanup with no visible cause.
+    do {
+        typealias M = HotkeyMonitor
+        let hyper: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand]
+        let z: Int64 = 6, v: Int64 = 9, c: Int64 = 8
+        check("chord_undo", M.chord(keyCode: z, flags: hyper) == .undo)
+        check("chord_verbatim", M.chord(keyCode: v, flags: hyper) == .toggleVerbatim)
+        check("chord_verbatim_with_shift",
+              M.chord(keyCode: v, flags: hyper.union(.maskShift)) == .toggleVerbatim)
+        check("paste_is_not_a_chord", M.chord(keyCode: v, flags: .maskCommand) == nil)
+        check("option_v_is_not_a_chord", M.chord(keyCode: v, flags: .maskAlternate) == nil)
+        check("ctrl_cmd_v_is_not_a_chord",
+              M.chord(keyCode: v, flags: [.maskControl, .maskCommand]) == nil)
+        check("other_key_is_not_a_chord", M.chord(keyCode: c, flags: hyper) == nil)
     }
 
     let pass = checks.allSatisfy { $0.pass }

@@ -98,6 +98,8 @@ public final class OverlayHUD {
         case "cancelled": glyph = "✕ cancelled"
         case "error": glyph = "⚠︎ saved to clipboard"
         case "disabled": glyph = "‖ off here"
+        case "verbatim_on": glyph = "¶ verbatim on"
+        case "verbatim_off": glyph = "¶ cleanup on"
         default: glyph = state
         }
         glyphLabel.stringValue = glyph

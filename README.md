@@ -34,6 +34,9 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
   or the switch in the dashboard header. The choice is kept in the encrypted settings.
 - **Undo** the last insertion with Control-Option-Command-Z. Holding a modifier chord never
   starts a dictation, so the undo shortcut cannot trip the push-to-talk keys.
+- **Verbatim mode** (menu, or Control-Option-Command-V anywhere) inserts exactly what was
+  heard, with no cleanup — for paths, flags, commands and code. It stays on until you turn it
+  off, and the setting is kept in the encrypted store.
 
 ## Install
 
