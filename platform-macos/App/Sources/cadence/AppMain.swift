@@ -407,14 +407,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    func renderState(_ state: String) {
-        // SF Symbols, template-rendered: adapts to menu-bar light/dark, no emoji.
+    /// SF Symbols, template-rendered: adapts to menu-bar light/dark, no emoji. Idle in
+    /// verbatim mode gets its own symbol: the mode is sticky, and cleanup quietly off with
+    /// nothing on screen is the failure it must not have.
+    static func statusSymbol(state: String, verbatim: Bool) -> String {
+        if verbatim, state == "idle" || state == "cancelled" { return "text.quote" }
         let symbols = [
             "idle": "mic", "listening": "mic.fill", "thinking": "ellipsis",
             "inserting": "arrow.down.to.line", "done": "checkmark", "cancelled": "mic",
             "error": "exclamationmark.triangle", "disabled": "pause",
         ]
-        let name = symbols[state] ?? "mic"
+        return symbols[state] ?? "mic"
+    }
+
+    func renderState(_ state: String) {
+        lastRenderedState = state
+        let name = Self.statusSymbol(state: state, verbatim: verbatimMode)
         if let image = NSImage(systemSymbolName: name, accessibilityDescription: state) {
             image.isTemplate = true
             statusItem.button?.image = image
@@ -422,8 +430,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             statusItem.button?.title = state.prefix(1).uppercased()
         }
-        stateMenuItem.title = engine == nil ? "Loading model…" : state.capitalized
+        stateMenuItem.title = engine == nil
+            ? "Loading model…" : state.capitalized + (verbatimMode ? " — Verbatim" : "")
     }
+
+    private var lastRenderedState = "idle"
 
     private var dashboard: DashboardWindowController?
 
@@ -594,6 +605,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         verbatimMode.toggle()
         historyStore?.setVerbatimMode(verbatimMode)
         router.log("verbatim → \(verbatimMode ? "on" : "off")")
+        renderState(lastRenderedState)
     }
 
     @objc func toggleRetainAudio() {

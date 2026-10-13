@@ -129,7 +129,7 @@ platform-macos/.build/release/insertctl selftest   # insertion + readback logic
 platform-macos/.build/release/cadence selftest-stats     # dashboard metric maths
 platform-macos/.build/release/cadence selftest-store     # store key: keep, rescue, or reset
 python3 -m unittest discover -s tools -p 'test_*.py'      # log recovery (tools/recover_from_log.py)
-platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitration
+platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitration + app chords
 platform-macos/.build/release/cadence selftest-appearance [--out dir]  # light/dark renders
 qa/wer-harness.sh                                  # word error rate + ASR latency together
 qa/spine-selftest.sh                               # end-to-end WAV to inserted text

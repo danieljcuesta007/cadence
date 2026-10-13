@@ -171,8 +171,15 @@ public final class HotkeyMonitor {
         if type == .keyDown, arbiter.held != nil {
             fire(arbiter.retract())
         }
-        if type == .keyDown, let chord = Self.chord(keyCode: keyCode, flags: event.flags) {
-            let handler = chord == .undo ? onUndo : onToggleVerbatim
+        let repeating = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if type == .keyDown,
+            let chord = Self.chord(keyCode: keyCode, flags: event.flags, autorepeat: repeating)
+        {
+            let handler: (() -> Void)?
+            switch chord {
+            case .undo: handler = onUndo
+            case .toggleVerbatim: handler = onToggleVerbatim
+            }
             if let handler {
                 DispatchQueue.main.async { handler() }
                 return nil // consumed: the chord is ours alone
@@ -185,9 +192,10 @@ public final class HotkeyMonitor {
     /// particular must stay the user's paste. Pure, so `cadence selftest-hotkeys` pins it.
     public enum Chord: Equatable { case undo, toggleVerbatim }
 
-    public static func chord(keyCode: Int64, flags: CGEventFlags) -> Chord? {
+    /// `autorepeat`: a held chord's repeats are not new presses — a toggle must flip once.
+    public static func chord(keyCode: Int64, flags: CGEventFlags, autorepeat: Bool = false) -> Chord? {
         let mods: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand]
-        guard flags.isSuperset(of: mods) else { return nil }
+        guard !autorepeat, flags.isSuperset(of: mods) else { return nil }
         switch keyCode {
         case kZ: return .undo
         case kV: return .toggleVerbatim
