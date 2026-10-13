@@ -9,18 +9,19 @@ function staggerWords(words, stepMs) {
 // only when no copy has succeeded since that click began and none is still in
 // flight; then the command is selected if possible so the visitor can copy it manually.
 // Results are announced once through the page's status line.
+const copyTurn = { n: 0 }; // shared by every copy button: who spoke last
 function initCopy(button, clipboard, status, select) {
   const label = button.textContent;
   let timer, successes = 0, pending = 0;
   const show = (text, message) => {
     button.textContent = text;
     // One status line for every button; a changed string is re-announced.
-    const mine = status.textContent === message ? message + '\u00a0' : message;
-    status.textContent = mine;
+    status.textContent = status.textContent === message ? message + '\u00a0' : message; // a repeat is re-announced
+    const turn = ++copyTurn.n;
     clearTimeout(timer);
     timer = setTimeout(() => {
       button.textContent = label;
-      if (status.textContent === mine) status.textContent = ''; // only our own message; another button may have spoken since
+      if (copyTurn.n === turn) status.textContent = ''; // nobody has spoken since: clear our own message only
     }, 1600);
   };
   button.addEventListener('click', async () => {
