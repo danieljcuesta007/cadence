@@ -7,7 +7,7 @@ function staggerWords(words, stepMs) {
 
 // Every click copies the same text, so one success is enough. A failure is shown
 // only when no copy has succeeded since that click began and none is still in
-// flight; then the command is selected so the visitor can copy it by hand.
+// flight; then the command is selected if possible so the visitor can copy it manually.
 // Results are announced once through the page's status line.
 function initCopy(button, clipboard, status, select) {
   const label = button.textContent;
@@ -15,9 +15,13 @@ function initCopy(button, clipboard, status, select) {
   const show = (text, message) => {
     button.textContent = text;
     // One status line for every button; a changed string is re-announced.
-    status.textContent = status.textContent === message ? message + '\u00a0' : message;
+    const mine = status.textContent === message ? message + '\u00a0' : message;
+    status.textContent = mine;
     clearTimeout(timer);
-    timer = setTimeout(() => { button.textContent = label; }, 1600); // the status line is shared: never cleared by one button's timer
+    timer = setTimeout(() => {
+      button.textContent = label;
+      if (status.textContent === mine) status.textContent = ''; // only our own message; another button may have spoken since
+    }, 1600);
   };
   button.addEventListener('click', async () => {
     const before = successes;
@@ -30,7 +34,7 @@ function initCopy(button, clipboard, status, select) {
       if (successes > before || pending > 1) return; // another copy landed, or still may
       const code = button.previousElementSibling;
       const selected = code && code.tagName === 'PRE' && select(code);
-      show('Copy failed', selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Please select the command and copy it.');
+      show('Copy failed', selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Please copy the command manually.');
     } finally { pending--; }
   });
 }

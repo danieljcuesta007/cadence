@@ -107,7 +107,7 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   slow = click(); fast = click();
   await fast.fail(); assert.equal(copy.textContent, 'Copy'); assert.deepEqual(selected, []);
   await slow.ok(); assert.equal(copy.textContent, 'Copied');
-  assert.equal(status.textContent, 'Copied to clipboard\u00a0', 'the same result is re-announced');
+  assert.equal(status.textContent, 'Copied to clipboard', 'our reset cleared our own message, so this one is announced fresh');
   // A lone failure selects the command and says so.
   fire(); await click().fail();
   assert.equal(copy.textContent, 'Copy failed'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /copy it yourself/);
@@ -135,6 +135,8 @@ test('two copy buttons share the status line without wiping each other', async (
   const said = status.textContent;
   timers[0]();  // A's reset fires after B spoke
   assert.equal(a.textContent, 'Copy'); assert.equal(status.textContent, said, "B's message survives A's reset");
+  timers[1]();  // B's own reset clears B's message
+  assert.equal(status.textContent, '', 'no stale result left behind');
 });
 
 test('the page has the status line copy results are announced in', () => {
@@ -150,7 +152,7 @@ test('copy degrades: no selection API gives an honest message; no status line ke
   runInNewContext(js, { getSelection: () => { throw new Error('no selection here'); }, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
     navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
   await copy.listeners.click();
-  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /select the command and copy it/);
+  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /copy the command manually/); assert.doesNotMatch(status.textContent, /above|selected/);
   const kept = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
   runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [kept] : [] }, navigator: { clipboard: { writeText: async () => {} } }, setTimeout() {}, clearTimeout() {} });
   await kept.listeners.click();
