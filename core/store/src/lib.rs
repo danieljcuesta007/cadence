@@ -327,6 +327,13 @@ impl Store {
     // ---- utterances -------------------------------------------------------------------
 
     pub fn insert_utterance(&self, rec: &UtteranceRecord) -> Result<(), StoreError> {
+        self.write_utterance(rec)?;
+        self.fold_wal();
+        Ok(())
+    }
+
+    /// The insert without the checkpoint, for batch callers that fold once at the end.
+    fn write_utterance(&self, rec: &UtteranceRecord) -> Result<(), StoreError> {
         if rec.id.is_empty() {
             return Err(StoreError::BadRecord("empty utterance id".into()));
         }
@@ -356,7 +363,6 @@ impl Store {
                 rec.extra_json,
             ],
         )?;
-        self.fold_wal();
         Ok(())
     }
 
@@ -417,11 +423,15 @@ impl Store {
                         rec.id = format!("import-{i}");
                     }
                     rec.id = format!("{}-{}", rec.id, rec.created_at_ms);
-                    self.insert_utterance(&rec)?;
+                    self.write_utterance(&rec)?;
                     imported += 1;
                 }
                 Err(_) => skipped += 1,
             }
+        }
+        // One checkpoint for the whole import, not one per row.
+        if imported > 0 {
+            self.fold_wal();
         }
         Ok((imported, skipped))
     }
@@ -467,6 +477,7 @@ impl Store {
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![id, data, data.len() as i64, now_ms(), purge_after_ms],
         )?;
+        self.fold_wal();
         Ok(())
     }
 
@@ -643,7 +654,9 @@ impl cadence_models::ModelStore for Store {
             )
             .map_err(map_err)?;
         }
-        tx.commit().map_err(map_err)
+        tx.commit().map_err(map_err)?;
+        self.fold_wal();
+        Ok(())
     }
 }
 
@@ -824,6 +837,17 @@ mod tests {
             .unwrap();
         assert!(file_len(&path) > before, "db file did not grow");
         assert_eq!(file_len(&wal_of(&path)), 0, "WAL still holds the write");
+    }
+
+    #[test]
+    fn a_retained_audio_blob_lands_in_the_db_file_too() {
+        // The blob is written before its utterance; if the utterance write then fails, the
+        // blob (the largest write there is) must not be left in the WAL alone.
+        let path = tmp("wal-blob.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        store.put_audio_blob("audio-1", &vec![7u8; 50_000], None).unwrap();
+        assert_eq!(file_len(&wal_of(&path)), 0, "blob left in the WAL");
     }
 
     #[test]
