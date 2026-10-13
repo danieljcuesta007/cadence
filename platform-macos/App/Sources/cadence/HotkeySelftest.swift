@@ -144,12 +144,16 @@ func runHotkeySelftest() -> Int32 {
         // ...and the repeats are still swallowed, or they reach the frontmost app as its own
         // ⌃⌥⌘V / ⌃⌥⌘Z shortcut (release review #31).
         check("held_chord_repeat_is_swallowed_not_fired",
-              M.chordAction(keyCode: v, flags: hyper, autorepeat: true) == .swallow
-                  && M.chordAction(keyCode: z, flags: hyper, autorepeat: true) == .swallow)
+              M.chordAction(keyCode: v, flags: hyper, autorepeat: true, fired: .toggleVerbatim) == .swallow
+                  && M.chordAction(keyCode: z, flags: hyper, autorepeat: true, fired: .undo) == .swallow)
         check("first_press_fires",
-              M.chordAction(keyCode: v, flags: hyper, autorepeat: false) == .fire(.toggleVerbatim))
+              M.chordAction(keyCode: v, flags: hyper, autorepeat: false, fired: nil) == .fire(.toggleVerbatim))
         check("non_chord_is_untouched",
-              M.chordAction(keyCode: v, flags: .maskCommand, autorepeat: true) == nil)
+              M.chordAction(keyCode: v, flags: .maskCommand, autorepeat: true, fired: nil) == nil)
+        // A repeat of a press Cadence never fired (⌘V held, then ⌃⌥ added; or no handler)
+        // belongs to the app.
+        check("unfired_repeat_passes_through",
+              M.chordAction(keyCode: v, flags: hyper, autorepeat: true, fired: nil) == nil)
     }
 
     // 8. A sticky verbatim mode is visible in the menu bar when idle, so cleanup never goes

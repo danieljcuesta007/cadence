@@ -99,6 +99,8 @@ public final class HotkeyMonitor {
     private var runLoopSource: CFRunLoopSource?
     /// Owns the "which key is held" state; see PTTArbiter for the rules it enforces.
     private var arbiter = PTTArbiter()
+    /// The chord whose first press we handled; its auto-repeats are swallowed.
+    private var firedChord: Chord?
 
     private static let kRightOption: Int64 = 61
     private static let kLeftOption: Int64 = 58
@@ -172,8 +174,10 @@ public final class HotkeyMonitor {
             fire(arbiter.retract())
         }
         let repeating = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if type == .keyDown, !repeating { firedChord = nil }
         if type == .keyDown,
-            let action = Self.chordAction(keyCode: keyCode, flags: event.flags, autorepeat: repeating)
+            let action = Self.chordAction(
+                keyCode: keyCode, flags: event.flags, autorepeat: repeating, fired: firedChord)
         {
             switch action {
             case .swallow:
@@ -185,6 +189,7 @@ public final class HotkeyMonitor {
                 case .toggleVerbatim: handler = onToggleVerbatim
                 }
                 if let handler {
+                    firedChord = chord
                     DispatchQueue.main.async { handler() }
                     return nil // consumed: the chord is ours alone
                 }
@@ -200,10 +205,15 @@ public final class HotkeyMonitor {
     public enum ChordAction: Equatable { case fire(Chord), swallow }
 
     /// A held chord's repeats are not new presses (a toggle must flip once), but they are
-    /// still ours: passed on, they would fire the frontmost app's own ⌃⌥⌘V / ⌃⌥⌘Z.
-    public static func chordAction(keyCode: Int64, flags: CGEventFlags, autorepeat: Bool) -> ChordAction? {
+    /// still ours: passed on, they would fire the frontmost app's own ⌃⌥⌘V / ⌃⌥⌘Z. Only
+    /// repeats of a press we actually fired, though — `fired` — or an app's own held ⌘V
+    /// that picks up ⌃⌥ midway would vanish.
+    public static func chordAction(
+        keyCode: Int64, flags: CGEventFlags, autorepeat: Bool, fired: Chord?
+    ) -> ChordAction? {
         guard let chord = chord(keyCode: keyCode, flags: flags) else { return nil }
-        return autorepeat ? .swallow : .fire(chord)
+        if !autorepeat { return .fire(chord) }
+        return chord == fired ? .swallow : nil
     }
 
     public static func chord(keyCode: Int64, flags: CGEventFlags) -> Chord? {

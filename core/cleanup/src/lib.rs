@@ -239,10 +239,10 @@ pub fn apply_commands(transcript: &str) -> (String, Vec<Edit>) {
     let mut out: Vec<Clause> = Vec::with_capacity(clauses.len());
     let mut removed = 0;
     for c in &clauses {
-        // After a colon it is being quoted ("the label is: Delete that"), not spoken.
-        let quoted = out.last().is_some_and(|k| k.end == Some(':'));
-        if !quoted && SCRATCH_COMMANDS.contains(&phrase_of(&c.text).as_str()) {
-            if let Some(v) = out.iter().rposition(|k| !is_filler_clause(&k.text)) {
+        if SCRATCH_COMMANDS.contains(&phrase_of(&c.text).as_str()) {
+            // After a colon it is being quoted ("the label is: um, Delete that"), not spoken.
+            let target = out.iter().rposition(|k| !is_filler_clause(&k.text));
+            if let Some(v) = target.filter(|&v| out[v].end != Some(':')) {
                 // Said after a full stop, it takes back that whole sentence; after a comma,
                 // just the clause.
                 let start = if out[v].end.is_some_and(is_terminator) {
@@ -292,7 +292,10 @@ fn collapse_stutters(s: &str) -> (String, usize) {
     for (i, w) in words.iter().enumerate() {
         let plain = w.chars().all(|c| c.is_alphabetic() || c == '\'');
         // "vitamin A a day": a capital letter used as a label, then the article.
-        let label = w.chars().count() == 1
+        // A sentence-initial "A a" is still the stutter: Whisper capitalizes the first word.
+        let sentence_start = i == 0 || words[i - 1].ends_with(['.', '!', '?']);
+        let label = !sentence_start
+            && w.chars().count() == 1
             && w.chars().all(char::is_uppercase)
             && words.get(i + 1) != Some(w);
         let repeated = !label && words.get(i + 1).is_some_and(|n| bare(n) == bare(w));
@@ -685,6 +688,8 @@ mod tests {
         assert_eq!(clean("i told you you were right"), "I told you you were right.");
         // A capital letter used as a label is not a stuttered article.
         assert_eq!(clean("take vitamin A a day"), "Take vitamin A a day.");
+        // ...but a sentence-initial "A a" is still the stutter.
+        assert_eq!(clean("A a lot of people came"), "A lot of people came.");
     }
 
     #[test]
@@ -779,6 +784,10 @@ mod tests {
         assert_eq!(
             guarded("The button label is: Delete that.").text,
             "The button label is: Delete that."
+        );
+        assert_eq!(
+            guarded("The button label is: um, delete that.").text,
+            "The button label is: delete that."
         );
     }
 
