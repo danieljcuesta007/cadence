@@ -208,7 +208,30 @@ impl Store {
             path: path.as_ref().to_owned(),
         };
         store.migrate()?;
+        // A previous run that never closed (reboot, kill, crash) leaves its writes in the
+        // WAL; fold them into the main file before anything else happens.
+        store.fold_wal();
         Ok(store)
+    }
+
+    /// Move everything in the WAL into the main db file and truncate the WAL to zero
+    /// bytes. SQLite only does this on its own when the last connection closes or the WAL
+    /// passes ~1000 pages, and even then (PASSIVE) the sidecar keeps its size. Cadence runs
+    /// for days and is never closed cleanly, so without this the whole history lived in
+    /// `store.db-wal` (live 2026-10-11: 4 KB db, 3.3 MB WAL). Returns
+    /// `(busy, wal_frames, checkpointed_frames)` as SQLite reports them.
+    pub fn checkpoint(&self) -> Result<(i64, i64, i64), StoreError> {
+        Ok(self
+            .conn
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })?)
+    }
+
+    /// Best-effort checkpoint after a write. The write itself already committed, so a
+    /// failed or busy checkpoint must never turn it into an error; the next one catches up.
+    fn fold_wal(&self) {
+        let _ = self.checkpoint();
     }
 
     pub fn path(&self) -> &Path {
@@ -333,6 +356,7 @@ impl Store {
                 rec.extra_json,
             ],
         )?;
+        self.fold_wal();
         Ok(())
     }
 
@@ -420,6 +444,7 @@ impl Store {
         )?;
         let n = tx.execute("DELETE FROM utterances WHERE created_at < ?1", [cutoff_ms])?;
         tx.commit()?;
+        self.fold_wal();
         Ok(n)
     }
 
@@ -465,6 +490,7 @@ impl Store {
             [id],
         )?;
         tx.commit()?;
+        self.fold_wal();
         Ok(n > 0)
     }
 
@@ -478,6 +504,7 @@ impl Store {
         )?;
         let n = tx.execute("DELETE FROM utterances WHERE id = ?1", [id])?;
         tx.commit()?;
+        self.fold_wal();
         Ok(n > 0)
     }
 
@@ -499,6 +526,9 @@ impl Store {
             )?;
         }
         tx.commit()?;
+        if n > 0 {
+            self.fold_wal();
+        }
         Ok(n)
     }
 
@@ -509,6 +539,7 @@ impl Store {
             "INSERT OR REPLACE INTO settings(key, value) VALUES (?1, ?2)",
             params![key, value],
         )?;
+        self.fold_wal();
         Ok(())
     }
 
@@ -764,6 +795,55 @@ mod tests {
             .windows(b"EXTREMELY-DISTINCTIVE-PLAINTEXT".len())
             .any(|w| w == b"EXTREMELY-DISTINCTIVE-PLAINTEXT"));
         assert!(!raw.starts_with(b"SQLite format 3"), "unencrypted header");
+    }
+
+    fn file_len(p: &Path) -> u64 {
+        std::fs::metadata(p).map(|m| m.len()).unwrap_or(0)
+    }
+
+    fn wal_of(p: &Path) -> PathBuf {
+        let mut s = p.as_os_str().to_owned();
+        s.push("-wal");
+        PathBuf::from(s)
+    }
+
+    #[test]
+    fn a_saved_dictation_lands_in_the_db_file_not_the_wal() {
+        // Live 2026-10-11: store.db 4 KB, store.db-wal 3.3 MB — every dictation since July
+        // lived only in the sidecar, one stray deletion from gone.
+        let path = tmp("wal-fold.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        let before = file_len(&path);
+        store
+            .insert_utterance(&UtteranceRecord {
+                id: "utt-wal".into(),
+                output_text: Some("x".repeat(20_000)),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(file_len(&path) > before, "db file did not grow");
+        assert_eq!(file_len(&wal_of(&path)), 0, "WAL still holds the write");
+    }
+
+    #[test]
+    fn open_folds_a_wal_left_behind_by_a_killed_process() {
+        let path = tmp("wal-killed.db");
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(&path, &key()).unwrap();
+        // A raw write, then no close at all — the shape of a reboot or a SIGKILL.
+        store
+            .conn
+            .execute(
+                "INSERT INTO settings(key, value) VALUES ('k', ?1)",
+                ["y".repeat(20_000)],
+            )
+            .unwrap();
+        assert!(file_len(&wal_of(&path)) > 0);
+        std::mem::forget(store);
+        let reopened = Store::open(&path, &key()).unwrap();
+        assert_eq!(file_len(&wal_of(&path)), 0, "open left the WAL unfolded");
+        assert_eq!(reopened.get_setting("k").unwrap().map(|v| v.len()), Some(20_000));
     }
 
     #[test]
