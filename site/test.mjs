@@ -107,13 +107,14 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   slow = click(); fast = click();
   await fast.fail(); assert.equal(copy.textContent, 'Copy'); assert.deepEqual(selected, []);
   await slow.ok(); assert.equal(copy.textContent, 'Copied');
-  assert.equal(status.textContent, 'Copied to clipboard\u00a0', 'the same result is re-announced');
+  assert.equal(status.textContent, 'Copied to clipboard', 'the reset cleared the status, so the result is announced fresh');
   // A lone failure selects the command and says so.
   fire(); await click().fail();
   assert.equal(copy.textContent, 'Copy failed'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /copy it yourself/);
-  status.textContent = 'Copy failed. The command is selected so you can copy it yourself.'; // as if another button said it
-  fire(); await click().fail(); assert.match(status.textContent, /\u00a0$/, 'a repeat from any button is re-announced');
-  assert.deepEqual(written, Array(6).fill('brew install --cask cadence'));
+  fire(); await click().ok();
+  status.textContent = 'Copy failed. The command is selected so you can copy it yourself.'; // another button just said this
+  await click().fail(); assert.match(status.textContent, /\u00a0$/, 'a repeat from any button is re-announced');
+  assert.deepEqual(written, Array(7).fill('brew install --cask cadence'));
   assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
@@ -126,19 +127,24 @@ test('the page has the status line copy results are announced in', () => {
   const tags = home.match(/<[^>]*data-copy-status[^>]*>/g) || [];
   assert.equal(tags.length, 1, 'exactly one status line');
   assert.match(tags[0], /role="status"/);
+  assert.match(tags[0], /class="visually-hidden"/, 'the status line must stay invisible');
 });
 
 test('copy degrades: no selection API gives an honest message; no status line keeps the buttons', async () => {
   const copy = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, previousElementSibling: { tagName: 'PRE' }, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
   const status = { textContent: '' };
-  runInNewContext(js, { getSelection: () => null, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
+  runInNewContext(js, { getSelection: () => { throw new Error('no selection here'); }, document: { querySelector: () => status, querySelectorAll: s => s === '[data-copy]' ? [copy] : [] },
     navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
   await copy.listeners.click();
-  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /by hand/);
+  assert.equal(copy.textContent, 'Copy failed'); assert.match(status.textContent, /by hand/); assert.doesNotMatch(status.textContent, /above/);
   const kept = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; } };
   runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [kept] : [] }, navigator: { clipboard: { writeText: async () => {} } }, setTimeout() {}, clearTimeout() {} });
   await kept.listeners.click();
   assert.equal(kept.removed, undefined); assert.equal(kept.textContent, 'Copied');
+  const lost = { textContent: 'Copy', dataset: { copy: 'x' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } };
+  runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [lost] : [] }, navigator: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, setTimeout() {}, clearTimeout() {} });
+  await lost.listeners.click();
+  assert.equal(lost.textContent, 'Copy failed', 'a failure without a status line still shows on the button');
 });
 
 test('build ships exactly the reviewed files, unchanged and free of private data', async () => {
