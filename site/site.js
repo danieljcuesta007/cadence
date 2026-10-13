@@ -17,7 +17,7 @@ function initCopy(button, clipboard, status, select) {
     // One status line for every button; a changed string is re-announced.
     status.textContent = status.textContent === message ? message + '\u00a0' : message;
     clearTimeout(timer);
-    timer = setTimeout(() => { button.textContent = label; status.textContent = ''; }, 1600);
+    timer = setTimeout(() => { button.textContent = label; }, 1600); // the status line is shared: never cleared by one button's timer
   };
   button.addEventListener('click', async () => {
     const before = successes;
@@ -30,7 +30,7 @@ function initCopy(button, clipboard, status, select) {
       if (successes > before || pending > 1) return; // another copy landed, or still may
       const code = button.previousElementSibling;
       const selected = code && code.tagName === 'PRE' && select(code);
-      show('Copy failed', selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Please copy the command by hand.');
+      show('Copy failed', selected ? 'Copy failed. The command is selected so you can copy it yourself.' : 'Copy failed. Please select the command and copy it.');
     } finally { pending--; }
   });
 }
