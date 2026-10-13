@@ -219,6 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         router.retainAudioEnabled = { [weak self] in self?.retainAudio ?? false }
         capture.preferBuiltInMic = store?.preferBuiltInMic ?? true
         capture.voiceIsolation = store?.voiceIsolation ?? true
+        reconcileLoginItem(store: store) { [weak self] in self?.router.log($0) }
         router.engine = { [weak self] in self?.engine }
         router.statusUpdate = { [weak self] state in
             guard let self else { return }
@@ -558,9 +559,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
+                historyStore?.setStartAtLogin(false)
                 router.log("start at login → off")
             } else {
                 try SMAppService.mainApp.register()
+                historyStore?.setStartAtLogin(true)
                 router.log("start at login → on")
             }
         } catch {
