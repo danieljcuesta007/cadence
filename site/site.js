@@ -7,10 +7,12 @@ function staggerWords(words, stepMs) {
 
 function initCopy(button, clipboard) {
   const label = button.textContent; // read once, so a double click can't save "Copied" as the label
+  let timer;
   button.addEventListener('click', async () => {
+    clearTimeout(timer);
     try { await clipboard.writeText(button.dataset.copy); button.textContent = 'Copied'; }
     catch { button.textContent = 'Select and copy'; }
-    setTimeout(() => { button.textContent = label; }, 1600);
+    timer = setTimeout(() => { button.textContent = label; }, 1600);
   });
 }
 

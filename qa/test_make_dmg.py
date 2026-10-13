@@ -29,7 +29,7 @@ class MakeDmgTests(unittest.TestCase):
         (self.app / 'Contents/MacOS/Cadence').write_text('#!/bin/sh\n')
         (self.app / 'Contents/MacOS/Cadence').chmod(0o755)
         (self.app / 'Contents/Info.plist').write_text('<?xml version="1.0"?><plist version="1.0"><dict>'
-            '<key>CFBundleExecutable</key><string>Cadence</string><key>CFBundleIdentifier</key><string>dev.cadence.test</string></dict></plist>')
+            '<key>CFBundleShortVersionString</key><string>9.9.9</string><key>CFBundleExecutable</key><string>Cadence</string><key>CFBundleIdentifier</key><string>dev.cadence.test</string></dict></plist>')
         self.sign()
 
     def tearDown(self):
@@ -57,6 +57,15 @@ class MakeDmgTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('pinned hash', result.stderr)
         self.assertFalse((self.tmp / 'dist/Cadence.dmg').exists())
+
+    def test_refuses_a_version_the_app_does_not_carry(self):
+        result = subprocess.run(['bash', 'qa/make-dmg.sh', '9.9.8'], cwd=self.tmp, capture_output=True, text=True, timeout=300)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("the app says version '9.9.9'", result.stderr)
+        bad = subprocess.run(['bash', 'qa/make-dmg.sh', 'v9.9.9'], cwd=self.tmp, capture_output=True, text=True, timeout=300)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn('no leading v', bad.stderr)
+        self.assertIn('sha256 "UNRELEASED"', (self.tmp / 'Casks/cadence.rb').read_text())
 
     def test_refuses_without_licenses(self):
         (self.app / 'Contents/Resources/THIRD_PARTY_NOTICES.md').unlink()

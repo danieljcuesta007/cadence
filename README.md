@@ -3,8 +3,8 @@
 Local-first, cloud-optional, system-wide AI voice dictation for macOS.
 
 Hold Right-Option, speak, release — the text lands in whatever field has focus. Transcription
-runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app makes no
-network connections at idle. Hold Left-Option instead and it dictates in your second
+runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app contains no
+networking code. Hold Left-Option instead and it dictates in your second
 language, at the same speed.
 
 **Status:** Phase 1, in daily use on Apple Silicon. `platform-windows/` and `cloud/` are
@@ -37,7 +37,7 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
 
 ## Install
 
-Download `Cadence.dmg` from [the latest release](https://github.com/danieljcuesta007/cadence/releases/latest)
+From the first release (v0.1.0) on, download `Cadence.dmg` from [the latest release](https://github.com/danieljcuesta007/cadence/releases/latest)
 or the site, https://cadence-dictation.pages.dev, or use Homebrew:
 
 ```sh

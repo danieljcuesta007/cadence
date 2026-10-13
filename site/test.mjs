@@ -71,6 +71,8 @@ test('comparison is dated, sourced and fair', () => {
   assert.match(section, /Where they win/);
   for (const page of Object.values(pages)) assert.match(page, /not affiliated with/);
   assert.match(legal, /THIRD_PARTY_NOTICES\.md/);
+  assert.doesNotMatch(html, /while idle/, 'privacy claims must say the same thing on every page');
+  assert.match(home, /og:image" content="https:\/\//);
   assert.match(home + legal, /Whisper/);
 });
 
@@ -88,12 +90,12 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   const copy = { textContent: 'Copy', dataset: { copy: 'brew install --cask cadence' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } };
   const written = [];
   const document = { querySelectorAll: s => s === '.typed .w' ? words : s === '[data-copy]' ? [copy] : [] };
-  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); } } }, setTimeout() {} });
+  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); } } }, setTimeout() { return 1; }, clearTimeout() {} });
   assert.deepEqual(words.map(w => w.style.animationDelay), ['0.60s', '0.77s', '0.94s']);
   await copy.listeners.click(); await copy.listeners.click();
   assert.deepEqual(written, ['brew install --cask cadence', 'brew install --cask cadence']);
   const lone = { dataset: { copy: 'x' }, remove() { this.removed = true; } };
-  runInNewContext(js, { document: { querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {} });
+  runInNewContext(js, { document: { querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
   assert.equal(lone.removed, true);
 });
 
