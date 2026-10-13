@@ -34,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let retainAudioItem = NSMenuItem(
         title: "Keep Audio Recordings", action: nil, keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Start at Login", action: nil, keyEquivalent: "")
+    /// §7 F15: literal transcript, no cleanup — the escape hatch for paths, flags and code.
+    var verbatimMode = false
+    let verbatimItem = NSMenuItem(title: "Verbatim (No Cleanup)", action: nil, keyEquivalent: "v")
     let builtInMicItem = NSMenuItem(
         title: "Use Built-in Microphone", action: nil, keyEquivalent: "")
     let voiceIsolationItem = NSMenuItem(
@@ -111,6 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         undoItem.keyEquivalentModifierMask = [.control, .option, .command]
         undoItem.target = self
         menu.addItem(undoItem)
+        // Verbatim: the in-app escape hatch when cleanup would mangle a path or a flag.
+        // The key equivalent is display only — ⌃⌥⌘V works anywhere via the hotkey tap.
+        verbatimItem.keyEquivalentModifierMask = [.control, .option, .command]
+        verbatimItem.action = #selector(toggleVerbatim)
+        verbatimItem.target = self
+        menu.addItem(verbatimItem)
         menu.addItem(.separator())
         // Per-app rule (§7 per-app overrides, first slice): toggle dictation for whatever
         // app is frontmost when the menu opens (we're an LSUIElement — opening the menu
@@ -211,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         retainAudio = store?.retainAudioEnabled ?? false
         dictationLanguage = store?.dictationLanguage ?? "en"
         secondaryLanguage = store?.secondaryLanguage ?? "es"
+        verbatimMode = store?.verbatimMode ?? false
         Appearance.apply(store?.appearance ?? .system)
         Appearance.persist = { [weak self] choice in
             self?.historyStore?.setAppearance(choice)
@@ -255,7 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.activity = ProcessInfo.processInfo.beginActivity(
                     options: [.userInitiated, .latencyCritical], reason: "dictation")
             }
-            self.engine?.triggerDown(verbatim: self.config.verbatim)
+            self.engine?.triggerDown(verbatim: self.config.verbatim || self.verbatimMode)
         }
         hotkeys.onPTTUp = { [weak self] _ in
             guard let self else { return }
@@ -280,6 +290,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         hotkeys.onCancel = { [weak self] in self?.engine?.cancel() }
         hotkeys.onUndo = { [weak self] in self?.router.undoLastInsertion() }
+        hotkeys.onToggleVerbatim = { [weak self] in
+            guard let self else { return }
+            self.toggleVerbatim()
+            // A chord has no menu to show its checkmark, so say which way it went — but
+            // never over a dictation in flight.
+            if self.router.activeState == "idle" {
+                self.overlay.show(state: self.verbatimMode ? "verbatim_on" : "verbatim_off", chip: nil)
+                self.overlay.scheduleFade(after: 0.9)
+            }
+        }
         startHotkeysOrOnboard()
 
         capture.onChunk = { [weak self] samples, level in
@@ -387,14 +407,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    func renderState(_ state: String) {
-        // SF Symbols, template-rendered: adapts to menu-bar light/dark, no emoji.
+    /// SF Symbols, template-rendered: adapts to menu-bar light/dark, no emoji. Idle in
+    /// verbatim mode gets its own symbol: the mode is sticky, and cleanup quietly off with
+    /// nothing on screen is the failure it must not have.
+    static func statusSymbol(state: String, verbatim: Bool) -> String {
+        if verbatim, state == "idle" || state == "cancelled" { return "text.quote" }
         let symbols = [
             "idle": "mic", "listening": "mic.fill", "thinking": "ellipsis",
             "inserting": "arrow.down.to.line", "done": "checkmark", "cancelled": "mic",
             "error": "exclamationmark.triangle", "disabled": "pause",
         ]
-        let name = symbols[state] ?? "mic"
+        return symbols[state] ?? "mic"
+    }
+
+    func renderState(_ state: String) {
+        lastRenderedState = state
+        let name = Self.statusSymbol(state: state, verbatim: verbatimMode)
         if let image = NSImage(systemSymbolName: name, accessibilityDescription: state) {
             image.isTemplate = true
             statusItem.button?.image = image
@@ -402,8 +430,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             statusItem.button?.title = state.prefix(1).uppercased()
         }
-        stateMenuItem.title = engine == nil ? "Loading model…" : state.capitalized
+        stateMenuItem.title = engine == nil
+            ? "Loading model…" : state.capitalized + (verbatimMode ? " — Verbatim" : "")
     }
+
+    private var lastRenderedState = "idle"
 
     private var dashboard: DashboardWindowController?
 
@@ -424,6 +455,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             disableItem.isEnabled = false
         }
         retainAudioItem.state = retainAudio ? .on : .off
+        verbatimItem.state = verbatimMode ? .on : .off
         retainAudioItem.isEnabled = historyStore != nil
         retentionItem.isEnabled = historyStore != nil
         let current = historyStore?.retentionDays ?? 0
@@ -566,6 +598,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             router.log("start-at-login toggle failed: \(error)")
         }
+    }
+
+    /// Takes effect from the next dictation; one already in flight keeps its mode.
+    @objc func toggleVerbatim() {
+        verbatimMode.toggle()
+        historyStore?.setVerbatimMode(verbatimMode)
+        router.log("verbatim → \(verbatimMode ? "on" : "off")")
+        renderState(lastRenderedState)
     }
 
     @objc func toggleRetainAudio() {

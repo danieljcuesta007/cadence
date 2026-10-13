@@ -87,6 +87,8 @@ public final class HotkeyMonitor {
     public var onCancel: (() -> Void)?
     /// §7 F21: dedicated undo-last-dictation chord (⌃⌥⌘Z), consumed when handled.
     public var onUndo: (() -> Void)?
+    /// §7 F15: verbatim on/off chord (⌃⌥⌘V), consumed when handled.
+    public var onToggleVerbatim: (() -> Void)?
     /// Governs Esc consumption; read on the tap thread (main run loop).
     public var isActive: () -> Bool = { false }
     /// The second key is opt-out: when this returns false Left-Option is ignored entirely,
@@ -102,6 +104,7 @@ public final class HotkeyMonitor {
     private static let kLeftOption: Int64 = 58
     private static let kEscape: Int64 = 53
     private static let kZ: Int64 = 6
+    private static let kV: Int64 = 9
     /// Device-dependent modifier bits (IOLLEvent.h). The general .maskAlternate cannot tell
     /// the two Option keys apart, and both PTT keys are Option keys.
     private static let deviceLeftAlt: UInt64 = 0x0000_0020
@@ -168,14 +171,36 @@ public final class HotkeyMonitor {
         if type == .keyDown, arbiter.held != nil {
             fire(arbiter.retract())
         }
-        if type == .keyDown, keyCode == Self.kZ, onUndo != nil {
-            let mods: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand]
-            if event.flags.isSuperset(of: mods) {
-                DispatchQueue.main.async { self.onUndo?() }
+        let repeating = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if type == .keyDown,
+            let chord = Self.chord(keyCode: keyCode, flags: event.flags, autorepeat: repeating)
+        {
+            let handler: (() -> Void)?
+            switch chord {
+            case .undo: handler = onUndo
+            case .toggleVerbatim: handler = onToggleVerbatim
+            }
+            if let handler {
+                DispatchQueue.main.async { handler() }
                 return nil // consumed: the chord is ours alone
             }
         }
         return Unmanaged.passUnretained(event)
+    }
+
+    /// The app's own chords, all on ⌃⌥⌘ so none can collide with a plain shortcut — ⌘V in
+    /// particular must stay the user's paste. Pure, so `cadence selftest-hotkeys` pins it.
+    public enum Chord: Equatable { case undo, toggleVerbatim }
+
+    /// `autorepeat`: a held chord's repeats are not new presses — a toggle must flip once.
+    public static func chord(keyCode: Int64, flags: CGEventFlags, autorepeat: Bool = false) -> Chord? {
+        let mods: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand]
+        guard !autorepeat, flags.isSuperset(of: mods) else { return nil }
+        switch keyCode {
+        case kZ: return .undo
+        case kV: return .toggleVerbatim
+        default: return nil
+        }
     }
 
     /// Is this specific Option key physically down? Both raise .maskAlternate, so the general
