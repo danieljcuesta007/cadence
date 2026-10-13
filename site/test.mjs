@@ -90,10 +90,21 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   const copy = { textContent: 'Copy', dataset: { copy: 'brew install --cask cadence' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } };
   const written = [];
   const document = { querySelectorAll: s => s === '.typed .w' ? words : s === '[data-copy]' ? [copy] : [] };
-  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); } } }, setTimeout() { return 1; }, clearTimeout() {} });
+  const timers = new Map(); let next = 0;
+  const writes = [];
+  runInNewContext(js, { document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
+    setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   assert.deepEqual(words.map(w => w.style.animationDelay), ['0.60s', '0.77s', '0.94s']);
-  await copy.listeners.click(); await copy.listeners.click();
-  assert.deepEqual(written, ['brew install --cask cadence', 'brew install --cask cadence']);
+  // Out of order: the older click is slow and fails, the newer one succeeds first.
+  const older = copy.listeners.click(), newer = copy.listeners.click();
+  writes[1].ok(); await newer;
+  assert.equal(copy.textContent, 'Copied');
+  writes[0].fail(new Error('denied')); await older;
+  assert.equal(copy.textContent, 'Copied', 'a stale failure must not overwrite the newer success');
+  assert.equal(written.length, 2);
+  assert.equal(timers.size, 1, 'only the newest reset timer is left running');
+  [...timers.values()][0]();
+  assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = { dataset: { copy: 'x' }, remove() { this.removed = true; } };
   runInNewContext(js, { document: { querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
   assert.equal(lone.removed, true);
