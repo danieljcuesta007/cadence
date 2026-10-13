@@ -5,18 +5,23 @@ function staggerWords(words, stepMs) {
   words.forEach((w, i) => { w.style.animationDelay = (0.6 + i * stepMs / 1000).toFixed(2) + 's'; });
 }
 
+// Every click copies the same text, so one success is enough: show "Copied" as soon
+// any copy lands, and "Copy failed" only when every copy still pending has failed.
 function initCopy(button, clipboard) {
-  const label = button.textContent; // read once, so a double click can't save "Copied" as the label
-  let timer, latest = 0;
-  button.addEventListener('click', async () => {
-    const mine = ++latest;   // only the newest click may change the button
-    clearTimeout(timer);
-    button.textContent = label; // never left saying "Copied" for a write that hasn't happened
-    let text = 'Copied';
-    try { await clipboard.writeText(button.dataset.copy); } catch { text = 'Select and copy'; }
-    if (mine !== latest) return; // a newer click took over while this write was pending
+  const label = button.textContent;
+  let timer, pending = 0, copied = false;
+  const show = text => {
     button.textContent = text;
-    timer = setTimeout(() => { button.textContent = label; }, 1600);
+    clearTimeout(timer);
+    timer = setTimeout(() => { button.textContent = label; copied = false; }, 1600);
+  };
+  button.addEventListener('click', async () => {
+    pending++;
+    let ok = true;
+    try { await clipboard.writeText(button.dataset.copy); } catch { ok = false; }
+    pending--;
+    if (ok) { copied = true; show('Copied'); }
+    else if (!copied && pending === 0) show('Copy failed');
   });
 }
 
