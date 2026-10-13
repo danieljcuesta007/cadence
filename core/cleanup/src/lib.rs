@@ -19,6 +19,18 @@ pub struct CleanupOutput {
     /// True iff the hallucination guard rejected the engine output and substituted
     /// lightly-cleaned verbatim.
     pub guard_fallback: bool,
+    /// What the rules removed, in the order they ran. Empty when nothing changed or when
+    /// the guard fell back (its fallback text applies none of them).
+    pub edits: Vec<Edit>,
+}
+
+/// One automatic edit, recorded by rule name and size only — never the words, so the log
+/// can say what cleanup did without becoming a second, unencrypted transcript. The words
+/// themselves stay recoverable: the raw transcript is stored as `transcript_final`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Edit {
+    pub rule: &'static str,
+    pub words_removed: usize,
 }
 
 pub trait CleanupEngine {
@@ -31,6 +43,18 @@ pub trait CleanupEngine {
 
 /// Default filler tokens stripped in dictation mode (single-token; configurable).
 const FILLERS: &[&str] = &["um", "uh", "uhh", "erm", "er", "hmm", "mmm", "mm"];
+
+/// Multi-word fillers. Only ever removed when set off by a comma ("it's, you know, fast"):
+/// unpunctuated they are usually content ("do you know", "I mean it").
+const FILLER_PHRASES: &[&str] = &["you know", "i mean"];
+
+/// Words whose immediate repeat is an ASR-captured stutter ("the the", "I I think"). A short
+/// allow-list on purpose: doubles like "no no", "ha ha", "that that", "had had" and "is is"
+/// are real speech or real grammar, so anything not listed here is left alone.
+const STUTTER_WORDS: &[&str] = &[
+    "the", "a", "an", "to", "of", "in", "on", "at", "for", "with", "and", "or", "but", "i",
+    "i'm", "we", "you", "it", "it's", "my", "our", "your", "el", "de", "en",
+];
 
 pub struct RuleCleanup {
     fillers: Vec<String>,
@@ -66,17 +90,139 @@ impl CleanupEngine for RuleCleanup {
             return Ok(CleanupOutput {
                 text: normalize_ws(transcript),
                 guard_fallback: false,
+                edits: Vec::new(),
             });
         }
+        let mut edits = Vec::new();
         let mut words: Vec<&str> = transcript.split_whitespace().collect();
         words.retain(|w| !self.is_filler(w));
-        let joined = words.join(" ");
-        let text = finish_sentences(&joined);
+        let (joined, phrase_words) = drop_filler_phrases(&words.join(" "));
+        if phrase_words > 0 {
+            edits.push(Edit { rule: "filler_phrase", words_removed: phrase_words });
+        }
+        let (joined, stutters) = collapse_stutters(&joined);
+        if stutters > 0 {
+            edits.push(Edit { rule: "repetition", words_removed: stutters });
+        }
         Ok(CleanupOutput {
-            text,
+            text: finish_sentences(&joined),
             guard_fallback: false,
+            edits,
         })
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Clauses: a transcript split at the punctuation the ASR wrote. Rules that need to know
+// whether a phrase was set off by commas work on these instead of on raw words.
+
+#[derive(Debug, Clone)]
+struct Clause {
+    text: String,
+    /// The punctuation that closed the clause; None for a trailing, unpunctuated one.
+    end: Option<char>,
+}
+
+fn is_terminator(c: char) -> bool {
+    matches!(c, '.' | '!' | '?')
+}
+
+/// Split at clause punctuation followed by whitespace or the end — so "3.30", "google.com"
+/// and "U.S" stay inside their clause.
+fn split_clauses(s: &str) -> Vec<Clause> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        let closes = matches!(c, ',' | '.' | ';' | ':' | '!' | '?')
+            && chars.get(i + 1).map_or(true, |n| n.is_whitespace());
+        if closes {
+            out.push(Clause { text: cur.trim().to_string(), end: Some(c) });
+            cur.clear();
+        } else {
+            cur.push(c);
+        }
+    }
+    if !cur.trim().is_empty() {
+        out.push(Clause { text: cur.trim().to_string(), end: None });
+    }
+    out
+}
+
+fn join_clauses(clauses: &[Clause]) -> String {
+    clauses
+        .iter()
+        .filter(|c| !c.text.is_empty())
+        .map(|c| match c.end {
+            Some(p) => format!("{}{p}", c.text),
+            None => c.text.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The punctuation left on the clause in front of a removed span that `own` closed. A
+/// sentence end in front always stays; otherwise the span's own sentence end (or its
+/// absence, at the very end) carries over. `parenthetical`: the span was wrapped in a comma
+/// pair (", you know,"), so both commas go.
+fn merged_end(prev: Option<char>, own: Option<char>, parenthetical: bool) -> Option<char> {
+    if prev.is_some_and(is_terminator) {
+        return prev;
+    }
+    match own {
+        Some(c) if is_terminator(c) => own,
+        None => None,
+        _ if parenthetical && prev == Some(',') => None,
+        _ => prev,
+    }
+}
+
+fn phrase_of(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
+/// Remove comma-set-off filler phrases. Returns the text and how many words went.
+fn drop_filler_phrases(s: &str) -> (String, usize) {
+    let clauses = split_clauses(s);
+    if clauses.len() < 2 {
+        return (s.to_string(), 0);
+    }
+    let mut out: Vec<Clause> = Vec::with_capacity(clauses.len());
+    let mut removed = 0;
+    for c in clauses {
+        let set_off = c.end == Some(',') || out.last().is_some_and(|p| p.end == Some(','));
+        if set_off && FILLER_PHRASES.contains(&phrase_of(&c.text).as_str()) {
+            if let Some(prev) = out.last_mut() {
+                prev.end = merged_end(prev.end, c.end, true);
+            }
+            removed += c.text.split_whitespace().count();
+            continue;
+        }
+        out.push(c);
+    }
+    if removed == 0 {
+        return (s.to_string(), 0);
+    }
+    (join_clauses(&out), removed)
+}
+
+/// Collapse an immediate repeat of a STUTTER_WORDS word. The first copy must carry no
+/// punctuation — "to, to be honest" is two deliberate words.
+fn collapse_stutters(s: &str) -> (String, usize) {
+    let words: Vec<&str> = s.split_whitespace().collect();
+    let bare = |w: &str| w.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'').to_lowercase();
+    let mut out = Vec::with_capacity(words.len());
+    let mut removed = 0;
+    for (i, w) in words.iter().enumerate() {
+        let plain = w.chars().all(|c| c.is_alphabetic() || c == '\'');
+        let repeated = words.get(i + 1).is_some_and(|n| bare(n) == bare(w));
+        if plain && repeated && STUTTER_WORDS.contains(&bare(w).as_str()) {
+            removed += 1;
+            continue;
+        }
+        out.push(*w);
+    }
+    (out.join(" "), removed)
 }
 
 /// Whitespace normalization only — the "lightly cleaned verbatim" guard fallback (§17.2).
@@ -264,10 +410,15 @@ impl<E: CleanupEngine> CleanupEngine for Guarded<E> {
                 CleanupOutput {
                     text: normalize_ws(transcript),
                     guard_fallback: true,
+                    edits: Vec::new(),
                 }
             });
         }
-        let input_words = content_words(transcript);
+        // Measure against the transcript with set-off filler phrases already gone, the same
+        // way single fillers never count: removing "you know" is not lost meaning, and on a
+        // short utterance it would otherwise trip the floor by itself.
+        let basis = drop_filler_phrases(&normalize_ws(transcript)).0;
+        let input_words = content_words(&basis);
         if input_words.is_empty() {
             return Ok(out);
         }
@@ -278,13 +429,14 @@ impl<E: CleanupEngine> CleanupEngine for Guarded<E> {
             .filter(|w| output_set.contains(*w))
             .count() as f64;
         let retention = retained / input_words.len() as f64;
-        let in_len = normalize_ws(transcript).chars().count().max(1) as f64;
+        let in_len = basis.chars().count().max(1) as f64;
         let out_len = normalize_ws(&out.text).chars().count() as f64;
         let ratio = out_len / in_len;
         if retention < self.min_retention || ratio < self.len_ratio.0 || ratio > self.len_ratio.1 {
             Ok(CleanupOutput {
                 text: finish_sentences(&normalize_ws(transcript)),
                 guard_fallback: true,
+                edits: Vec::new(),
             })
         } else {
             Ok(out)
@@ -385,6 +537,70 @@ mod tests {
         assert_eq!(clean("bring the umbrella"), "Bring the umbrella.");
     }
 
+    // ---- repetition + filler phrases (audit 2026-10-11, roadmap step 3) ----
+
+    #[test]
+    fn stuttered_function_words_collapse() {
+        assert_eq!(clean("the the meeting is at noon"), "The meeting is at noon.");
+        assert_eq!(clean("i i think we should go to to the store"), "I think we should go to the store.");
+        // A removed filler can leave a stutter behind; it collapses too.
+        assert_eq!(clean("send it to the um the team"), "Send it to the team.");
+    }
+
+    #[test]
+    fn meaningful_doubles_survive() {
+        assert_eq!(clean("no no that is wrong"), "No no that is wrong.");
+        assert_eq!(clean("ha ha very funny"), "Ha ha very funny.");
+        assert_eq!(clean("i said that that was fine"), "I said that that was fine.");
+        assert_eq!(clean("she said what it is is a bug"), "She said what it is is a bug.");
+        assert_eq!(clean("she had had enough"), "She had had enough.");
+        // Punctuation between the two means the speaker chose both.
+        assert_eq!(clean("to, to be honest"), "To, to be honest.");
+    }
+
+    #[test]
+    fn set_off_filler_phrases_are_removed() {
+        assert_eq!(clean("it's, you know, really fast"), "It's really fast.");
+        assert_eq!(clean("i mean, it works"), "It works.");
+        assert_eq!(clean("it ships today, you know."), "It ships today.");
+        assert_eq!(clean("done. you know, it was easy"), "Done. It was easy.");
+    }
+
+    #[test]
+    fn filler_phrases_that_carry_meaning_stay() {
+        assert_eq!(clean("do you know where it is"), "Do you know where it is?");
+        assert_eq!(clean("i mean it"), "I mean it.");
+        assert_eq!(clean("she knows what i mean"), "She knows what I mean.");
+        assert_eq!(clean("you know."), "You know.");
+    }
+
+    #[test]
+    fn rule_edits_are_reported_without_their_words() {
+        let out = RuleCleanup::default()
+            .cleanup("the the plan is, you know, fine", false)
+            .unwrap();
+        assert_eq!(out.text, "The plan is fine.");
+        assert_eq!(
+            out.edits,
+            vec![
+                Edit { rule: "filler_phrase", words_removed: 2 },
+                Edit { rule: "repetition", words_removed: 1 },
+            ]
+        );
+        let plain = RuleCleanup::default().cleanup("all good", false).unwrap();
+        assert!(plain.edits.is_empty());
+    }
+
+    #[test]
+    fn guard_accepts_filler_phrase_removal_on_short_utterances() {
+        // Without phrase-aware retention, 4 of 6 words "lost" trips the 0.6 floor and the
+        // filler comes back.
+        let g = Guarded::new(RuleCleanup::default());
+        let out = g.cleanup("i mean, you know, it works", false).unwrap();
+        assert!(!out.guard_fallback);
+        assert_eq!(out.text, "It works.");
+    }
+
     // ---- guard ----
 
     struct Inventor;
@@ -393,6 +609,7 @@ mod tests {
             Ok(CleanupOutput {
                 text: "I hereby resign effective immediately.".into(),
                 guard_fallback: false,
+                edits: Vec::new(),
             })
         }
     }
@@ -403,6 +620,7 @@ mod tests {
             Ok(CleanupOutput {
                 text: "ok".into(),
                 guard_fallback: false,
+                edits: Vec::new(),
             })
         }
     }
@@ -445,6 +663,7 @@ mod tests {
                 Ok(CleanupOutput {
                     text: "i said that".into(),
                     guard_fallback: false,
+                    edits: Vec::new(),
                 })
             }
         }
