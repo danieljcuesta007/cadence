@@ -59,13 +59,14 @@ class MakeDmgTests(unittest.TestCase):
         self.assertFalse((self.tmp / 'dist/Cadence.dmg').exists())
 
     def test_refuses_a_version_the_app_does_not_carry(self):
+        cask = (self.tmp / 'Casks/cadence.rb').read_text()
         result = subprocess.run(['bash', 'qa/make-dmg.sh', '9.9.8'], cwd=self.tmp, capture_output=True, text=True, timeout=300)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("the app says version '9.9.9'", result.stderr)
         bad = subprocess.run(['bash', 'qa/make-dmg.sh', 'v9.9.9'], cwd=self.tmp, capture_output=True, text=True, timeout=300)
         self.assertNotEqual(bad.returncode, 0)
         self.assertIn('no leading v', bad.stderr)
-        self.assertIn('sha256 "UNRELEASED"', (self.tmp / 'Casks/cadence.rb').read_text())
+        self.assertEqual((self.tmp / 'Casks/cadence.rb').read_text(), cask)  # a refused run leaves the cask alone
 
     def test_refuses_without_licenses(self):
         (self.app / 'Contents/Resources/THIRD_PARTY_NOTICES.md').unlink()
