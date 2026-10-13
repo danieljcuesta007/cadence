@@ -351,6 +351,21 @@ impl Orchestrator {
                 if self.state != State::Thinking || !self.is_current(&utterance) {
                     return fx;
                 }
+                if text.trim().is_empty() {
+                    // Every word was taken back ("…, scratch that"). Nothing to insert —
+                    // an empty paste would still replace a selection — so close it out like
+                    // a cancel.
+                    self.current = None;
+                    self.state = State::Idle;
+                    fx.push(Effect::PlaySound {
+                        sound: Sound::CaptureCancel,
+                    });
+                    fx.push(Effect::ShowOverlay {
+                        state: State::Idle,
+                        location_chip: None,
+                    });
+                    return fx;
+                }
                 let u = self.current.as_mut().unwrap();
                 u.cleanup_location = Some(location);
                 u.final_text = Some(text.clone());

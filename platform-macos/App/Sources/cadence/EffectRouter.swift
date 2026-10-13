@@ -224,6 +224,9 @@ final class EffectRouter {
                 self.statusUpdate?("idle")
                 self.onIdle?(self.lastInsertedText)
             }
+        case "log_note":
+            // Content-free by contract (core/ipc LogNote): counts and rule names only.
+            if let message = obj["message"] as? String { log(message) }
         default:
             log("unknown effect type: \(type)")
         }

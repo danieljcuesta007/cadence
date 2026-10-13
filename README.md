@@ -25,6 +25,10 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
   other, each pinned. Switching languages costs a different finger rather than a menu trip or
   the ~160 ms that auto-detection adds to every utterance. Either key can be set to Automatic
   if you prefer detection, and the second key can be unbound entirely.
+- **Cleanup you can predict** — fillers ("um", and "you know" / "I mean" when set off by
+  commas) and stutters ("the the") are removed; "no no" and "had had" are not. Say "scratch
+  that" or "delete that" as its own phrase to drop the clause before it. Every removal is
+  logged by count only, and the raw transcript stays in history.
 - **Personal dictionary** for proper nouns, applied to the refined pass as a Whisper prompt.
 - **Encrypted history** in SQLCipher, with an optional retained-audio mode (off by default) and
   a retention window you choose.
