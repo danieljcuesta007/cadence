@@ -90,10 +90,18 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   const copy = { textContent: 'Copy', dataset: { copy: 'brew install --cask cadence' }, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; } };
   const written = [];
   const document = { querySelectorAll: s => s === '.typed .w' ? words : s === '[data-copy]' ? [copy] : [] };
-  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); } } }, setTimeout() { return 1; }, clearTimeout() {} });
+  const timers = new Map(); let next = 0;
+  let release; const slow = new Promise(r => { release = r; });
+  runInNewContext(js, { document, navigator: { clipboard: { writeText: async t => { written.push(t); await slow; } } },
+    setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   assert.deepEqual(words.map(w => w.style.animationDelay), ['0.60s', '0.77s', '0.94s']);
-  await copy.listeners.click(); await copy.listeners.click();
+  const clicks = Promise.all([copy.listeners.click(), copy.listeners.click()]); // overlap a slow clipboard write
+  release(); await clicks;
   assert.deepEqual(written, ['brew install --cask cadence', 'brew install --cask cadence']);
+  assert.equal(copy.textContent, 'Copied');
+  assert.equal(timers.size, 1, 'only the newest reset timer is left running');
+  [...timers.values()][0]();
+  assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = { dataset: { copy: 'x' }, remove() { this.removed = true; } };
   runInNewContext(js, { document: { querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
   assert.equal(lone.removed, true);
