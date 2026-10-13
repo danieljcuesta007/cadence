@@ -92,33 +92,36 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   const document = { querySelector: s => s === '[data-copy-status]' ? status : null, querySelectorAll: s => s === '.typed .w' ? words : s === '[data-copy]' ? [copy] : [] };
   const timers = new Map(); let next = 0;
   const writes = [];
-  let clock = 1000; const selected = []; const code = { tag: 'pre' }; copy.previousElementSibling = code;
+  const selected = []; const code = { tagName: 'PRE' }; copy.previousElementSibling = code;
   const status = { textContent: '' };
-  runInNewContext(js, { getSelection: () => ({ selectAllChildren: el => selected.push(el) }), Date: { now: () => clock }, document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
+  runInNewContext(js, { getSelection: () => ({ selectAllChildren: el => selected.push(el) }), document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
     setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   assert.deepEqual(words.map(w => w.style.animationDelay), ['0.60s', '0.77s', '0.94s']);
   const click = () => { const done = copy.listeners.click(); const w = writes.at(-1); return { ok: async () => { w.ok(); await done; }, fail: async () => { w.fail(new Error('denied')); await done; } }; };
   const fire = () => { [...timers.values()].at(-1)(); timers.clear(); };
   // A slow failure that settles after a newer success (even after the reset) changes nothing.
   let slow = click(), fast = click();
-  clock += 10; await fast.ok(); assert.equal(copy.textContent, 'Copied'); assert.equal(status.textContent, 'Copied to clipboard');
-  fire(); assert.equal(copy.textContent, 'Copy');
-  clock += 5000; await slow.fail(); assert.equal(copy.textContent, 'Copy', 'a stale failure never shows');
-  assert.deepEqual(selected, []);
-  // A failure with no success since it began selects the command and says how to copy.
-  clock += 10; await click().fail();
-  assert.equal(copy.textContent, 'Press \u2318C'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /Command C/);
-  // A pending click never hides a later success, whatever order they settle in.
-  fire(); slow = click(); fast = click();
-  clock += 10; await fast.fail(); assert.equal(copy.textContent, 'Press \u2318C');
-  clock += 10; await slow.ok(); assert.equal(copy.textContent, 'Copied');
+  await fast.ok(); assert.equal(copy.textContent, 'Copied'); assert.equal(status.textContent, 'Copied to clipboard');
+  fire(); await slow.fail(); assert.equal(copy.textContent, 'Copy', 'a stale failure never shows');
+  // An early failure stays quiet while another copy is still in flight, and that copy wins.
+  slow = click(); fast = click();
+  await fast.fail(); assert.equal(copy.textContent, 'Copy'); assert.deepEqual(selected, []);
+  await slow.ok(); assert.equal(copy.textContent, 'Copied');
+  assert.equal(status.textContent, 'Copied to clipboard\u00a0', 'the same result is re-announced');
+  // A lone failure selects the command and says so.
+  fire(); await click().fail();
+  assert.equal(copy.textContent, 'Copy failed'); assert.deepEqual(selected, [code]); assert.match(status.textContent, /copy it yourself/);
   assert.deepEqual(written, Array(5).fill('brew install --cask cadence'));
   assert.equal(timers.size, 1, 'exactly one reset timer is running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
   const lone = { dataset: { copy: 'x' }, remove() { this.removed = true; } };
-  runInNewContext(js, { document: { querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
+  runInNewContext(js, { document: { querySelector: () => null, querySelectorAll: s => s === '[data-copy]' ? [lone] : [] }, navigator: {}, setTimeout() {}, clearTimeout() {} });
   assert.equal(lone.removed, true);
+});
+
+test('the page has the status line copy results are announced in', () => {
+  assert.match(home, /<p class="visually-hidden" role="status" data-copy-status><\/p>/);
 });
 
 test('build ships exactly the reviewed files, unchanged and free of private data', async () => {

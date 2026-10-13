@@ -5,37 +5,40 @@ function staggerWords(words, stepMs) {
   words.forEach((w, i) => { w.style.animationDelay = (0.6 + i * stepMs / 1000).toFixed(2) + 's'; });
 }
 
-// Every click copies the same text, so a failure only matters if no copy has
-// succeeded since that click began. On a real failure the command is selected,
-// so Command-C still works. Results are announced once through the status line.
-function initCopy(button, clipboard, status, select, now = Date.now) {
+// Every click copies the same text, so one success is enough. A failure is shown
+// only when no copy has succeeded since that click began and none is still in
+// flight; then the command is selected so the visitor can copy it by hand.
+// Results are announced once through the page's status line.
+function initCopy(button, clipboard, status, select) {
   const label = button.textContent;
-  let timer, lastSuccess = -Infinity;
-  const show = (text, said) => {
+  let timer, successes = 0, pending = 0, said = '';
+  const show = (text, message) => {
     button.textContent = text;
-    if (status) status.textContent = said;
+    said = said === message ? message + '\u00a0' : message; // a changed string is re-announced
+    status.textContent = said;
     clearTimeout(timer);
     timer = setTimeout(() => { button.textContent = label; }, 1600);
   };
   button.addEventListener('click', async () => {
-    const started = now();
+    const before = successes;
+    pending++;
     try {
       await clipboard.writeText(button.dataset.copy);
-      lastSuccess = now();
+      successes++;
       show('Copied', 'Copied to clipboard');
     } catch {
-      if (lastSuccess >= started) return; // another click already put it on the clipboard
+      if (successes > before || pending > 1) return; // another copy landed, or still may
       const code = button.previousElementSibling;
-      if (code && select) select(code);
-      show('Press \u2318C', 'Copy failed. The command is selected; press Command C.');
-    }
+      if (code && code.tagName === 'PRE') select(code);
+      show('Copy failed', 'Copy failed. The command is selected so you can copy it yourself.');
+    } finally { pending--; }
   });
 }
 
 if (typeof document !== 'undefined' && document.querySelectorAll) {
   staggerWords([...document.querySelectorAll('.typed .w')], 170);
   const clipboard = typeof navigator !== 'undefined' && navigator.clipboard;
-  const status = document.querySelector && document.querySelector('[data-copy-status]');
+  const status = document.querySelector('[data-copy-status]');
   const select = el => { const sel = typeof getSelection === 'function' && getSelection(); if (sel) sel.selectAllChildren(el); };
-  document.querySelectorAll('[data-copy]').forEach(b => clipboard ? initCopy(b, clipboard, status, select) : b.remove());
+  document.querySelectorAll('[data-copy]').forEach(b => clipboard && status ? initCopy(b, clipboard, status, select) : b.remove());
 }
