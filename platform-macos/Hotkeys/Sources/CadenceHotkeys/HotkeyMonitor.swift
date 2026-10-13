@@ -99,6 +99,8 @@ public final class HotkeyMonitor {
     private var runLoopSource: CFRunLoopSource?
     /// Owns the "which key is held" state; see PTTArbiter for the rules it enforces.
     private var arbiter = PTTArbiter()
+    /// The chord whose first press we handled; its auto-repeats are swallowed.
+    private var firedChord: Chord?
 
     private static let kRightOption: Int64 = 61
     private static let kLeftOption: Int64 = 58
@@ -172,17 +174,25 @@ public final class HotkeyMonitor {
             fire(arbiter.retract())
         }
         let repeating = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if type == .keyDown, !repeating { firedChord = nil }
         if type == .keyDown,
-            let chord = Self.chord(keyCode: keyCode, flags: event.flags, autorepeat: repeating)
+            let action = Self.chordAction(
+                keyCode: keyCode, flags: event.flags, autorepeat: repeating, fired: firedChord)
         {
-            let handler: (() -> Void)?
-            switch chord {
-            case .undo: handler = onUndo
-            case .toggleVerbatim: handler = onToggleVerbatim
-            }
-            if let handler {
-                DispatchQueue.main.async { handler() }
-                return nil // consumed: the chord is ours alone
+            switch action {
+            case .swallow:
+                return nil // a held chord's repeat: ours, but already handled
+            case .fire(let chord):
+                let handler: (() -> Void)?
+                switch chord {
+                case .undo: handler = onUndo
+                case .toggleVerbatim: handler = onToggleVerbatim
+                }
+                if let handler {
+                    firedChord = chord
+                    DispatchQueue.main.async { handler() }
+                    return nil // consumed: the chord is ours alone
+                }
             }
         }
         return Unmanaged.passUnretained(event)
@@ -192,10 +202,23 @@ public final class HotkeyMonitor {
     /// particular must stay the user's paste. Pure, so `cadence selftest-hotkeys` pins it.
     public enum Chord: Equatable { case undo, toggleVerbatim }
 
-    /// `autorepeat`: a held chord's repeats are not new presses — a toggle must flip once.
-    public static func chord(keyCode: Int64, flags: CGEventFlags, autorepeat: Bool = false) -> Chord? {
+    public enum ChordAction: Equatable { case fire(Chord), swallow }
+
+    /// A held chord's repeats are not new presses (a toggle must flip once), but they are
+    /// still ours: passed on, they would fire the frontmost app's own ⌃⌥⌘V / ⌃⌥⌘Z. Only
+    /// repeats of a press we actually fired, though — `fired` — or an app's own held ⌘V
+    /// that picks up ⌃⌥ midway would vanish.
+    public static func chordAction(
+        keyCode: Int64, flags: CGEventFlags, autorepeat: Bool, fired: Chord?
+    ) -> ChordAction? {
+        guard let chord = chord(keyCode: keyCode, flags: flags) else { return nil }
+        if !autorepeat { return .fire(chord) }
+        return chord == fired ? .swallow : nil
+    }
+
+    public static func chord(keyCode: Int64, flags: CGEventFlags) -> Chord? {
         let mods: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand]
-        guard !autorepeat, flags.isSuperset(of: mods) else { return nil }
+        guard flags.isSuperset(of: mods) else { return nil }
         switch keyCode {
         case kZ: return .undo
         case kV: return .toggleVerbatim

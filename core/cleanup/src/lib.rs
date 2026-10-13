@@ -230,18 +230,31 @@ const SCRATCH_COMMANDS: &[&str] = &["scratch that", "delete that"];
 /// Apply "scratch that" / "delete that". A command counts only when it is a whole clause
 /// of its own (the ASR punctuated around it) with a real clause before it to remove;
 /// anything else is content ("I'll scratch that idea", an unpunctuated run-on), per the
-/// blueprint §526 "prefer content" policy. Filler clauses in between ("John, um, scratch
-/// that") go with it — the speaker meant the clause before the "um". Removes one content
-/// clause per command, never more.
+/// blueprint §526 "prefer content" policy; after a colon it is quoted content. Filler
+/// clauses in between ("John, um, scratch that") go with it — the speaker meant the clause
+/// before the "um". After a comma it removes one clause; as a sentence of its own it removes
+/// the sentence before it.
 pub fn apply_commands(transcript: &str) -> (String, Vec<Edit>) {
     let clauses = split_clauses(transcript);
     let mut out: Vec<Clause> = Vec::with_capacity(clauses.len());
     let mut removed = 0;
     for c in &clauses {
         if SCRATCH_COMMANDS.contains(&phrase_of(&c.text).as_str()) {
-            if let Some(v) = out.iter().rposition(|k| !is_filler_clause(&k.text)) {
+            // After a colon it is being quoted ("the label is: um, Delete that"), not spoken.
+            let target = out.iter().rposition(|k| !is_filler_clause(&k.text));
+            if let Some(v) = target.filter(|&v| out[v].end != Some(':')) {
+                // Said after a full stop, it takes back that whole sentence; after a comma,
+                // just the clause.
+                let start = if out[v].end.is_some_and(is_terminator) {
+                    out[..v]
+                        .iter()
+                        .rposition(|k| k.end.is_some_and(is_terminator))
+                        .map_or(0, |p| p + 1)
+                } else {
+                    v
+                };
                 let gone: usize = out
-                    .drain(v..)
+                    .drain(start..)
                     .map(|k| k.text.split_whitespace().count())
                     .sum();
                 if let Some(prev) = out.last_mut() {
@@ -278,7 +291,14 @@ fn collapse_stutters(s: &str) -> (String, usize) {
     let mut removed = 0;
     for (i, w) in words.iter().enumerate() {
         let plain = w.chars().all(|c| c.is_alphabetic() || c == '\'');
-        let repeated = words.get(i + 1).is_some_and(|n| bare(n) == bare(w));
+        // "vitamin A a day": a capital letter used as a label, then the article.
+        // A sentence-initial "A a" is still the stutter: Whisper capitalizes the first word.
+        let sentence_start = i == 0 || words[i - 1].ends_with(['.', '!', '?']);
+        let label = !sentence_start
+            && w.chars().count() == 1
+            && w.chars().all(char::is_uppercase)
+            && words.get(i + 1) != Some(w);
+        let repeated = !label && words.get(i + 1).is_some_and(|n| bare(n) == bare(w));
         if plain && repeated && STUTTER_WORDS.contains(&bare(w).as_str()) {
             removed += 1;
             continue;
@@ -666,6 +686,10 @@ mod tests {
         assert_eq!(clean("turn it on on monday"), "Turn it on on monday.");
         assert_eq!(clean("log in in the morning"), "Log in in the morning.");
         assert_eq!(clean("i told you you were right"), "I told you you were right.");
+        // A capital letter used as a label is not a stuttered article.
+        assert_eq!(clean("take vitamin A a day"), "Take vitamin A a day.");
+        // ...but a sentence-initial "A a" is still the stutter.
+        assert_eq!(clean("A a lot of people came"), "A lot of people came.");
     }
 
     #[test]
@@ -743,6 +767,28 @@ mod tests {
     #[test]
     fn abbreviations_do_not_split_the_scratched_clause() {
         assert_eq!(guarded("Call Mr. Jones, scratch that, call Ann.").text, "Call Ann.");
+    }
+
+    #[test]
+    fn scratch_that_as_its_own_sentence_takes_back_the_sentence() {
+        // After a full stop the speaker is retracting the sentence, not its last clause.
+        assert_eq!(guarded("I'll call him tomorrow, after lunch. Scratch that.").text, "");
+        assert_eq!(
+            guarded("Book the room. I'll call him tomorrow, after lunch. Scratch that. Email him.").text,
+            "Book the room. Email him."
+        );
+    }
+
+    #[test]
+    fn a_command_after_a_colon_is_quoted_content() {
+        assert_eq!(
+            guarded("The button label is: Delete that.").text,
+            "The button label is: Delete that."
+        );
+        assert_eq!(
+            guarded("The button label is: um, delete that.").text,
+            "The button label is: delete that."
+        );
     }
 
     #[test]

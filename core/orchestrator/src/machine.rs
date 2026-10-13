@@ -351,6 +351,8 @@ impl Orchestrator {
                 if self.state != State::Thinking || !self.is_current(&utterance) {
                     return fx;
                 }
+                // Cleanup produced this result either way, so the record says where it ran.
+                self.current.as_mut().unwrap().cleanup_location = Some(location);
                 if text.trim().is_empty() {
                     // Every word was taken back ("…, scratch that"). Nothing to insert — an
                     // empty paste would still replace a selection — but it is still recorded,
@@ -362,7 +364,6 @@ impl Orchestrator {
                     return fx;
                 }
                 let u = self.current.as_mut().unwrap();
-                u.cleanup_location = Some(location);
                 u.final_text = Some(text.clone());
                 u.pending = Some(Pending::Insertion);
                 let chip = Self::overall_location(u);
