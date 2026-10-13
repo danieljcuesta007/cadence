@@ -11,6 +11,7 @@ function initCopy(button, clipboard) {
   button.addEventListener('click', async () => {
     const mine = ++latest;   // only the newest click may change the button
     clearTimeout(timer);
+    button.textContent = label; // never left saying "Copied" for a write that hasn't happened
     let text = 'Copied';
     try { await clipboard.writeText(button.dataset.copy); } catch { text = 'Select and copy'; }
     if (mine !== latest) return; // a newer click took over while this write was pending

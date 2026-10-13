@@ -95,13 +95,17 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   runInNewContext(js, { document, navigator: { clipboard: { writeText: t => { written.push(t); return new Promise((ok, fail) => writes.push({ ok, fail })); } } },
     setTimeout: fn => { timers.set(++next, fn); return next; }, clearTimeout: id => timers.delete(id) });
   assert.deepEqual(words.map(w => w.style.animationDelay), ['0.60s', '0.77s', '0.94s']);
-  // Out of order: the older click is slow and fails, the newer one succeeds first.
-  const older = copy.listeners.click(), newer = copy.listeners.click();
-  writes[1].ok(); await newer;
+  const settle = async (click, i, how) => { how === 'ok' ? writes[i].ok() : writes[i].fail(new Error('denied')); await click; };
+  // Older click fails late, after a newer success: the success stands.
+  let older = copy.listeners.click(), newer = copy.listeners.click();
+  assert.equal(copy.textContent, 'Copy', 'pending clicks show the plain label');
+  await settle(newer, 1, 'ok'); await settle(older, 0, 'fail');
   assert.equal(copy.textContent, 'Copied');
-  writes[0].fail(new Error('denied')); await older;
-  assert.equal(copy.textContent, 'Copied', 'a stale failure must not overwrite the newer success');
-  assert.equal(written.length, 2);
+  // Older click succeeds late, after a newer failure: the failure stands.
+  older = copy.listeners.click(); newer = copy.listeners.click();
+  await settle(newer, 3, 'fail'); await settle(older, 2, 'ok');
+  assert.equal(copy.textContent, 'Select and copy');
+  assert.deepEqual(written, Array(4).fill('brew install --cask cadence'));
   assert.equal(timers.size, 1, 'only the newest reset timer is left running');
   [...timers.values()][0]();
   assert.equal(copy.textContent, 'Copy', 'the reset restores the original label');
