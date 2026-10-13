@@ -380,6 +380,8 @@ fn fully_scratched_utterance_inserts_nothing() {
         Effect::PersistUtterance { inserted: false, transcript_final: Some(t), .. }
             if t == "Meet Tuesday. Scratch that."
     )));
+    // And the record says where cleanup ran.
+    assert_eq!(m.last_privacy().and_then(|p| p.cleanup_location), Some(ProcessingLocation::Local));
     // The next dictation starts clean.
     m.handle(Event::TriggerDown {
         mode: Mode::Dictation,
