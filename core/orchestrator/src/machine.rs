@@ -358,6 +358,8 @@ impl Orchestrator {
                     fx.push(Effect::PlaySound {
                         sound: Sound::CaptureCancel,
                     });
+                    // Cleanup produced this result, so the record says where it ran.
+                    self.current.as_mut().unwrap().cleanup_location = Some(location);
                     self.finish(&mut fx, State::Cancelled, false);
                     return fx;
                 }

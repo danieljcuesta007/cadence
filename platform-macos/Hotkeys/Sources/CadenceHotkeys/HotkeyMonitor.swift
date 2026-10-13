@@ -173,16 +173,21 @@ public final class HotkeyMonitor {
         }
         let repeating = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         if type == .keyDown,
-            let chord = Self.chord(keyCode: keyCode, flags: event.flags, autorepeat: repeating)
+            let action = Self.chordAction(keyCode: keyCode, flags: event.flags, autorepeat: repeating)
         {
-            let handler: (() -> Void)?
-            switch chord {
-            case .undo: handler = onUndo
-            case .toggleVerbatim: handler = onToggleVerbatim
-            }
-            if let handler {
-                DispatchQueue.main.async { handler() }
-                return nil // consumed: the chord is ours alone
+            switch action {
+            case .swallow:
+                return nil // a held chord's repeat: ours, but already handled
+            case .fire(let chord):
+                let handler: (() -> Void)?
+                switch chord {
+                case .undo: handler = onUndo
+                case .toggleVerbatim: handler = onToggleVerbatim
+                }
+                if let handler {
+                    DispatchQueue.main.async { handler() }
+                    return nil // consumed: the chord is ours alone
+                }
             }
         }
         return Unmanaged.passUnretained(event)
@@ -192,10 +197,18 @@ public final class HotkeyMonitor {
     /// particular must stay the user's paste. Pure, so `cadence selftest-hotkeys` pins it.
     public enum Chord: Equatable { case undo, toggleVerbatim }
 
-    /// `autorepeat`: a held chord's repeats are not new presses — a toggle must flip once.
-    public static func chord(keyCode: Int64, flags: CGEventFlags, autorepeat: Bool = false) -> Chord? {
+    public enum ChordAction: Equatable { case fire(Chord), swallow }
+
+    /// A held chord's repeats are not new presses (a toggle must flip once), but they are
+    /// still ours: passed on, they would fire the frontmost app's own ⌃⌥⌘V / ⌃⌥⌘Z.
+    public static func chordAction(keyCode: Int64, flags: CGEventFlags, autorepeat: Bool) -> ChordAction? {
+        guard let chord = chord(keyCode: keyCode, flags: flags) else { return nil }
+        return autorepeat ? .swallow : .fire(chord)
+    }
+
+    public static func chord(keyCode: Int64, flags: CGEventFlags) -> Chord? {
         let mods: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand]
-        guard !autorepeat, flags.isSuperset(of: mods) else { return nil }
+        guard flags.isSuperset(of: mods) else { return nil }
         switch keyCode {
         case kZ: return .undo
         case kV: return .toggleVerbatim

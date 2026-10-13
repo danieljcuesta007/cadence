@@ -141,9 +141,15 @@ func runHotkeySelftest() -> Int32 {
         check("other_key_is_not_a_chord", M.chord(keyCode: c, flags: hyper) == nil)
         // Holding the chord past the key-repeat delay must not flip verbatim back and forth
         // (or undo several times).
-        check("held_chord_repeat_is_ignored",
-              M.chord(keyCode: v, flags: hyper, autorepeat: true) == nil
-                  && M.chord(keyCode: z, flags: hyper, autorepeat: true) == nil)
+        // ...and the repeats are still swallowed, or they reach the frontmost app as its own
+        // ⌃⌥⌘V / ⌃⌥⌘Z shortcut (release review #31).
+        check("held_chord_repeat_is_swallowed_not_fired",
+              M.chordAction(keyCode: v, flags: hyper, autorepeat: true) == .swallow
+                  && M.chordAction(keyCode: z, flags: hyper, autorepeat: true) == .swallow)
+        check("first_press_fires",
+              M.chordAction(keyCode: v, flags: hyper, autorepeat: false) == .fire(.toggleVerbatim))
+        check("non_chord_is_untouched",
+              M.chordAction(keyCode: v, flags: .maskCommand, autorepeat: true) == nil)
     }
 
     // 8. A sticky verbatim mode is visible in the menu bar when idle, so cleanup never goes

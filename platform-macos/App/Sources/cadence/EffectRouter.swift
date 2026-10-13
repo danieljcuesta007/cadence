@@ -221,11 +221,14 @@ final class EffectRouter {
             undoRecord?.armed = true
             undoLock.unlock()
         case "schedule_fade_to_idle":
+            // Read now, not when the block runs: a next dictation's start_capture may clear
+            // it in between (release review #31).
+            let inserted = lastInsertedText
             onUI {
                 self.activeState = "idle"
                 self.overlay?.scheduleFade()
                 self.statusUpdate?("idle")
-                self.onIdle?(self.lastInsertedText)
+                self.onIdle?(inserted)
             }
         case "log_note":
             // Content-free by contract (core/ipc LogNote): counts and rule names only.
