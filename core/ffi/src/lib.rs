@@ -201,12 +201,29 @@ impl OrchLoop {
                         ..
                     } => {
                         let ev = match self.cleanup.cleanup(&transcript, verbatim) {
-                            Ok(out) => Event::CleanupDone {
+                            Ok(out) => {
+                                if !out.edits.is_empty() {
+                                    // Counts only: what cleanup removed, never the words.
+                                    let summary: Vec<String> = out
+                                        .edits
+                                        .iter()
+                                        .map(|e| format!("{} -{}w", e.rule, e.words_removed))
+                                        .collect();
+                                    self.emit(&Effect::LogNote {
+                                        message: format!(
+                                            "cleanup {}: {}",
+                                            utterance.0,
+                                            summary.join(", ")
+                                        ),
+                                    });
+                                }
+                                Event::CleanupDone {
                                 utterance,
                                 text: out.text,
                                 location: ProcessingLocation::Local,
                                 guard_fallback: out.guard_fallback,
-                            },
+                                }
+                            }
                             Err(_) => Event::CleanupFailed {
                                 utterance,
                                 location: ProcessingLocation::Local,
@@ -1212,10 +1229,14 @@ mod tests {
 
     impl Harness {
         fn new() -> Self {
+            Self::with_refined("um hello world this is uh cadence")
+        }
+
+        fn with_refined(text: &str) -> Self {
             let (tx, rx) = mpsc::channel::<String>();
             let tx = Box::new(tx);
             let ctx = &*tx as *const mpsc::Sender<String> as *mut c_void;
-            let refined = CString::new("um hello world this is uh cadence").unwrap();
+            let refined = CString::new(text).unwrap();
             let engine = unsafe { cadence_engine_new_mock(refined.as_ptr(), collect_cb, ctx) };
             assert!(!engine.is_null());
             Self {
@@ -1297,6 +1318,25 @@ mod tests {
         assert_eq!(overlay["state"], "done");
         h.expect("persist_utterance");
         h.expect("schedule_fade_to_idle");
+    }
+
+    #[test]
+    fn cleanup_edits_reach_the_log_without_their_words() {
+        let h = Harness::with_refined("Send it to John, scratch that, send it to Mary.");
+        unsafe { cadence_engine_trigger_down(h.engine, false) };
+        h.expect("start_capture");
+        push_chunk(&h, 1600);
+        unsafe { cadence_engine_trigger_up(h.engine) };
+        h.expect("stop_capture");
+        unsafe { cadence_engine_capture_stopped(h.engine) };
+
+        let note = h.expect("log_note");
+        let msg = note["message"].as_str().unwrap();
+        assert!(msg.contains("scratch_that -6w"), "{msg}");
+        // cadence.log is plaintext; the words belong only in the encrypted store.
+        assert!(!msg.contains("John") && !msg.contains("Mary"), "{msg}");
+        let ins = h.expect("run_insertion");
+        assert_eq!(ins["text"], "Send it to Mary.");
     }
 
     #[test]

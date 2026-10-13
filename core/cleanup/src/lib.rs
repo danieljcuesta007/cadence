@@ -206,6 +206,39 @@ fn drop_filler_phrases(s: &str) -> (String, usize) {
     (join_clauses(&out), removed)
 }
 
+/// Spoken self-corrections (§7 F17). Each removes the clause before it.
+const SCRATCH_COMMANDS: &[&str] = &["scratch that", "delete that"];
+
+/// Apply "scratch that" / "delete that". A command counts only as a clause of its own — the
+/// ASR closed the clause before it and wrote punctuation after it (or it ends the
+/// utterance) — and only when there is a clause before it to remove. Anything else is
+/// content ("I'll scratch that idea", an unpunctuated run-on), per the blueprint §526
+/// "prefer content" policy. Removes one clause per command, never more.
+pub fn apply_commands(transcript: &str) -> (String, Vec<Edit>) {
+    let clauses = split_clauses(transcript);
+    let mut out: Vec<Clause> = Vec::with_capacity(clauses.len());
+    let mut removed = 0;
+    for (i, c) in clauses.iter().enumerate() {
+        let own_clause = i > 0 && clauses[i - 1].end.is_some();
+        let is_command = SCRATCH_COMMANDS.contains(&phrase_of(&c.text).as_str());
+        if own_clause && is_command {
+            if let Some(victim) = out.pop() {
+                if let Some(prev) = out.last_mut() {
+                    prev.end = merged_end(prev.end, c.end, false);
+                }
+                removed += victim.text.split_whitespace().count()
+                    + c.text.split_whitespace().count();
+                continue;
+            }
+        }
+        out.push(c.clone());
+    }
+    if removed == 0 {
+        return (transcript.to_string(), Vec::new());
+    }
+    (join_clauses(&out), vec![Edit { rule: "scratch_that", words_removed: removed }])
+}
+
 /// Collapse an immediate repeat of a STUTTER_WORDS word. The first copy must carry no
 /// punctuation — "to, to be honest" is two deliberate words.
 fn collapse_stutters(s: &str) -> (String, usize) {
@@ -400,6 +433,22 @@ fn content_words(s: &str) -> Vec<String> {
 
 impl<E: CleanupEngine> CleanupEngine for Guarded<E> {
     fn cleanup(&self, transcript: &str, verbatim: bool) -> Result<CleanupOutput, CleanupError> {
+        if verbatim {
+            return self.check(transcript, true);
+        }
+        // Spoken commands run first, outside the engine: they are the user's explicit
+        // instruction, not an inference, so the guard measures the engine against the
+        // commanded text. The raw words stay in history as `transcript_final`.
+        let (commanded, mut edits) = apply_commands(transcript);
+        let mut out = self.check(&commanded, false)?;
+        edits.append(&mut out.edits);
+        out.edits = edits;
+        Ok(out)
+    }
+}
+
+impl<E: CleanupEngine> Guarded<E> {
+    fn check(&self, transcript: &str, verbatim: bool) -> Result<CleanupOutput, CleanupError> {
         let out = self.inner.cleanup(transcript, verbatim)?;
         if verbatim {
             // Verbatim forbids ANY word change: guard rejects everything but ws-normalization.
@@ -599,6 +648,67 @@ mod tests {
         let out = g.cleanup("i mean, you know, it works", false).unwrap();
         assert!(!out.guard_fallback);
         assert_eq!(out.text, "It works.");
+    }
+
+    // ---- "scratch that" / "delete that" (audit 2026-10-11, roadmap step 4) ----
+
+    fn guarded(s: &str) -> CleanupOutput {
+        Guarded::new(RuleCleanup::default()).cleanup(s, false).unwrap()
+    }
+
+    #[test]
+    fn scratch_that_removes_the_clause_before_it() {
+        assert_eq!(guarded("Send it to John, scratch that, send it to Mary.").text, "Send it to Mary.");
+        assert_eq!(
+            guarded("Meet at the office, on Tuesday, scratch that, Wednesday.").text,
+            "Meet at the office, Wednesday."
+        );
+        assert_eq!(
+            guarded("We ship Monday, then test, scratch that. We test first.").text,
+            "We ship Monday. We test first."
+        );
+        assert_eq!(guarded("Send it to John. Delete that. Send it to Mary.").text, "Send it to Mary.");
+    }
+
+    #[test]
+    fn scratch_that_inside_a_sentence_is_content() {
+        assert_eq!(guarded("I'll scratch that idea from the list.").text, "I'll scratch that idea from the list.");
+        assert_eq!(guarded("Can you delete that.").text, "Can you delete that?");
+        // Nothing before it to remove: the words were meant as words.
+        assert_eq!(guarded("Delete that.").text, "Delete that.");
+        // No punctuation means no evidence it was spoken as a command — prefer content.
+        assert_eq!(
+            guarded("send it to john scratch that send it to mary").text,
+            "Send it to john scratch that send it to mary."
+        );
+    }
+
+    #[test]
+    fn scratching_everything_leaves_nothing() {
+        let out = guarded("Meet Tuesday. Scratch that.");
+        assert_eq!(out.text, "");
+        assert!(!out.guard_fallback);
+    }
+
+    #[test]
+    fn scratch_that_is_reported_and_verbatim_ignores_it() {
+        let out = guarded("Send it to John, scratch that, send it to Mary.");
+        assert_eq!(out.edits, vec![Edit { rule: "scratch_that", words_removed: 6 }]);
+        let lit = Guarded::new(RuleCleanup::default())
+            .cleanup("send it to john, scratch that, send it to mary", true)
+            .unwrap();
+        assert_eq!(lit.text, "send it to john, scratch that, send it to mary");
+        assert!(lit.edits.is_empty());
+    }
+
+    #[test]
+    fn guard_floor_still_holds_after_a_command() {
+        let out = Guarded::new(Inventor)
+            .cleanup("send it monday, scratch that, review the quarterly numbers", false)
+            .unwrap();
+        assert!(out.guard_fallback);
+        assert_eq!(out.text, "Review the quarterly numbers.");
+        assert_eq!(out.edits, vec![Edit { rule: "scratch_that", words_removed: 5 }]);
     }
 
     // ---- guard ----
