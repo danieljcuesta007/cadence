@@ -103,6 +103,7 @@ test('site.js: words get staggered delays; copy writes the command; no clipboard
   assert.equal(copy.textContent, 'Copied');
   // Older click succeeds late, after a newer failure: the failure stands.
   older = copy.listeners.click(); newer = copy.listeners.click();
+  assert.equal(copy.textContent, 'Copy', 'a new click clears the old "Copied" while its write is pending');
   await settle(newer, 3, 'fail'); await settle(older, 2, 'ok');
   assert.equal(copy.textContent, 'Select and copy');
   assert.deepEqual(written, Array(4).fill('brew install --cask cadence'));
