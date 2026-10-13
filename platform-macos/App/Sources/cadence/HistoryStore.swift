@@ -373,23 +373,6 @@ final class HistoryStore {
         }
     }
 
-    /// The user's Start at Login choice; nil until recorded. Kept here so a launch can
-    /// restore the system registration if it is ever lost (see LoginItem.swift).
-    var startAtLogin: Bool? {
-        guard let handle, let c = cadence_store_setting_get(handle, "start_at_login")
-        else { return nil }
-        defer { cadence_string_free(c) }
-        return String(cString: c) == "on"
-    }
-
-    func setStartAtLogin(_ on: Bool) {
-        guard let handle else { return }
-        if !cadence_store_setting_set(handle, "start_at_login", on ? "on" : "off") {
-            let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
-            LogFile.append("start_at_login save failed: \(msg)")
-        }
-    }
-
     /// Apple voice processing (noise suppression) on capture; default OFF — experimental
     /// (AUVoiceIO teardown deadlocked the app live 2026-07-19; opt-in until trustworthy).
     var voiceIsolation: Bool {

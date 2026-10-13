@@ -10,9 +10,10 @@
 //       is frontmost-guarded — the harness safety lesson from Phase 0 is mandatory here.
 //
 //   cadence selftest-appearance [--out dir]
-//   cadence selftest-login
-//   cadence login-item [--register]   (from inside Cadence.app)
 //       Offscreen light/dark render checks for the dashboard; --out keeps the PNGs.
+//
+//   Cadence.app/Contents/MacOS/Cadence login-item [--register]
+//       Start at Login status as the system reports it, no admin needed (LoginItem.swift).
 //
 // Default model path matches the headless tool; CADENCE_MODEL overrides.
 
@@ -93,9 +94,9 @@ func parseArgs() -> Config {
         case "selftest-store": c.mode = "selftest-store"
         case "selftest-hotkeys": c.mode = "selftest-hotkeys"
         case "selftest-appearance": c.mode = "selftest-appearance"
-        case "selftest-login": c.mode = "selftest-login"
         case "login-item": c.mode = "login-item"
-        case "--register": c.register = true
+        // Only after login-item: anywhere else it would be silently ignored.
+        case "--register" where c.mode == "login-item": c.register = true
         case "--out": c.outDir = it.next()
         case "--model": if let v = it.next() { c.model = v }
         case "--mock": c.mock = it.next() ?? "mock transcript"
@@ -127,8 +128,6 @@ case "selftest-hotkeys":
     exit(runHotkeySelftest())
 case "selftest-appearance":
     exit(runAppearanceSelftest(outDir: config.outDir))
-case "selftest-login":
-    exit(runLoginItemSelftest())
 case "login-item":
     exit(runLoginItemCommand(register: config.register))
 default:
