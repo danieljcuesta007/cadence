@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cadence: privacy, license and credits</title>
+<meta name="description" content="How Cadence and this website handle your data, Cadence's MIT license, the open-source parts it is built on, and trademarks.">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="doc-page">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="Cadence home"><img src="favicon.png" alt="" width="28" height="28"><span>Cadence</span></a>
+  <nav aria-label="Main navigation">
+    <a href="index.html#features">Features</a>
+    <a href="index.html#compare">Compare</a>
+    <a class="nav-cta" href="index.html#download">Download</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1" class="doc">
+  <h1>Privacy, license and credits</h1>
+  <p class="doc-date">Last updated 13 October 2026</p>
+
+  <h2 id="privacy">Privacy</h2>
+  <h3>The Cadence app</h3>
+  <ul>
+    <li>Your speech is turned into text on your Mac. Cadence has no account, no server and no networking code, so nothing you say is sent anywhere.</li>
+    <li>It uses the microphone only while you hold a dictation key, and Accessibility only to put text where your cursor is.</li>
+    <li>Dictation history and settings are stored on your Mac in <code>~/.cadence</code>, in an encrypted database. Audio is saved only if you turn that on, and you choose how long it's kept.</li>
+    <li>Delete everything by quitting Cadence and removing <code>~/.cadence</code> and the app.</li>
+  </ul>
+  <h3>This website</h3>
+  <ul>
+    <li>No cookies, analytics, trackers, forms or third-party scripts. The page's security policy blocks them outright.</li>
+    <li>The site is hosted on Cloudflare Pages, and downloads come from GitHub. Like any web host, both handle standard request data (such as your IP address) to serve and protect them.</li>
+  </ul>
+
+  <h2 id="license">License</h2>
+  <p>Cadence is open source under the MIT license. You may use, copy, modify and share it, including commercially, as long as the copyright notice comes with it. It is provided "as is", without warranty of any kind. The full text is in the <a href="https://github.com/danieljcuesta007/cadence/blob/main/LICENSE" rel="noopener">LICENSE file</a>.</p>
+
+  <h2 id="credits">Credits</h2>
+  <p>Cadence stands on these open-source projects. Their full license texts ship inside every download as <code>THIRD_PARTY_NOTICES.md</code>.</p>
+  <ul>
+    <li><b>Whisper</b> speech-recognition model by OpenAI (MIT).</li>
+    <li><b>whisper.cpp</b> by Georgi Gerganov and contributors (MIT), used through <b>whisper-rs</b> (Unlicense).</li>
+    <li><b>SQLCipher</b> by Zetetic (BSD-style), through <b>rusqlite</b> (MIT), with <b>OpenSSL</b> (Apache 2.0).</li>
+  </ul>
+  <p>Designed and built by Daniel Cuesta under DC Labs, with Claude.</p>
+
+  <h2 id="trademarks">Trademarks</h2>
+  <p>Wispr Flow, Superwhisper, Apple, macOS and OpenAI belong to their owners. They're named here only to compare features and to credit the work Cadence uses. Cadence is an independent project and is not affiliated with, sponsored by or endorsed by any of them.</p>
+
+  <h2 id="contact">Contact</h2>
+  <p>Questions and bugs: open an issue on <a href="https://github.com/danieljcuesta007/cadence/issues" rel="noopener">GitHub</a>. For a security problem, use <em>Report a vulnerability</em> on the repository's Security tab instead, so the details stay private.</p>
+</main>
+<footer class="site-footer">
+  <div class="footer-brand"><img src="favicon.png" alt="" width="32" height="32"><p><strong>Cadence</strong><br>A DC Labs product</p></div>
+  <nav aria-label="Footer"><a href="index.html">Home</a><a href="https://github.com/danieljcuesta007/cadence" rel="noopener">Source</a></nav>
+  <p class="fineprint">© 2026 Daniel Cuesta. MIT licensed. Cadence is not affiliated with or endorsed by the companies named on this page.</p>
+</footer>
+</body>
+</html>

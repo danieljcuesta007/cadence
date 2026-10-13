@@ -3,8 +3,8 @@
 Local-first, cloud-optional, system-wide AI voice dictation for macOS.
 
 Hold Right-Option, speak, release — the text lands in whatever field has focus. Transcription
-runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app makes no
-network connections at idle. Hold Left-Option instead and it dictates in your second
+runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app contains no
+networking code. Hold Left-Option instead and it dictates in your second
 language, at the same speed.
 
 **Status:** Phase 1, in daily use on Apple Silicon. `platform-windows/` and `cloud/` are
@@ -35,7 +35,22 @@ UX spec + roadmap). Progress: [`docs/STATUS.md`](docs/STATUS.md) · Decisions:
 - **Undo** the last insertion with Control-Option-Command-Z. Holding a modifier chord never
   starts a dictation, so the undo shortcut cannot trip the push-to-talk keys.
 
-## Requirements
+## Install
+
+From the first release (v0.1.0) on, download `Cadence.dmg` from [the latest release](https://github.com/danieljcuesta007/cadence/releases/latest)
+or the site, https://cadence-dictation.pages.dev, or use Homebrew:
+
+```sh
+brew tap danieljcuesta007/cadence https://github.com/danieljcuesta007/cadence
+brew install --cask cadence
+```
+
+Cadence isn't notarized by Apple (that costs $99 a year, and Cadence is free), so the first
+open needs **System Settings › Privacy & Security › Open Anyway**. Releases:
+`qa/package-app.sh && qa/make-dmg.sh <version>` (it refuses a wrong model, missing licenses
+or a broken signature, and fills in the checksum for the cask and site).
+
+## Requirements (to build it yourself)
 
 No Homebrew or admin rights needed. Everything below is user-local.
 
@@ -115,6 +130,8 @@ platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitrati
 platform-macos/.build/release/cadence selftest-appearance [--out dir]  # light/dark renders
 qa/wer-harness.sh                                  # word error rate + ASR latency together
 qa/spine-selftest.sh                               # end-to-end WAV to inserted text
+(cd site && npm run build && npm test)             # website: links, CSP, honesty, checksums
+python3 -B -m unittest qa.test_make_dmg            # release disk image guards
 ```
 
 The Swift layer has no XCTest (Command Line Tools do not ship it), so pure logic is covered by
