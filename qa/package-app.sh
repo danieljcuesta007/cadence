@@ -28,6 +28,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/models"
 
 cp "$BIN" "$APP/Contents/MacOS/Cadence"
 cp "$MODEL" "$APP/Contents/Resources/models/"
+# Licenses travel with every copy (OpenSSL's Apache 2.0 requires its notice).
+cp LICENSE THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 # Say out loud what got bundled. The whole failure above was silent — the packager knew and
 # never printed it, so a wrong model looked exactly like a right one.
 case "$(basename "$MODEL")" in
