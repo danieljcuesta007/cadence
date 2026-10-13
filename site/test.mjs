@@ -137,6 +137,13 @@ test('two copy buttons share the status line without wiping each other', async (
   assert.equal(a.textContent, 'Copy'); assert.equal(status.textContent, said, "B's message survives A's reset");
   timers[1]();  // B's own reset clears B's message
   assert.equal(status.textContent, '', 'no stale result left behind');
+  // Same result from two buttons in a row: A's older timer must not clear B's newer message.
+  fail = false; timers.length = 0;
+  await a.listeners.click(); await b.listeners.click(); await b.listeners.click(); // the text cycles back to A's exact string
+  const newest = status.textContent;
+  timers[0]();
+  assert.equal(status.textContent, newest, "A's timer leaves B's identical, newer message alone");
+  timers[2](); assert.equal(status.textContent, '', "B's latest timer clears it");
 });
 
 test('the page has the status line copy results are announced in', () => {
