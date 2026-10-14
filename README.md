@@ -134,6 +134,7 @@ platform-macos/.build/release/cadence selftest-stats     # dashboard metric math
 platform-macos/.build/release/cadence selftest-store     # store key: keep, rescue, or reset
 python3 -m unittest discover -s tools -p 'test_*.py'      # log recovery (tools/recover_from_log.py)
 platform-macos/.build/release/cadence selftest-hotkeys   # two-key PTT arbitration + app chords
+platform-macos/.build/release/cadence selftest-lifecycle # startup, heartbeat, shutdown evidence
 platform-macos/.build/release/cadence selftest-appearance [--out dir]  # light/dark renders
 qa/wer-harness.sh                                  # word error rate + ASR latency together
 qa/spine-selftest.sh                               # end-to-end WAV to inserted text
@@ -143,6 +144,33 @@ python3 -B -m unittest qa.test_make_dmg            # release disk image guards
 
 Is Start at Login really registered? Ask the installed bundle, not the menu checkmark
 (`sfltool dumpbtm` needs an admin password): `~/Applications/Cadence.app/Contents/MacOS/Cadence login-item`.
+
+### When dictation stops working
+
+Run `~/Applications/Cadence.app/Contents/MacOS/Cadence doctor` (use `/Applications` if
+installed there). It prints a read-only JSON report with running processes, recorded engine
+and hotkey readiness, microphone/Accessibility status, Start at Login, bundled-model
+availability, and suggested recovery steps. Exit 0 means the checks passed; exit 1 means
+something needs attention. Permission checks describe the diagnostic executable, so run
+the installed bundle rather than a bare development binary. No permission prompts appear.
+
+If the app is stopped, `open ~/Applications/Cadence.app` starts it again. Start at Login
+launches it when you log in; it does not restart it after every quit or termination.
+
+The menu's **Open Diagnostic Logs…** opens `~/.cadence/logs`. `lifecycle.json` keeps the
+current and previous session: startup time, PID, version, a heartbeat every 60 seconds,
+readiness, and a shutdown reason when available. Launch and exit events also go into
+`cadence.log`, with queued logs flushed at shutdown. Normal menu quits, application quits,
+system shutdown requests, and known startup failures are recorded. A missing shutdown
+record is reported as unexplained; it cannot distinguish crashes, force quits, SIGKILL,
+or power loss. Boot-session changes identify an intervening reboot. Sleep can delay a
+heartbeat, so an old heartbeat alone is not evidence of a hang.
+
+Lifecycle records contain no transcripts, audio, or encryption keys. `doctor` reads only
+these records and crash-report metadata, and does not read the history store or raw log
+contents. Older `cadence.log` entries can contain personal data from earlier versions;
+review them locally before sharing. Malformed or newer-format lifecycle records are
+preserved and diagnosed; logging failures never prevent dictation.
 
 The Swift layer has no XCTest (Command Line Tools do not ship it), so pure logic is covered by
 the two `selftest` subcommands above instead.

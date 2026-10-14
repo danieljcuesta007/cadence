@@ -1,6 +1,46 @@
 # STATUS — Cadence build progress
 
-Updated: 2026-07-26 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+Updated: 2026-10-14 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+
+## Lifecycle diagnostics (2026-10-14)
+
+Daniel reported Cadence down; the process was absent. Reopening restored dictation,
+confirmed by Daniel. No crash report explained the prior exit; login registration was
+enabled and the machine had not rebooted since that session started. Historical unified
+logs were inaccessible. The original exit cause remains unknown.
+
+**Implemented and installed locally:** content-free atomic `~/.cadence/logs/lifecycle.json`
+records startup, 60-second heartbeat, engine/hotkey readiness, and known shutdown reasons.
+The previous session is preserved on launch. Menu quits, app quit/logout, system shutdown
+requests and known startup failures have explicit evidence; abrupt exits remain unexplained.
+Lifecycle events go to `cadence.log`, flushed synchronously at launch/exit. Corrupt or
+unsupported records are preserved; write failures do not block dictation.
+
+`Cadence.app/Contents/MacOS/Cadence doctor` checks running processes, permissions, model,
+login registration, lifecycle history and crash metadata; returns recovery suggestions
+without reading transcripts, audio, keys, or raw log contents. **Open Diagnostic Logs…**
+is available in the menu. Recovery instructions are in README.md.
+
+**Verified:** release Swift build; 17/17 lifecycle checks, each observed failing with
+deliberate implementation faults; 37/37 existing hotkey checks. Real installed-app
+termination persisted `application_quit_or_logout` and flushed its log. While stopped,
+doctor returned 1 and suggested reopening. Relaunch preserved the previous exit; doctor
+returned 0 with engine/hotkeys ready, permissions granted, model present, login enabled.
+Installed app = 0.1.1 (build 3), stable signing requirement unchanged and signature verified.
+Real speech after this update, reboot behavior, and system shutdown notification delivery
+are not yet live-verified; pure reboot classification is regression-tested.
+
+**Git / handoff:** implementation PR #38 (`fix/lifecycle-diagnostics` → `dev`), based on
+main `a399661`. Daniel authorized publication and release through `dev` → `main` on
+14 October. Local source worktree: `~/cadence-lifecycle-diagnostics`; close-out commit
+and release state are recorded in `~/brain/memory/cadence-runtime-safety.md`. Shared
+checkout's unrelated `site/.wrangler/` files are excluded from this change. Pre-update
+rollback bundle is under the temporary directory recorded in that memory note.
+On a future outage run the installed `doctor` command before restarting.
+
+**Review correction (PR #38):** preserving an unreadable lifecycle file originally also
+skipped shutdown log flushing. The monitor now retains an in-memory session while keeping
+the original file untouched; two additional checks reproduced the fault before the fix.
 
 ## Two-key push-to-talk (2026-07-26) — the language decision, dissolved
 

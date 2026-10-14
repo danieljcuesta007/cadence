@@ -1,7 +1,7 @@
 // cadence — the macOS menu-bar shell (§25 App/, §32 Phase 1 spine).
 //
 //   cadence run [--model path | --mock "text"] [--verbatim]
-//       Menu-bar agent: hold Right-Option (or Right-Control for the second language) to
+//       Menu-bar agent: hold Right-Option (or Left-Option for the second language) to
 //       dictate into the focused field; Esc cancels.
 //
 //   cadence selftest-wav <wav> [--model path | --mock "text"] [--expect-app Name]
@@ -14,6 +14,9 @@
 //
 //   Cadence.app/Contents/MacOS/Cadence login-item [--register]
 //       Start at Login status as the system reports it, no admin needed (LoginItem.swift).
+//
+//   Cadence.app/Contents/MacOS/Cadence doctor
+//       Read-only runtime and lifecycle diagnostics; exit 0 when ready, 1 for attention.
 //
 // Default model path matches the headless tool; CADENCE_MODEL overrides.
 
@@ -95,6 +98,8 @@ func parseArgs() -> Config {
         case "selftest-hotkeys": c.mode = "selftest-hotkeys"
         case "selftest-appearance": c.mode = "selftest-appearance"
         case "login-item": c.mode = "login-item"
+        case "doctor": c.mode = "doctor"
+        case "selftest-lifecycle": c.mode = "selftest-lifecycle"
         // Only after login-item: anywhere else it would be silently ignored.
         case "--register" where c.mode == "login-item": c.register = true
         case "--out": c.outDir = it.next()
@@ -130,6 +135,10 @@ case "selftest-appearance":
     exit(runAppearanceSelftest(outDir: config.outDir))
 case "login-item":
     exit(runLoginItemCommand(register: config.register))
+case "doctor":
+    exit(runDoctor())
+case "selftest-lifecycle":
+    exit(runLifecycleSelftest())
 default:
     runApp(config) // never returns
 }
