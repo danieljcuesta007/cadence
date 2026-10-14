@@ -42,12 +42,17 @@ func runLifecycleSelftest() -> Int32 {
     do {
         let corrupt = Data("not json".utf8)
         try corrupt.write(to: url)
-        let broken = LifecycleMonitor(url: url, log: { logs.append($0) }, flush: {})
+        let beforeBroken = logs.count
+        var brokenFlushes = 0
+        let broken = LifecycleMonitor(url: url, log: { logs.append($0) }, flush: { brokenFlushes += 1 })
         broken.start(version: "test", scheduleHeartbeat: false)
         broken.heartbeat()
         broken.stop(reason: "menu_quit")
+        let brokenLogs = Array(logs.dropFirst(beforeBroken))
         check("malformed_record_preserved", try Data(contentsOf: url) == corrupt)
-        check("malformed_record_reported", logs.last?.contains("record unreadable") == true)
+        check("malformed_record_reported", brokenLogs.contains { $0.contains("record unreadable") })
+        check("malformed_record_keeps_shutdown_event", brokenLogs.contains { $0.contains("lifecycle stopped") && $0.contains("reason=menu_quit") })
+        check("malformed_record_keeps_shutdown_flush", brokenFlushes == 2)
         let blocked = url.appendingPathComponent("impossible.json")
         let failure = LifecycleMonitor(url: blocked, log: { logs.append($0) }, flush: {})
         failure.start(version: "test", scheduleHeartbeat: false)

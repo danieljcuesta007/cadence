@@ -98,9 +98,9 @@ final class LifecycleMonitor {
         case .unreadable:
             // Preserve malformed or newer-format evidence rather than overwriting it.
             failed = true
+            previous = nil
             log("lifecycle record unreadable or unsupported; preserved, recording disabled")
-            flush()
-            return
+            // Keep an in-memory session so independent launch/exit logs still work.
         }
         let session = LifecycleSession(id: UUID().uuidString, pid: pid, bootID: bootID,
             version: version, startedAt: now, heartbeatAt: now)

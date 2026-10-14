@@ -21,7 +21,7 @@ login registration, lifecycle history and crash metadata; returns recovery sugge
 without reading transcripts, audio, keys, or raw log contents. **Open Diagnostic Logs…**
 is available in the menu. Recovery instructions are in README.md.
 
-**Verified:** release Swift build; 15/15 lifecycle checks, each observed failing with
+**Verified:** release Swift build; 17/17 lifecycle checks, each observed failing with
 deliberate implementation faults; 37/37 existing hotkey checks. Real installed-app
 termination persisted `application_quit_or_logout` and flushed its log. While stopped,
 doctor returned 1 and suggested reopening. Relaunch preserved the previous exit; doctor
@@ -37,6 +37,10 @@ and release state are recorded in `~/brain/memory/cadence-runtime-safety.md`. Sh
 checkout's unrelated `site/.wrangler/` files are excluded from this change. Pre-update
 rollback bundle is under the temporary directory recorded in that memory note.
 On a future outage run the installed `doctor` command before restarting.
+
+**Review correction (PR #38):** preserving an unreadable lifecycle file originally also
+skipped shutdown log flushing. The monitor now retains an in-memory session while keeping
+the original file untouched; two additional checks reproduced the fault before the fix.
 
 ## Two-key push-to-talk (2026-07-26) — the language decision, dissolved
 
