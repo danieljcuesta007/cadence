@@ -30,13 +30,13 @@ Installed app = 0.1.1 (build 3), stable signing requirement unchanged and signat
 Real speech after this update, reboot behavior, and system shutdown notification delivery
 are not yet live-verified; pure reboot classification is regression-tested.
 
-**Git / handoff:** local branch `fix/lifecycle-diagnostics`, worktree
-`~/cadence-lifecycle-diagnostics`, based on main `a399661`. GitHub publication/release
-remains pending; do not rebuild from the older shared main checkout and overwrite the
-installed update. No changes to shared main or its unrelated `site/.wrangler/` files.
-Pre-update rollback bundle is under the temporary directory recorded in
-`~/brain/memory/cadence-runtime-safety.md`. Next: review/release this branch when authorized;
-on a future outage run the installed `doctor` command before restarting.
+**Git / handoff:** implementation PR #38 (`fix/lifecycle-diagnostics` → `dev`), based on
+main `a399661`. Daniel authorized publication and release through `dev` → `main` on
+14 October. Local source worktree: `~/cadence-lifecycle-diagnostics`; close-out commit
+and release state are recorded in `~/brain/memory/cadence-runtime-safety.md`. Shared
+checkout's unrelated `site/.wrangler/` files are excluded from this change. Pre-update
+rollback bundle is under the temporary directory recorded in that memory note.
+On a future outage run the installed `doctor` command before restarting.
 
 ## Two-key push-to-talk (2026-07-26) — the language decision, dissolved
 
