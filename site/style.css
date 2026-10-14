@@ -6,8 +6,15 @@
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,monospace;
   --gutter:clamp(16px,5vw,64px); --max:1120px;
+  /* The content cap tracks the window instead of stopping at a fixed 1120px, which left wide
+     dead margins either side on any screen wider than ~1250px (Daniel, 14 Oct: "no matter what
+     computer it's loaded in it fixes itself accordingly"). Gutters already scale, so the column
+     and the margins move together. */
   color-scheme:light dark;
 }
+@media (min-width:1300px) { :root { --max:min(1400px, calc(100vw - 2 * var(--gutter))); } }
+@media (min-width:1800px) { :root { --max:min(1640px, calc(100vw - 2 * var(--gutter))); } }
+@media (min-width:2400px) { :root { --max:min(1840px, calc(100vw - 2 * var(--gutter))); } }
 @media (prefers-color-scheme:dark) {
   :root { --bg:#111312; --bg-2:#171a18; --fg:#eef1ee; --muted:#a3aaa4; --line:#2a2f2b; --card:#181b19;
     --green:#5cb567; --green-ink:#0c1a0f; --green-soft:#1c2b1f; --pill:#f2f4f2; --pill-fg:#1c1f22; }

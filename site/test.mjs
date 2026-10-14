@@ -178,3 +178,14 @@ test('build ships exactly the reviewed files, unchanged and free of private data
     if (/\.(html|css|js)$|_headers/.test(file)) assert.doesNotMatch(built.toString(), /\/Users\/|\/private\/tmp\/|ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|@nd\.edu/);
   }
 });
+
+// Wide screens, 14 Oct: "no matter what computer it's loaded in it fixes itself accordingly."
+// A fixed 1120px column left dead margins either side of anything wider than ~1250px.
+test('the content cap tracks the window instead of stopping at a fixed width', () => {
+  assert.match(css, /--gutter:clamp\(16px,5vw,64px\); --max:1120px;/, 'the base cap is unchanged below 1300px');
+  for (const [bp, cap] of [['1300', '1400px'], ['1800', '1640px'], ['2400', '1840px']]) {
+    assert.ok(css.includes(`@media (min-width:${bp}px) { :root { --max:min(${cap}, calc(100vw - 2 * var(--gutter))); } }`),
+      `above ${bp}px the cap becomes ${cap} or the window minus its gutters`);
+  }
+  assert.match(css, /main > section > \* \{ max-width:var\(--max\)/, 'the column reads the cap, so every section follows');
+});
