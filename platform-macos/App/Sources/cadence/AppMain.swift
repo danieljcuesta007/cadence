@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     let stateMenuItem = NSMenuItem(title: "Idle", action: nil, keyEquivalent: "")
     let router = EffectRouter()
+    lazy var lifecycle = LifecycleMonitor(log: { [weak self] in self?.router.log($0) },
+                                          flush: { LogFile.flush() })
+    var terminationReason = "application_quit_or_logout"
     let overlay = OverlayHUD()
     let capture = AudioCapture()
     let hotkeys = HotkeyMonitor()
@@ -84,9 +87,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Metal atexit teardown aborts (see quit()).
     func applicationWillTerminate(_ notification: Notification) {
         engine = nil
+        lifecycle.stop(reason: terminationReason)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "dev"
+        lifecycle.start(version: "\(version) (\(build))")
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.terminationReason = "system_logout_or_shutdown_requested"
+            self?.router.log("lifecycle system logout or shutdown requested")
+            LogFile.flush()
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         renderState("idle")
 
@@ -199,6 +213,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loginItem.action = #selector(toggleStartAtLogin)
         loginItem.target = self
         menu.addItem(loginItem)
+        let logsItem = NSMenuItem(
+            title: "Open Diagnostic Logs…", action: #selector(openDiagnosticLogs), keyEquivalent: "")
+        logsItem.target = self
+        menu.addItem(logsItem)
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit Cadence", action: #selector(quit), keyEquivalent: "q"))
@@ -314,7 +332,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard granted else {
                 self.router.log(
                     "mic access denied — System Settings → Privacy & Security → Microphone")
-                exit(1)
+                DispatchQueue.main.async {
+                    self.lifecycle.stop(reason: "startup_failed_microphone_permission")
+                    exit(1)
+                }
+                return
             }
             // Pay tap-install/converter/prepare costs now, not on the first key-down (§28).
             self.capture.prewarm()
@@ -323,9 +345,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let engine = CoreEngine(backend: makeBackend(self.config)) { [weak self] json in
                     self?.router.route(json)
                 }
-                guard let engine else { exit(1) }
+                guard let engine else {
+                    DispatchQueue.main.async {
+                        self.lifecycle.stop(reason: "startup_failed_engine")
+                        exit(1)
+                    }
+                    return
+                }
                 DispatchQueue.main.async {
                     self.engine = engine
+                    self.lifecycle.ready(engine: true)
                     // Apply the primary key's language now that the engine exists (the env
                     // default is "auto"), so a dictation that starts before any key-driven
                     // switch is already pinned. Each PTT re-pins to its own key's language.
@@ -371,7 +400,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastAXTrusted: Bool?
 
     private func startHotkeysOrOnboard() {
-        if hotkeys.start() { return }
+        if hotkeys.start() {
+            lifecycle.ready(hotkeys: true)
+            router.log("permissions granted — hotkeys live")
+            return
+        }
+        lifecycle.ready(hotkeys: false)
         let opts = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(opts)
         router.log(
@@ -385,6 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             if self.hotkeys.start() {
                 timer.invalidate()
+                self.lifecycle.ready(hotkeys: true)
                 self.router.log("permissions granted — hotkeys live")
                 self.renderState("idle")
                 return
@@ -711,7 +746,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    @objc func openDiagnosticLogs() {
+        NSWorkspace.shared.open(LifecycleDiagnostics.url.deletingLastPathComponent())
+    }
+
     @objc func quit() {
+        terminationReason = "menu_quit"
         hotkeys.stop()
         capture.stop()
         // Free the engine BEFORE terminate: ggml's Metal teardown asserts in atexit

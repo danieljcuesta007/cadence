@@ -372,6 +372,10 @@ enum LogFile {
             handle?.write(Data("\(stamp.string(from: Date())) \(msg)\n".utf8))
         }
     }
+
+    static func flush() {
+        queue.sync { try? handle?.synchronize() }
+    }
 }
 
 /// Stand-in for core/store (§24): append-only JSONL so no utterance is ever unrecoverable
