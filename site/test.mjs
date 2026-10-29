@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir, access } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import { files as SHIPPED, art as ART } from './files.mjs';
 
 const pages = { 'index.html': await readFile('index.html', 'utf8'), 'legal.html': await readFile('legal.html', 'utf8') };
 const home = pages['index.html'], legal = pages['legal.html'], html = home + legal;
 const css = await readFile('style.css', 'utf8');
 const js = await readFile('site.js', 'utf8');
+const tryJs = await readFile('try.js', 'utf8');
 const headers = await readFile('_headers', 'utf8');
 const cask = await readFile('../Casks/cadence.rb', 'utf8');
-const ART = (await readdir('art')).filter(f => f.endsWith('.svg')).sort().map(f => `art/${f}`);
-const SHIPPED = ['index.html', 'legal.html', 'style.css', 'site.js', 'favicon.png', 'apple-touch-icon.png', 'icon-512.png', '_headers', ...ART];
 const OUTBOUND = /^https:\/\/(github\.com\/danieljcuesta007\/cadence(\/|$)|danielcuesta007\.com$|addisuna\.com$|skeptic\.pages\.dev$|wisprflow\.ai\/(pricing|privacy)$|superwhisper\.com$|support\.apple\.com\/)/;
 
 test('internal links and fragments resolve, IDs are unique per page', () => {
@@ -209,7 +209,129 @@ test('the riso art is self-contained and works under the strict policy', async (
   assert.ok(home.includes('src="art/mark.svg"') && legal.includes('src="art/mark.svg"'), 'both pages carry the mark');
   assert.match(css, /--red-text:#b02d18;/, 'small red text uses the AA red');
   // White, not cream (Daniel, 29 Oct): the paper and every print card are pure white.
-  assert.match(css, /--paper:#ffffff;/); assert.match(css, /--print:#ffffff;/); assert.match(css, /--card:#ffffff;/);
+  assert.match(css, /--paper:#ffffff;/); assert.match(css, /--card:#ffffff;/);
+  // Illustration cards may be a breath warmer than the page, never actual cream.
+  assert.match(css, /--print:#fdfaf3;/);
   assert.doesNotMatch(css + home + legal, /#f3ecdc|#ebe2cc|#fbf7ee/i, 'no cream left anywhere');
   assert.match(css, /--blue:#2443c4;/); assert.match(css, /--pink:#f2a2bf;/); assert.match(css, /--red:#ec4a32;/);
+});
+
+// 29 Oct: "we just want to highlight DC Labs, not necessarily the use of AI."
+test('credits name DC Labs, never "with Claude"', () => {
+  assert.doesNotMatch(html, /with(&nbsp;|\s| )Claude/i);
+  assert.match(home, /Built by Daniel Cuesta at DC&nbsp;Labs\./);
+});
+
+// 29 Oct: "more textured like papery … the site itself I still want in the textured white paper look."
+test('the white is textured paper on every surface', async () => {
+  const paper = await readFile('paper.svg', 'utf8');
+  assert.match(paper, /feTurbulence[^>]*stitchTiles="stitch"/, 'the texture tiles without seams');
+  assert.doesNotMatch(paper, /<script|\sstyle=|https?:\/\/(?!www\.w3\.org\/2000\/svg)/);
+  assert.match(css, /--texture:url\(paper\.svg\); --print-texture:url\(paper\.svg\);/);
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const lists = [...bare.matchAll(/([^{}]+)\{ background-image:var\(--(?:print-)?texture\); background-size:320px; \}/g)].map(m => m[1].split(',').map(s => s.trim()));
+  const textured = new Set(lists.flat());
+  assert.ok(textured.has('body') && textured.has('.print'), 'the page and the prints are paper');
+  for (const [, sel] of bare.matchAll(/([^{}@]+)\{[^}]*background:var\(--(?:paper|card|paper-2|print)\)/g))
+    for (const s of sel.split(',').map(x => x.trim())) assert.ok(textured.has(s), `${s} is a paper surface without the texture`);
+});
+
+test('try.js: no network, storage or recording; the microphone is optional', () => {
+  assert.doesNotMatch(tryJs, /fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|indexedDB|MediaRecorder|https?:\/\/|\.destination/);
+  assert.match(headers, /Permissions-Policy: camera=\(\), microphone=\(self\), geolocation=\(\)/, 'microphone for this site only, camera and location still off');
+  assert.match(home, /nothing is recorded, saved or sent/);
+  assert.match(home, /data-orb-toggle[^>]*hidden/, 'no button until the script knows a microphone could work');
+});
+
+function loadTry() { const ctx = {}; runInNewContext(tryJs, ctx); return ctx; }
+
+test('voice level is boosted RMS, clamped to 1; the orb only turns while it hears you', () => {
+  const { voiceLevel, orbMotion } = loadTry();
+  assert.equal(voiceLevel(new Uint8Array(8), 1.5), 0);
+  assert.equal(voiceLevel(null, 1.5), 0);
+  assert.ok(Math.abs(voiceLevel(new Uint8Array(4).fill(51), 1.5) - 0.9) < 1e-9, 'RMS 0.2 x 1.5 x 3');
+  assert.equal(voiceLevel(new Uint8Array(4).fill(255), 1.5), 1);
+  const s = { rot: 0, hover: 0, hoverIntensity: 0 };
+  orbMotion(s, 0.04, 1, 1.2, 0.8); assert.equal(s.rot, 0, 'silence does not spin');
+  orbMotion(s, 0.5, 1, 1.2, 0.8); assert.ok(Math.abs(s.rot - 1.5) < 1e-9); assert.equal(s.hover, 1); assert.ok(Math.abs(s.hoverIntensity - 0.32) < 1e-9);
+});
+
+function fakeTry({ grant = true, withOrb = false, hold = false, level = 51 } = {}) {
+  const calls = { getUserMedia: 0, stopped: 0, closed: 0, order: [], frames: 0 };
+  let release, lost; const loud = { value: level };
+  const el = () => ({ textContent: '', hidden: true, disabled: false, attrs: {}, classes: new Set(), listeners: {},
+    setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this.listeners[t] = f; }, classList: null, querySelector: () => null });
+  const button = el(), status = el(), root = el(), title = el();
+  for (const e of [root, title]) e.classList = { add: c => e.classes.add(c) };
+  const doc = { querySelector: s => ({ '[data-orb]': root, '[data-orb-toggle]': button, '[data-orb-status]': status })[s] || null,
+    querySelectorAll: s => s === '.scribble-title' ? [title] : [] };
+  const stream = { getTracks: () => [{ stop: () => calls.stopped++ }] };
+  const mediaDevices = { getUserMedia: async () => { calls.getUserMedia++; calls.order.push('getUserMedia'); if (!grant) throw new Error('denied');
+    if (hold) await new Promise(r => { release = r; }); return stream; } };
+  class AudioContext { constructor() { this.state = 'running'; calls.order.push('AudioContext'); }
+    createAnalyser() { return { frequencyBinCount: 4, getByteFrequencyData(b) { b.fill(loud.value); } }; }
+    createMediaStreamSource() { return { connect() {}, disconnect() {} }; } close() { calls.closed++; this.state = 'closed'; } }
+  let hide; const frames = [];
+  const ctx = loadTry();
+  const createOrb = withOrb ? (canvas, onLost) => { lost = onLost; return { frame() { calls.frames++; } }; } : () => null;
+  root.querySelector = s => s === 'canvas' ? {} : null;
+  const api = ctx.initTry(doc, { createOrb, createListener: ctx.createListener, mediaDevices, AudioContext,
+    raf: fn => frames.push(fn), IntersectionObserver: null, reducedMotion: false, onHide: fn => { hide = fn; } });
+  return { api, calls, button, status, root, title, frames, loud, hide: () => hide(), grantNow: () => release(), loseContext: () => lost() };
+}
+
+test('the microphone opens only from the button, and Stop or leaving gives it back', async () => {
+  const t = fakeTry();
+  assert.equal(t.calls.getUserMedia, 0, 'nothing asks for the microphone on load');
+  assert.equal(t.button.hidden, false, 'the button shows when a microphone could work');
+  assert.ok(t.root.classes.has('no-webgl'), 'no WebGL falls back to the still illustration');
+  assert.ok(t.title.classes.has('drawn'), 'without IntersectionObserver the loop is simply drawn');
+  await t.button.listeners.click();
+  assert.equal(t.calls.getUserMedia, 1);
+  assert.equal(t.button.attrs['aria-pressed'], 'true'); assert.equal(t.button.textContent, 'Stop listening');
+  t.frames.at(-1)(16); assert.equal(t.status.textContent, 'Hearing you.', 'loud input is announced once');
+  await t.button.listeners.click();
+  assert.equal(t.calls.stopped, 1, 'the track is stopped'); assert.equal(t.calls.closed, 1, 'the audio context is closed');
+  assert.equal(t.button.attrs['aria-pressed'], 'false'); assert.equal(t.status.textContent, 'Microphone off.');
+  await t.button.listeners.click(); t.hide();
+  assert.equal(t.calls.stopped, 2, 'leaving the page releases the microphone too');
+});
+
+test('a refused microphone leaves the orb breathing and says so', async () => {
+  const t = fakeTry({ grant: false });
+  await t.button.listeners.click();
+  assert.match(t.status.textContent, /No microphone was shared/);
+  assert.equal(t.button.attrs['aria-pressed'], undefined); assert.equal(t.button.disabled, false);
+  assert.equal(t.api.listener.listening, false);
+});
+
+test('hiding the page while the permission prompt is open cancels the microphone', async () => {
+  const t = fakeTry({ hold: true });
+  const click = t.button.listeners.click();
+  assert.deepEqual(t.calls.order, ['AudioContext', 'getUserMedia'], 'audio is set up inside the click, before the first await (Safari)');
+  t.hide(); t.grantNow(); await click;
+  assert.equal(t.calls.stopped, 1, 'the late stream is stopped at once');
+  assert.equal(t.api.listener.listening, false);
+  assert.equal(t.button.attrs['aria-pressed'], 'false'); assert.doesNotMatch(t.status.textContent, /No microphone/);
+});
+
+test('frames run only when there is something to show', async () => {
+  const none = fakeTry();
+  assert.equal(none.frames.length, 0, 'no orb and no microphone: no animation loop at all');
+  await none.button.listeners.click();
+  assert.equal(none.frames.length, 1, 'a live microphone runs the loop for the status line');
+  const orb = fakeTry({ withOrb: true });
+  assert.equal(orb.frames.length, 1, 'an orb on screen animates');
+  orb.loseContext();
+  assert.ok(orb.root.classes.has('no-webgl'), 'a lost WebGL context falls back to the still art');
+  orb.frames.at(-1)(16); assert.equal(orb.calls.frames, 0, 'and nothing draws to the dead context');
+});
+
+test('the status line does not chatter between syllables', async () => {
+  const t = fakeTry();
+  await t.button.listeners.click();
+  t.frames.at(-1)(100); assert.equal(t.status.textContent, 'Hearing you.');
+  t.loud.value = 0;
+  t.frames.at(-1)(900); assert.equal(t.status.textContent, 'Hearing you.', 'a short pause keeps the message');
+  t.frames.at(-1)(1700); assert.equal(t.status.textContent, 'Listening. Say something.', '1.5 s of quiet goes back');
 });
