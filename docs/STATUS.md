@@ -40,7 +40,7 @@ verified, and restarted. Shared dirty Command Center source checkout remains
 untouched; reviewed source stays in `~/ai-search-tracker-cadence-brand`.
 
 Real speech/first-install manual acceptance remains outstanding; preserve the
-original backup apps. Homepage brand-line exploration is unchanged.
+original backup apps. Brand voice was subsequently approved; see the current brand-voice checkpoint above.
 
 ## Waveform-only widget mark (2026-10-29)
 
@@ -52,7 +52,7 @@ DMG SHA-256 `63e315ea93b98916ac648cd7b1d70ad8cfe885bdf94ba031f3dea38cf57c31c1`.
 Existing Vitals change shipped through #211/#212; rebuilt and activated with
 the same stable signer. App icon's white plate remains unchanged (widget-only
 request). Original rollback apps remain pending Daniel's real dictation.
-Homepage brand-line options are under discussion; no copy change made.
+At this release, homepage brand-line options were still under discussion; the subsequent brand-voice checkpoint records the approved direction.
 
 ## Desktop widget and v0.1.2 release (2026-10-29)
 
