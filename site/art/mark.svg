@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="t">
-  <title id="t">Cadence mark: five bars of a voice level, the tallest in red</title>
+  <title id="t">Cadence mark: five bars of a voice level in pink and cobalt, the tallest in red</title>
+  <!-- No background ink: the mark sits on white paper. Pink, cobalt and red are the bars themselves. -->
   <defs>
     <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
       <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
@@ -8,15 +9,15 @@
     </filter>
   </defs>
   <g filter="url(#grain)">
-  <g fill="#F2A2BF" transform="translate(5 4)">
-    <rect x="24" y="24" width="192" height="192" rx="48"/>
+  <g fill="none" stroke="#2443C4" stroke-linecap="round" stroke-width="22">
+    <path d="M91 78 V162 M149 78 V162"/>
   </g>
-  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round">
-    <rect x="111" y="56" width="18" height="128" rx="9" stroke="none"/>
+  <g fill="none" stroke="#F2A2BF" stroke-linecap="round" stroke-width="22">
+    <path d="M62 102 V138 M178 102 V138"/>
   </g>
-  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="24" y="24" width="192" height="192" rx="48"/>
-    <path d="M64 100 V140 M92 80 V160 M148 80 V160 M176 100 V140" stroke-width="18"/>
+  <g fill="none" stroke="#EC4A32" stroke-linecap="round" stroke-width="22">
+    <path d="M120 54 V186"/>
   </g>
+  <rect x="24" y="24" width="192" height="192" rx="52" fill="none" stroke="#2443C4" stroke-width="7"/>
   </g>
 </svg>

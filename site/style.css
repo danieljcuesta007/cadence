@@ -11,6 +11,7 @@
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,monospace;
   --gutter:clamp(16px,5vw,64px); --max:1120px;
+  --section:clamp(64px,8vw,112px);
   /* The content cap tracks the window instead of stopping at a fixed 1120px, which left wide
      dead margins either side on any screen wider than ~1250px (Daniel, 14 Oct: "no matter what
      computer it's loaded in it fixes itself accordingly"). Gutters already scale, so the column
@@ -51,23 +52,23 @@ code { font-size:.88em; }
 .site-header .nav-cta { color:var(--blue-ink); background:var(--blue); padding:0 18px; border-radius:999px; box-shadow:3px 3px 0 var(--pink); }
 .site-header .nav-cta:hover { color:var(--blue-ink); transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--pink); }
 
-main > section { padding:clamp(72px,10vw,128px) var(--gutter); }
+main > section { padding:var(--section) var(--gutter); }
 main > section > * { max-width:var(--max); margin-left:auto; margin-right:auto; }
 .kicker,.eyebrow { font:700 12px/1.4 var(--sans); letter-spacing:.24em; text-transform:uppercase; color:var(--red-text); margin-top:0; margin-bottom:16px; }
 h1,h2,h3 { margin:0; line-height:1.05; color:var(--blue); }
-h2 { font:700 clamp(36px,5.2vw,64px)/1.02 var(--serif); letter-spacing:-.02em; text-wrap:balance; margin-bottom:clamp(28px,4vw,48px); }
+h2 { font:700 clamp(34px,4.6vw,60px)/1.04 var(--serif); letter-spacing:-.02em; text-wrap:balance; margin-bottom:clamp(24px,3.4vw,44px); }
 h3 { font:700 21px/1.25 var(--serif); }
 .section-lede { color:var(--muted); font-size:19px; padding-right:max(0px,calc(100% - 60ch)); margin-top:-24px; margin-bottom:36px; }
 .caption { color:var(--muted); font-size:14px; margin-top:20px; }
 
 /* Hero */
-.hero { padding-top:clamp(48px,7vw,96px) !important; padding-bottom:clamp(56px,7vw,96px) !important; }
+.hero { padding-top:clamp(36px,5vw,72px) !important; }
 .hero-grid { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:clamp(32px,5vw,72px); align-items:center; }
-.hero h1 { font:700 clamp(48px,6vw,92px)/.96 var(--serif); letter-spacing:-.035em; }
+.hero h1 { font:700 clamp(38px,6vw,92px)/.96 var(--serif); letter-spacing:-.035em; }
 .hero h1 span { display:inline-block; margin-top:.12em; font-style:italic; font-weight:500; font-size:.62em; letter-spacing:-.02em; color:var(--red-text); }
 .lede { font-size:clamp(18px,1.7vw,21px); color:var(--muted); max-width:52ch; margin:26px 0 34px; }
 .hero-actions { display:flex; gap:14px; flex-wrap:wrap; }
-.hero-art { padding:clamp(8px,1.4vw,16px); transform:rotate(1.2deg); }
+.hero-art { padding:clamp(8px,1.4vw,16px); transform:rotate(1.2deg); width:100%; max-width:620px; justify-self:end; }
 .button { display:inline-flex; align-items:center; justify-content:center; min-height:52px; padding:0 26px; border-radius:999px;
   background:var(--blue); color:var(--blue-ink); font:700 16px/1 var(--sans); text-decoration:none; border:2px solid var(--blue); box-shadow:4px 4px 0 var(--pink); transition:transform .12s, box-shadow .12s; }
 .button:hover { transform:translate(-2px,-2px); box-shadow:6px 6px 0 var(--pink); }
@@ -76,13 +77,13 @@ h3 { font:700 21px/1.25 var(--serif); }
 .button.ghost:hover { background:var(--pink-soft); box-shadow:none; transform:none; }
 
 /* Hero demo: a note window and the dictation pill */
-.demo { position:relative; margin-top:clamp(56px,7vw,88px) !important; max-width:820px !important; }
+.demo { position:relative; margin-top:clamp(40px,5vw,72px) !important; max-width:1180px !important; }
 .window { background:var(--card); border:2px solid var(--blue); border-radius:16px; text-align:left; box-shadow:8px 8px 0 var(--pink); }
 .window-bar { display:flex; gap:8px; align-items:center; padding:12px 14px; border-bottom:2px solid var(--blue); }
 .window-bar span { width:11px; height:11px; border-radius:50%; border:2px solid var(--blue); }
 .window-bar span:first-child { background:var(--red); border-color:var(--red); }
 .window-bar p { margin:0 auto; font:600 12px/1 var(--sans); letter-spacing:.16em; text-transform:uppercase; color:var(--muted); transform:translateX(-24px); }
-.typed { margin:0; padding:28px clamp(18px,4vw,36px) 72px; font:clamp(18px,2.1vw,24px)/1.55 var(--serif); color:var(--ink); min-height:190px; }
+.typed { margin:0; padding:26px clamp(18px,3.4vw,34px) 64px; font:clamp(18px,2.1vw,24px)/1.55 var(--serif); color:var(--ink); min-height:190px; }
 .typed .w { opacity:0; animation:word .25s ease-out forwards; }
 .caret { display:inline-block; width:3px; height:1.1em; margin-left:3px; vertical-align:-.15em; background:var(--red); animation:blink 1s steps(1) infinite; }
 .pill { position:absolute; left:50%; bottom:-22px; transform:translateX(-50%); display:flex; align-items:center; gap:10px;
@@ -99,30 +100,32 @@ h3 { font:700 21px/1.25 var(--serif); }
 @keyframes word { from { opacity:0; filter:blur(3px); } to { opacity:1; filter:none; } }
 @keyframes blink { 50% { opacity:0; } }
 
-/* Try it: a hand-drawn loop around the title, then the voice orb */
-.scribble-title { position:relative; max-width:880px !important; padding:clamp(48px,7vw,84px) 0; }
-.try { text-align:center; overflow:clip; padding-top:clamp(24px,4vw,56px) !important; }
-.scribble { position:absolute; inset:-2% -9%; width:118%; height:104%; overflow:visible; pointer-events:none; }
-.scribble path { fill:none; stroke:var(--red); stroke-width:12; stroke-linecap:round; stroke-linejoin:round; opacity:.9; stroke-dasharray:1 2; stroke-dashoffset:0; }
-.scribble-title > :not(svg) { position:relative; }
-.scribble-title h2 { font-size:clamp(40px,5.4vw,72px); margin-bottom:12px; }
-.scribble-sub { margin:0 auto; max-width:40ch; color:var(--muted); font-size:clamp(17px,1.8vw,21px); }
-/* 1.05 with a gap of 2: the round cap sits fully inside the gap, so no stray dot before the draw */
-.scribble-title.armed .scribble path { stroke-dashoffset:1.05; }
-.scribble-title.armed h2 { opacity:0; transform:translateY(20px); }
-.scribble-title.armed .scribble-sub { opacity:0; }
-.scribble-title.drawn .scribble path { animation:draw 2.5s cubic-bezier(.43,.13,.23,.96) forwards; }
-.scribble-title.drawn h2 { opacity:1; transform:none; transition:opacity .8s .5s, transform .8s .5s; }
-.scribble-title.drawn .scribble-sub { opacity:1; transition:opacity .8s 1s; }
+/* The loop: a red pencil circle drawn once around "Nothing leaves your Mac." (stretches to the line) */
+.hero h1 .circled { position:relative; display:inline-block; padding:.08em .22em; margin-left:-.22em; }
+.scribble { position:absolute; left:-18%; top:-34%; width:140%; height:168%; overflow:visible; pointer-events:none; }
+.scribble path { fill:none; stroke:var(--red); stroke-width:4.5px; stroke-linecap:round; stroke-linejoin:round; opacity:.92; }
+/* try.js measures the on-screen length into --loop. Gap of 2 and offset 1.05: the round cap
+   sits fully inside the gap, so no stray dot before the draw. Without JS the loop is just drawn. */
+.circled.armed .scribble path { stroke-dasharray:var(--loop) calc(var(--loop) * 2); stroke-dashoffset:calc(var(--loop) * 1.05); }
+.circled.drawn .scribble path { animation:draw 2.5s .4s cubic-bezier(.43,.13,.23,.96) forwards; }
 @keyframes draw { to { stroke-dashoffset:0; } }
-.try-stage { display:flex; flex-direction:column; align-items:center; gap:18px; margin-top:clamp(12px,3vw,32px) !important; }
-.orb-card { position:relative; width:min(420px,100%); aspect-ratio:1; overflow:hidden; display:grid; place-items:center; }
+
+/* Live demo: the Notes window and the orb side by side, the controls underneath */
+.demo-grid { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:clamp(18px,2.4vw,32px); align-items:stretch; }
+.demo-note { position:relative; display:flex; }
+.demo-note .window { flex:1; }
+.orb-card { position:relative; min-height:240px; overflow:hidden; display:grid; place-items:center; }
 .orb-card canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
-.orb-fallback { display:none; width:60%; }
+.orb-fallback { display:none; width:min(60%,200px); }
 .orb-card.no-webgl canvas { display:none; }
 .orb-card.no-webgl .orb-fallback { display:block; }
-.orb-status { min-height:1.6em; margin:0; font:italic 600 19px/1.4 var(--serif); color:var(--blue); }
-.orb-note { max-width:52ch; margin:0; }
+.demo-controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; margin-top:44px; }
+.orb-status { margin:0; font:italic 600 18px/1.4 var(--serif); color:var(--blue); }
+.orb-status:empty { display:none; }
+.orb-note { flex-basis:100%; max-width:68ch; margin:0; }
+/* Typing along: while the mic is live, words appear only as you speak */
+.typed.live .w { animation:none; opacity:0; transition:opacity .18s ease-out; }
+.typed.live .w.on { opacity:1; }
 [hidden] { display:none !important; }
 
 /* Steps */
@@ -136,11 +139,13 @@ h3 { font:700 21px/1.25 var(--serif); }
 kbd { display:inline-flex; align-items:center; min-height:28px; padding:0 8px; margin-right:3px; border:2px solid var(--blue); border-bottom-width:4px; border-radius:8px; background:var(--card); color:var(--blue); font:700 13px/1 var(--sans); }
 
 /* Features */
-.feature-grid { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.feature-grid { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:18px; }
+.feature-grid li { grid-column:span 2; }
+.feature-grid li:nth-child(2),.feature-grid li:nth-child(3) { grid-column:span 3; }
 .feature-grid li { border:2px solid var(--blue); border-radius:22px; padding:28px; background:var(--card); }
 .feature-grid p { color:var(--muted); margin:10px 0 0; }
 .feature-art .spot { width:96px; height:96px; margin-bottom:18px; }
-.feature-lead { grid-column:span 3; display:grid; grid-template-columns:auto minmax(0,1fr); gap:clamp(20px,4vw,44px); align-items:center;
+.feature-lead { grid-column:1 / -1 !important; display:grid; grid-template-columns:auto minmax(0,1fr); gap:clamp(20px,4vw,44px); align-items:center;
   background:var(--blue) !important; color:var(--blue-ink); padding:clamp(24px,4vw,44px) !important; box-shadow:8px 8px 0 var(--pink); }
 .lead-art { width:clamp(120px,16vw,200px); height:auto; background:var(--print); border-radius:20px; }
 .feature-lead h3 { font-size:clamp(28px,3.2vw,38px); color:var(--blue-ink); }
@@ -215,31 +220,36 @@ pre { background:var(--paper); border:2px dashed var(--line); border-radius:12px
 .doc-date { font-size:13px; color:var(--muted); }
 
 /* Paper: one list of every surface that carries the texture. Prints keep theirs in night mode. */
-body,pre,.window,.steps-band,.steps li,kbd,.feature-grid li,.compare,.table-wrap,.download-card,.copy,.creator,.creator-card,.site-footer { background-image:var(--texture); background-size:320px; }
+body,.site-header,pre,.window,.steps-band,.steps li,kbd,.feature-grid li,.compare,.table-wrap,.download-card,.copy,.creator,.creator-card,.site-footer { background-image:var(--texture); background-size:320px; }
 .print,.spot,.lead-art,.brand img,.footer-brand img { background-image:var(--print-texture); background-size:320px; }
 
 @media (max-width:900px) {
   .hero-grid,.steps,.download-grid,.creator-card,.site-footer { grid-template-columns:minmax(0,1fr); }
   .hero-art { max-width:520px; }
   .feature-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .feature-lead { grid-column:span 2; }
+  .feature-grid li,.feature-grid li:nth-child(2),.feature-grid li:nth-child(3) { grid-column:span 1; }
+  .demo-grid { grid-template-columns:minmax(0,1fr); row-gap:44px; }
+  .orb-card { min-height:0; aspect-ratio:16 / 9; }
+  .hero-art { justify-self:center; }
   .site-footer nav { justify-content:flex-start; }
 }
-@media (max-width:560px) {
+@media (max-width:760px) {
   .site-header nav a:not(.nav-cta) { display:none; }
-  .feature-grid { grid-template-columns:minmax(0,1fr); }
-  .feature-lead { grid-column:auto; grid-template-columns:minmax(0,1fr); }
-  .pill-label { display:none; }
-  .hero-art { transform:none; }
-  .scribble-title { padding:56px 0; }
-  .scribble-sub { max-width:24ch; font-size:16px; }
 }
+@media (max-width:560px) {
+  .feature-grid { grid-template-columns:minmax(0,1fr); }
+  .feature-lead { grid-template-columns:minmax(0,1fr); }
+  .orb-card { aspect-ratio:4 / 3; }
+  .pill-label { display:none; }
+  .hero h1 { font-size:clamp(34px,10.4vw,48px); }
+  .hero-art { transform:none; }
+  }
 @media (prefers-reduced-motion:reduce) {
   html { scroll-behavior:auto; }
   .typed .w { animation:none; opacity:1; }
   .caret,.bars i { animation:none; }
   .button { transition:none; }
-  .scribble-title.drawn .scribble path { animation:none; stroke-dashoffset:0; }
-  .scribble-title.drawn h2,.scribble-title.drawn .scribble-sub { transition:none; }
+  .circled.drawn .scribble path { animation:none; stroke-dashoffset:0; }
+  .typed.live .w { transition:none; }
   .button:hover,.button:active,.site-header .nav-cta:hover { transform:none; }
 }

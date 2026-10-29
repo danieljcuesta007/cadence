@@ -217,9 +217,10 @@ test('the riso art is self-contained and works under the strict policy', async (
 });
 
 // 29 Oct: "we just want to highlight DC Labs, not necessarily the use of AI."
-test('credits name DC Labs, never "with Claude"', () => {
+test('every page credits "Built by DC Labs, a Daniel J. Cuesta company", never "with Claude"', () => {
   assert.doesNotMatch(html, /with(&nbsp;|\s| )Claude/i);
-  assert.match(home, /Built by Daniel Cuesta at DC&nbsp;Labs\./);
+  // 29 Oct: one credit line for every DC Labs product.
+  for (const page of [home, legal]) assert.match(page, /Built by DC Labs, a Daniel J\. Cuesta company\./);
 });
 
 // 29 Oct: "more textured like papery … the site itself I still want in the textured white paper look."
@@ -239,7 +240,7 @@ test('the white is textured paper on every surface', async () => {
 test('try.js: no network, storage or recording; the microphone is optional', () => {
   assert.doesNotMatch(tryJs, /fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|indexedDB|MediaRecorder|https?:\/\/|\.destination/);
   assert.match(headers, /Permissions-Policy: camera=\(\), microphone=\(self\), geolocation=\(\)/, 'microphone for this site only, camera and location still off');
-  assert.match(home, /nothing is recorded, saved or sent/);
+  assert.match(home, /nothing is recorded, saved or sent/i);
   assert.match(home, /data-orb-toggle[^>]*hidden/, 'no button until the script knows a microphone could work');
 });
 
@@ -264,7 +265,7 @@ function fakeTry({ grant = true, withOrb = false, hold = false, level = 51 } = {
   const button = el(), status = el(), root = el(), title = el();
   for (const e of [root, title]) e.classList = { add: c => e.classes.add(c) };
   const doc = { querySelector: s => ({ '[data-orb]': root, '[data-orb-toggle]': button, '[data-orb-status]': status })[s] || null,
-    querySelectorAll: s => s === '.scribble-title' ? [title] : [] };
+    querySelectorAll: s => s === '.circled' ? [title] : [] };
   const stream = { getTracks: () => [{ stop: () => calls.stopped++ }] };
   const mediaDevices = { getUserMedia: async () => { calls.getUserMedia++; calls.order.push('getUserMedia'); if (!grant) throw new Error('denied');
     if (hold) await new Promise(r => { release = r; }); return stream; } };
@@ -333,5 +334,25 @@ test('the status line does not chatter between syllables', async () => {
   t.frames.at(-1)(100); assert.equal(t.status.textContent, 'Hearing you.');
   t.loud.value = 0;
   t.frames.at(-1)(900); assert.equal(t.status.textContent, 'Hearing you.', 'a short pause keeps the message');
-  t.frames.at(-1)(1700); assert.equal(t.status.textContent, 'Listening. Say something.', '1.5 s of quiet goes back');
+  t.frames.at(-1)(1700); assert.equal(t.status.textContent, 'Listening. Say something, and watch the note.', '1.5 s of quiet goes back');
+});
+
+test('the note types one word per stretch of voice, and starts over after a quiet finish', () => {
+  const { typeAlong } = loadTry();
+  const n = { voiced: 0, quiet: 0, shown: 0 };
+  typeAlong(n, 0.5, 0.4, 3); assert.equal(n.shown, 2, '0.4 s of voice is two words');
+  typeAlong(n, 0.0, 1.0, 3); assert.equal(n.shown, 2, 'silence types nothing');
+  typeAlong(n, 0.5, 0.2, 3); assert.equal(n.shown, 3);
+  typeAlong(n, 0.5, 1.0, 3); assert.equal(n.shown, 3, 'never past the last word');
+  typeAlong(n, 0.0, 2.5, 3); assert.equal(n.shown, 0, 'a finished note clears after 2 s of quiet');
+});
+
+test('the stretched loop is measured on screen, so its draw is a full line, not dots', () => {
+  const { loopLength } = loadTry();
+  // A straight 1200-unit line across a 600 px wide box is 600 px on screen.
+  const path = { getTotalLength: () => 1200, getPointAtLength: l => ({ x: l, y: 0 }) };
+  assert.ok(Math.abs(loopLength(path, { width: 600, height: 100 }, 1200, 600) - 600) < 1e-6);
+  const tall = { getTotalLength: () => 600, getPointAtLength: l => ({ x: 0, y: l }) };
+  assert.ok(Math.abs(loopLength(tall, { width: 600, height: 100 }, 1200, 600) - 100) < 1e-6, 'vertical runs scale by the height');
+  assert.match(css, /stroke-dasharray:var\(--loop\)/);
 });
