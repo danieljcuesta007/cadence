@@ -105,6 +105,7 @@ public final class HotkeyMonitor {
     private static let kRightOption: Int64 = 61
     private static let kLeftOption: Int64 = 58
     private static let kEscape: Int64 = 53
+    private static let kReturn: Int64 = 36
     private static let kZ: Int64 = 6
     private static let kV: Int64 = 9
     /// Device-dependent modifier bits (IOLLEvent.h). The general .maskAlternate cannot tell
@@ -170,7 +171,8 @@ public final class HotkeyMonitor {
         }
         // Typing while a PTT is held is not speech — it is ⌥e for an accent, or a shortcut.
         // Retract rather than transcribe silence. Esc above has already been handled.
-        if type == .keyDown, arbiter.held != nil {
+        // Return (36) is excluded: hitting it by accident must not cancel a dictation.
+        if type == .keyDown, arbiter.held != nil, keyCode != Self.kReturn {
             fire(arbiter.retract())
         }
         let repeating = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
