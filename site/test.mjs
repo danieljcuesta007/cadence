@@ -201,12 +201,12 @@ test('the riso art is self-contained and works under the strict policy', async (
     assert.doesNotMatch(svg, /<script|\sstyle=|<style|\son[a-z]+=|https?:\/\/(?!www\.w3\.org\/2000\/svg)/, `${file} has no script, inline CSS or remote reference`);
     const paints = [...svg.matchAll(/\b(?:fill|stroke|stop-color|flood-color|color)="([^"]+)"/g)].map(m => m[1]);
     assert.ok(paints.length, `${file} paints something`);
-    for (const paint of paints) assert.ok(['#2443C4', '#F2A2BF', '#EC4A32', 'NONE'].includes(paint.toUpperCase()), `${file}: ${paint} is not a Cadence ink`);
+    for (const paint of paints) assert.ok(['#2443C4', '#5CB567', '#EC4A32', 'NONE'].includes(paint.toUpperCase()), `${file}: ${paint} is not a Cadence ink`);
     assert.doesNotMatch(svg, /rgba?\(|hsla?\(/, `${file} uses hex inks only`);
     assert.equal((svg.match(/filter="url\(#grain\)"/g) || []).length, 1, `${file} runs the grain once`);
   }
   for (const file of ART.filter(f => !f.endsWith('mark.svg'))) assert.ok(home.includes(`src="${file}"`), `${file} is on the home page`);
   assert.ok(home.includes('src="art/mark.svg"') && legal.includes('src="art/mark.svg"'), 'both pages carry the mark');
   assert.match(css, /--red-text:#b02d18;/, 'small red text uses the AA red');
-  assert.match(css, /--blue:#2443c4;/); assert.match(css, /--pink:#f2a2bf;/); assert.match(css, /--red:#ec4a32;/);
+  assert.match(css, /--blue:#2443c4;/); assert.match(css, /--green:#5cb567;/); assert.match(css, /--red:#ec4a32;/);
 });

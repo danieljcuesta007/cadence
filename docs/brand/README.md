@@ -1,9 +1,9 @@
 # Cadence brand, v1 (riso)
 
-Cadence looks like a risograph print: two inks on cream paper, drawn with one confident
+Cadence looks like a risograph print: two inks on cream paper (cobalt and Cadence green), drawn with one confident
 line. It's warm, a little handmade and a little off-register. That suits a tool about your
 own voice, and it sets Cadence apart from the glossy gradients every other dictation app uses.
-Adopted 29 Oct 2026, when Daniel picked the riso direction for Cadence marketing.
+Adopted 29 Oct 2026, when Daniel picked the riso direction for Cadence marketing. The fill ink is Cadence green rather than the reference's pink, so the brand keeps the green the app already uses.
 
 The source files live in [`site/art/`](../../site/art/), the one place the site and this
 guide both read from. Don't copy them anywhere else.
@@ -18,7 +18,7 @@ One paper and three inks. The art is printed only in the three inks, and the pap
 | --- | --- | --- |
 | Paper | `#F3ECDC` | Background, and the card behind every illustration |
 | Cobalt | `#2443C4` | Line work, headings, buttons. The main ink |
-| Pink | `#F2A2BF` | Fills, and the offset "plate" shadow behind cards and buttons |
+| Green | `#5CB567` | Fills, and the offset "plate" shadow behind cards and buttons. The app's own green, so the site, the app and the icon share one colour |
 | Red | `#EC4A32` | The spot colour: one accent per view (mouth, caret, peak bar) |
 
 Small red **text** (labels, kickers) uses the deeper `#B02D18`, because bright red on cream
@@ -30,10 +30,10 @@ pinned to a dark wall.
 
 ## Rules for the art
 
-- **Two plates.** The pink plate prints first and sits slightly off register (about 5px
+- **Two plates.** The green plate prints first and sits slightly off register (about 5px
   down-right). Cobalt line work prints over it, and red is used sparingly.
 - **Line.** One weight per drawing (6–7 at the drawing's scale), with round caps and joins.
-  There are no gradients and no outlines on the pink.
+  There are no gradients and no outlines on the green.
 - **Grain.** Every ink carries the same speckle filter (`#grain`, fractal noise, seed 7),
   so the colour looks pressed into the paper rather than flat. Apply it once, on one group
   that wraps the whole drawing.

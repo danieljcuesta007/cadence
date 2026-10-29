@@ -8,7 +8,7 @@
     </filter>
   </defs>
   <g filter="url(#grain)">
-  <g fill="#F2A2BF" transform="translate(5 4)">
+  <g fill="#5CB567" transform="translate(5 4)">
     <rect x="40" y="132" width="160" height="78" rx="16"/>
     <rect x="100" y="-24" width="92" height="84" rx="28"/>
     <path d="M114 50 H146 V100 C146 112 138 118 130 118 C121 118 114 112 114 100 Z"/>

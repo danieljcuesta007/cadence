@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="60 70 540 480" role="img" aria-labelledby="t">
   <title id="t">A radio announcer speaks into a vintage microphone, and the words leave it as a line of type</title>
-  <!-- Cadence riso set. Two inks over paper: cobalt #2443C4 and pink #F2A2BF, red #EC4A32 as the spot.
+  <!-- Cadence riso set. Two inks over paper: cobalt #2443C4 and pink #5CB567, red #EC4A32 as the spot.
        The pink plate is printed slightly off register (translate 6,5) on purpose. -->
   <defs>
     <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="600" height="560">
@@ -13,7 +13,7 @@
   <g filter="url(#grain)">
 
   <!-- Pink plate -->
-  <g fill="#F2A2BF" transform="translate(6 5)">
+  <g fill="#5CB567" transform="translate(6 5)">
     <path d="M182 400 L186 330 C170 290 168 220 200 180 C220 160 245 160 252 172 C262 192 266 210 268 222 C276 236 290 252 298 262 C296 270 286 272 279 273 C283 280 284 285 281 290 L275 293 L280 300 C280 312 276 324 270 332 C258 342 244 344 236 342 L236 384 C236 390 238 396 240 400 Z"/>
     <rect x="338" y="214" width="64" height="124" rx="32"/>
     <path d="M392 214 C430 186 462 136 516 104 C546 88 574 84 596 88 L598 124 C574 120 552 124 530 138 C488 166 456 214 402 240 Z"/>
@@ -33,7 +33,7 @@
     <!-- hair -->
     <path fill="#2443C4" stroke="none" d="M196 186 C205 140 272 126 294 160 C300 172 290 182 262 180 C252 179 246 186 242 198 C236 214 228 224 214 230 C204 260 200 300 186 318 C166 300 164 230 196 186 Z"/>
     <!-- ear -->
-    <path d="M204 244 C188 236 182 262 190 278 C196 290 206 292 212 286" fill="#F2A2BF" stroke-width="6"/>
+    <path d="M204 244 C188 236 182 262 190 278 C196 290 206 292 212 286" fill="#5CB567" stroke-width="6"/>
     <path d="M200 256 C196 264 200 272 206 274" stroke-width="4"/>
     <!-- brow, closed eye, nostril, jaw -->
     <path d="M240 208 Q254 199 268 207" stroke-width="8"/>
