@@ -1,10 +1,12 @@
 /* Cadence: riso print. Two inks on white paper, cobalt #2443C4 and pink #F2A2BF, red #EC4A32 as the
    spot. Night mode is the same inks on a deep ink-blue sheet, and the illustrations stay on white
-   cards, like prints pinned to a dark wall. White, not cream: Daniel, 29 Oct. Brand guide: docs/brand/README.md. */
+   cards, like prints pinned to a dark wall. White, not cream: Daniel, 29 Oct. The white is paper, not
+   screen: paper.svg lays a fine tooth and faint fibres over every surface. Illustration cards may run
+   a breath warmer (--print) so the figures sit on a sheet, while the page itself stays white. Brand guide: docs/brand/README.md. */
 :root {
   --paper:#ffffff; --paper-2:#fdf3f7; --ink:#1d2a6b; --muted:#4f557a; --line:#e4e2ee; --card:#ffffff;
   --blue:#2443c4; --blue-ink:#ffffff; --pink:#f2a2bf; --pink-soft:#f8d5e1; --red:#ec4a32; --red-text:#b02d18; --pill:#1d2a6b; --pill-fg:#ffffff;
-  --print:#ffffff;
+  --print:#fdfaf3; --texture:url(paper.svg); --print-texture:url(paper.svg);
   --serif:"Iowan Old Style","New York","Palatino Linotype",Georgia,serif;
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,monospace;
@@ -20,7 +22,7 @@
 @media (min-width:2400px) { :root { --max:min(1840px, calc(100vw - 2 * var(--gutter))); } }
 @media (prefers-color-scheme:dark) {
   :root { --paper:#141a3d; --paper-2:#1a2150; --ink:#f5f6fc; --muted:#b9b8cf; --line:#2c356c; --card:#1b2250;
-    --blue:#8fa2ff; --blue-ink:#141a3d; --pink:#f2a2bf; --pink-soft:#3a2a52; --red:#ff7a63; --red-text:#ff7a63; --pill:#ffffff; --pill-fg:#141a3d; }
+    --blue:#8fa2ff; --blue-ink:#141a3d; --pink:#f2a2bf; --pink-soft:#3a2a52; --red:#ff7a63; --red-text:#ff7a63; --pill:#ffffff; --pill-fg:#141a3d; --texture:none; }
 }
 *,*::before,*::after { box-sizing:border-box; }
 html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
@@ -96,6 +98,32 @@ h3 { font:700 21px/1.25 var(--serif); }
 @keyframes wave { 0%,100% { transform:scaleY(.45); } 50% { transform:scaleY(1); } }
 @keyframes word { from { opacity:0; filter:blur(3px); } to { opacity:1; filter:none; } }
 @keyframes blink { 50% { opacity:0; } }
+
+/* Try it: a hand-drawn loop around the title, then the voice orb */
+.scribble-title { position:relative; max-width:880px !important; padding:clamp(48px,7vw,84px) 0; }
+.try { text-align:center; overflow:clip; padding-top:clamp(24px,4vw,56px) !important; }
+.scribble { position:absolute; inset:-2% -9%; width:118%; height:104%; overflow:visible; pointer-events:none; }
+.scribble path { fill:none; stroke:var(--red); stroke-width:12; stroke-linecap:round; stroke-linejoin:round; opacity:.9; stroke-dasharray:1 2; stroke-dashoffset:0; }
+.scribble-title > :not(svg) { position:relative; }
+.scribble-title h2 { font-size:clamp(40px,5.4vw,72px); margin-bottom:12px; }
+.scribble-sub { margin:0 auto; max-width:40ch; color:var(--muted); font-size:clamp(17px,1.8vw,21px); }
+/* 1.05 with a gap of 2: the round cap sits fully inside the gap, so no stray dot before the draw */
+.scribble-title.armed .scribble path { stroke-dashoffset:1.05; }
+.scribble-title.armed h2 { opacity:0; transform:translateY(20px); }
+.scribble-title.armed .scribble-sub { opacity:0; }
+.scribble-title.drawn .scribble path { animation:draw 2.5s cubic-bezier(.43,.13,.23,.96) forwards; }
+.scribble-title.drawn h2 { opacity:1; transform:none; transition:opacity .8s .5s, transform .8s .5s; }
+.scribble-title.drawn .scribble-sub { opacity:1; transition:opacity .8s 1s; }
+@keyframes draw { to { stroke-dashoffset:0; } }
+.try-stage { display:flex; flex-direction:column; align-items:center; gap:18px; margin-top:clamp(12px,3vw,32px) !important; }
+.orb-card { position:relative; width:min(420px,100%); aspect-ratio:1; overflow:hidden; display:grid; place-items:center; }
+.orb-card canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.orb-fallback { display:none; width:60%; }
+.orb-card.no-webgl canvas { display:none; }
+.orb-card.no-webgl .orb-fallback { display:block; }
+.orb-status { min-height:1.6em; margin:0; font:italic 600 19px/1.4 var(--serif); color:var(--blue); }
+.orb-note { max-width:52ch; margin:0; }
+[hidden] { display:none !important; }
 
 /* Steps */
 .steps-band { background:var(--paper-2); border-block:2px solid var(--blue); }
@@ -186,6 +214,10 @@ pre { background:var(--paper); border:2px dashed var(--line); border-radius:12px
 .doc li { margin-bottom:10px; }
 .doc-date { font-size:13px; color:var(--muted); }
 
+/* Paper: one list of every surface that carries the texture. Prints keep theirs in night mode. */
+body,pre,.window,.steps-band,.steps li,kbd,.feature-grid li,.compare,.table-wrap,.download-card,.copy,.creator,.creator-card,.site-footer { background-image:var(--texture); background-size:320px; }
+.print,.spot,.lead-art,.brand img,.footer-brand img { background-image:var(--print-texture); background-size:320px; }
+
 @media (max-width:900px) {
   .hero-grid,.steps,.download-grid,.creator-card,.site-footer { grid-template-columns:minmax(0,1fr); }
   .hero-art { max-width:520px; }
@@ -199,11 +231,15 @@ pre { background:var(--paper); border:2px dashed var(--line); border-radius:12px
   .feature-lead { grid-column:auto; grid-template-columns:minmax(0,1fr); }
   .pill-label { display:none; }
   .hero-art { transform:none; }
+  .scribble-title { padding:56px 0; }
+  .scribble-sub { max-width:24ch; font-size:16px; }
 }
 @media (prefers-reduced-motion:reduce) {
   html { scroll-behavior:auto; }
   .typed .w { animation:none; opacity:1; }
   .caret,.bars i { animation:none; }
   .button { transition:none; }
+  .scribble-title.drawn .scribble path { animation:none; stroke-dashoffset:0; }
+  .scribble-title.drawn h2,.scribble-title.drawn .scribble-sub { transition:none; }
   .button:hover,.button:active,.site-header .nav-cta:hover { transform:none; }
 }
