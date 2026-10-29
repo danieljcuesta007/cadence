@@ -42,6 +42,7 @@ func png(_ size: Int) -> Data {
 }
 let svg = mark.replacingOccurrences(of: "<defs>[\\s\\S]*?</defs>", with: "", options: .regularExpression)
     .replacingOccurrences(of: " filter=\"url(#grain)\"", with: "")
+    .replacingOccurrences(of: "(?m)[ \\t]+$", with: "", options: .regularExpression)
 try svg.write(to: site.appendingPathComponent("favicon-riso-v2.svg"), atomically: true, encoding: .utf8)
 let fallback = png(64)
 for name in ["favicon.png", "favicon-riso-v2.png"] { try fallback.write(to: site.appendingPathComponent(name)) }
