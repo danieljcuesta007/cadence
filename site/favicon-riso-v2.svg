@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="92 92 640 640" role="img" aria-labelledby="t">
+  <title id="t">Cadence mark: five bars of a voice level in cobalt, the tallest in pink</title>
+  <!-- The app icon's own geometry (render-icon.swift, 824 plate): bars 76 wide, 122 apart,
+       heights 180/312/400. The viewBox crops the plate margin so the bars fill the mark.
+       No background ink and no tile: the mark sits straight on the page. -->
+  
+  <g fill="none" stroke-linecap="round" stroke-width="76">
+    <path stroke="#2443C4" d="M168 360 V464 M656 360 V464 M290 294 V530 M534 294 V530"/>
+    <path stroke="#F2A2BF" d="M412 250 V574"/>
+  </g>
+</svg>

@@ -390,3 +390,25 @@ test('the loop length is written to --loop, and never as 0 before layout', () =>
   assert.equal(again.props['--loop'], '600.0px');
   assert.doesNotMatch(html, /pathLength=/, 'one length system: no pathLength on the measured loop');
 });
+
+// A new URL, rather than overwriting favicon.png, is what replaces cached old branding.
+test('both pages select versioned transparent brand icons and share the current geometry', async () => {
+  for (const page of Object.values(pages)) {
+    assert.match(page, /rel="icon" href="favicon-riso-v2\.svg"/);
+    assert.match(page, /rel="icon" href="favicon-riso-v2\.png"/);
+    assert.match(page, /rel="apple-touch-icon" href="apple-touch-icon-riso-v2\.png"/);
+    assert.doesNotMatch(page, /rel="icon" href="favicon\.png"/);
+  }
+  const svg = await readFile('favicon-riso-v2.svg', 'utf8');
+  const canonical = await readFile('art/mark.svg', 'utf8');
+  const paths = x => [...x.matchAll(/<path stroke="(#[A-Fa-f0-9]{6})" d="([^"]+)"/g)].map(m => m.slice(1));
+  assert.deepEqual(paths(svg), paths(canonical));
+  assert.deepEqual(new Set(paths(svg).map(x => x[0])), new Set(['#2443C4', '#F2A2BF']));
+  assert.doesNotMatch(svg, /<rect|<filter|<image/);
+  const png = await readFile('favicon-riso-v2.png');
+  assert.equal(png.readUInt32BE(16), 64); assert.equal(png.readUInt32BE(20), 64);
+  assert.equal(png[25], 6, 'RGBA PNG retains its transparent background');
+  const ico = await readFile('favicon.ico');
+  assert.equal(ico.readUInt16LE(2), 1); assert.equal(ico.readUInt16LE(4), 3);
+  assert.deepEqual([ico[6], ico[22], ico[38]], [16, 32, 64]);
+});
