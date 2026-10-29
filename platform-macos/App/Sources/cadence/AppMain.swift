@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     lazy var lifecycle = LifecycleMonitor(log: { [weak self] in self?.router.log($0) },
                                           flush: { LogFile.flush() })
     var terminationReason = "application_quit_or_logout"
+    let desktopWidget = DesktopWidgetController()
+    let desktopWidgetItem = NSMenuItem(title: "Show Desktop Widget", action: nil, keyEquivalent: "")
     let overlay = OverlayHUD()
     let capture = AudioCapture()
     let hotkeys = HotkeyMonitor()
@@ -123,6 +125,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             title: "History & Metrics…", action: #selector(showDashboard), keyEquivalent: "d")
         dashItem.target = self
         menu.addItem(dashItem)
+        desktopWidgetItem.target = self
+        desktopWidgetItem.action = #selector(toggleDesktopWidget)
+        menu.addItem(desktopWidgetItem)
+        desktopWidget.onOpen = { [weak self] in self?.showDashboard() }
+        desktopWidget.restore()
         let undoItem = NSMenuItem(
             title: "Undo Last Dictation", action: #selector(undoLast), keyEquivalent: "z")
         undoItem.keyEquivalentModifierMask = [.control, .option, .command]
@@ -478,6 +485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Refresh the per-app toggle for whatever is frontmost as the menu opens. We're an
     /// LSUIElement, so opening our menu leaves the user's app frontmost.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        desktopWidgetItem.state = desktopWidget.enabled ? .on : .off
         let front = NSWorkspace.shared.frontmostApplication?.localizedName
         menuFrontApp = front
         if let front, historyStore != nil {
@@ -669,6 +677,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         showDashboard()
         return true
+    }
+
+    @objc func toggleDesktopWidget() {
+        desktopWidget.setEnabled(!desktopWidget.enabled)
     }
 
     @objc func showDashboard() {

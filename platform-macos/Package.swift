@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "CadenceMac",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     targets: [
         // Insertion engine spike (§32 Phase 0): capability-detecting cascade that must never
         // freeze the target app nor corrupt the clipboard (AC-20).

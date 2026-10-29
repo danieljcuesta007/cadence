@@ -2,6 +2,30 @@
 
 Updated: 2026-10-14 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
+## Desktop widget and v0.1.2 release (2026-10-29, in progress)
+
+Daniel authorized the pink/cobalt release and site deployment, plus an optional
+public desktop widget and matching branding for his existing Vitals tile.
+The feature lives in `DesktopWidget.swift`: opt-in from **Show Desktop Widget**
+in the menu, the same wide layout as Vitals (today/week words, streak, pace, saved time and
+all-time words), local totals only, draggable, saved visibility/position, hide/open
+controls, stale-date protection, and no extra app/server dependency. Download
+page and DMG instructions explain the option. Vitals branding is isolated in
+`~/ai-search-tracker-cadence-brand` (three widget files only).
+
+Verified so far: 16 widget checks (a planted missing date guard failed), site
+27/27, DMG packaging 5/5, hotkeys 37/37, lifecycle 17/17, stats 39/39, Vitals
+format harness. Rendered the public tile and both sizes of the Vitals tile.
+Release builds now pin native dependencies and SwiftPM to macOS 14; the old
+build inherited this Mac's macOS 26.5 target despite advertising Sonoma support.
+The multilingual model remains `ggml-small.bin`, hash pinned by `make-dmg.sh`.
+
+Handoff: worktree `~/cadence-widget-release`, branch `feat/desktop-widget-v012`.
+Next: finish desktop interaction QA; reviewed feature → dev → main PRs;
+package 0.1.2, record checksum, publish release, deploy `cadence-dictation`,
+verify download and installed app. Cloudflare OAuth renewal has succeeded.
+Keep `~/Applications/Cadence.app.prev-20261029` until Daniel confirms real speech.
+
 ## Lifecycle diagnostics (2026-10-14)
 
 Daniel reported Cadence down; the process was absent. Reopening restored dictation,
