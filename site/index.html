@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cadence: dictation that never leaves your Mac</title>
 <meta name="description" content="Hold a key, speak, release, and the text lands wherever you're typing. Cadence transcribes on your Mac, works offline, speaks two languages and is free and open source.">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111312" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3ecdc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141a3d" media="(prefers-color-scheme: dark)">
 <meta property="og:title" content="Cadence: dictation that never leaves your Mac">
 <meta property="og:description" content="On-device, offline, bilingual push-to-talk dictation for macOS. Free and open source, from DC Labs.">
 <meta property="og:url" content="https://cadence-dictation.pages.dev/">
@@ -20,7 +20,7 @@
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="site-header">
-  <a class="brand" href="index.html" aria-label="Cadence home"><img src="favicon.png" alt="" width="28" height="28"><span>Cadence</span></a>
+  <a class="brand" href="index.html" aria-label="Cadence home"><img src="art/mark.svg" alt="" width="34" height="34"><span>Cadence</span></a>
   <nav aria-label="Main navigation">
     <a href="#features">Features</a>
     <a href="#compare">Compare</a>
@@ -32,12 +32,17 @@
 <main id="main" tabindex="-1">
 
 <section class="hero" aria-labelledby="hero-title">
+  <div class="hero-grid">
+  <div class="hero-copy">
   <p class="eyebrow">A DC Labs product · Free &amp; open source · macOS</p>
   <h1 id="hero-title">Speak. It types.<br><span>Nothing leaves your Mac.</span></h1>
   <p class="lede">Hold a key, say what you mean, let go. Cadence turns your voice into text in whatever app you're using, transcribed entirely on your Mac. Works offline, in two languages, for free.</p>
   <div class="hero-actions">
     <a class="button" href="#download">Download for Mac</a>
     <a class="button ghost" href="#compare">See how it compares</a>
+  </div>
+  </div>
+  <figure class="hero-art print"><img src="art/announcer.svg" alt="An illustrated announcer speaks into a vintage microphone, and the words leave it as a line of type" width="540" height="480"></figure>
   </div>
   <div class="demo" aria-hidden="true">
     <div class="window">
@@ -51,9 +56,9 @@
 <section class="steps-band" aria-labelledby="steps-title">
   <h2 id="steps-title" class="visually-hidden">How it works</h2>
   <ol class="steps">
-    <li><kbd>Right&nbsp;⌥</kbd><h3>Hold</h3><p>Hold Right Option in any app. A small pill appears while you speak.</p></li>
-    <li><span class="step-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><h3>Speak</h3><p>A quick draft shows as you talk. A second, more careful pass makes the final text.</p></li>
-    <li><span class="step-check" aria-hidden="true">Aa</span><h3>Release</h3><p>Let go and the text lands where your cursor is. <kbd>Ctrl</kbd><kbd>⌥</kbd><kbd>⌘</kbd><kbd>Z</kbd> takes it back.</p></li>
+    <li><img class="spot" src="art/hold.svg" alt="" width="120" height="120"><h3>Hold</h3><p>Hold <kbd>Right&nbsp;⌥</kbd> in any app. A small pill appears while you speak.</p></li>
+    <li><img class="spot" src="art/speak.svg" alt="" width="120" height="120"><h3>Speak</h3><p>A quick draft shows as you talk. A second, more careful pass makes the final text.</p></li>
+    <li><img class="spot" src="art/release.svg" alt="" width="120" height="120"><h3>Release</h3><p>Let go and the text lands where your cursor is. <kbd>Ctrl</kbd><kbd>⌥</kbd><kbd>⌘</kbd><kbd>Z</kbd> takes it back.</p></li>
   </ol>
 </section>
 
@@ -61,8 +66,8 @@
   <p class="kicker">Features</p>
   <h2 id="features-title">Everything you need, nothing that phones home.</h2>
   <ul class="feature-grid">
-    <li class="feature-lead"><h3>On your Mac, start to finish</h3><p>Speech becomes text on your Mac's own chip, using OpenAI's open Whisper model. No server, no account, and no networking code at all. Turn off Wi-Fi and it still works.</p></li>
-    <li><h3>Two languages, two keys</h3><p>Right Option for one language, Left Option for the other. Switching costs a finger, not a menu, and no time spent guessing the language.</p></li>
+    <li class="feature-lead"><img class="lead-art" src="art/jar.svg" alt="" width="200" height="200"><div><h3>On your Mac, start to finish</h3><p>Speech becomes text on your Mac's own chip, using OpenAI's open Whisper model. No server, no account, and no networking code at all. Turn off Wi-Fi and it still works.</p></div></li>
+    <li class="feature-art"><img class="spot" src="art/bubbles.svg" alt="" width="96" height="96"><h3>Two languages, two keys</h3><p>Right Option for one language, Left Option for the other. Switching costs a finger, not a menu, and no time spent guessing the language.</p></li>
     <li><h3>Your words, spelled right</h3><p>A personal dictionary teaches it the names and terms you use most.</p></li>
     <li><h3>History, encrypted</h3><p>Past dictations are kept in an encrypted database on your Mac, searchable, with copy and re-insert. Saving audio is off unless you turn it on.</p></li>
     <li><h3>See the time you save</h3><p>A dashboard with time saved, words, speaking pace, your streak and where you dictate most.</p></li>
@@ -94,7 +99,7 @@
   <h2 id="download-title">Get Cadence</h2>
   <div class="download-grid">
     <div class="download-card">
-      <img src="icon-512.png" alt="" width="120" height="120">
+      <img src="icon-512.png" alt="The Cadence app icon" width="120" height="120">
       <a class="button" href="https://github.com/danieljcuesta007/cadence/releases/latest/download/Cadence.dmg">Download Cadence.dmg</a>
       <p class="small">Apple silicon Mac · macOS 14 Sonoma or later · about 500 MB, because the speech model comes with it</p>
       <p class="small">Or with Homebrew:</p>
@@ -151,7 +156,7 @@ brew install --cask cadence</code></pre>
 </main>
 
 <footer class="site-footer">
-  <div class="footer-brand"><img src="favicon.png" alt="" width="32" height="32"><p><strong>Cadence</strong><br>A DC Labs product</p></div>
+  <div class="footer-brand"><img src="art/mark.svg" alt="" width="40" height="40"><p><strong>Cadence</strong><br>A DC Labs product</p></div>
   <nav aria-label="Footer">
     <a href="legal.html#privacy">Privacy</a>
     <a href="legal.html#license">License</a>
