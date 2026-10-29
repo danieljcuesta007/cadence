@@ -19,7 +19,7 @@ One paper and three inks. The art is printed only in the three inks, and the pap
 | Paper | `#FFFFFF` | Background, and the card behind every illustration. White, never cream (Daniel, 29 Oct). Alternate bands use a faint pink wash, `#FDF3F7` |
 | Cobalt | `#2443C4` | Line work, headings, buttons. The main ink |
 | Pink | `#F2A2BF` | Fills, and the offset "plate" shadow behind cards and buttons |
-| Red | `#EC4A32` | The spot colour: one accent per view (mouth, caret, peak bar) |
+| Red | `#EC4A32` | The spot colour: one accent per view (mouth, caret, the hand-drawn loop). Not the mark: its peak bar is pink |
 
 Small red **text** (labels, kickers) uses the deeper `#B02D18`, because bright red on white
 is only 3.2:1. The deeper red passes WCAG AA (4.5:1) on every surface.
@@ -66,7 +66,7 @@ stays white. In night mode only the prints keep the texture, because grey speckl
 | `release.svg` | A page of fresh type with a red caret | Step 3 |
 | `jar.svg` | A laptop under a bell jar: nothing leaves your Mac | Privacy feature |
 | `bubbles.svg` | "hi" and "hola" | Two-languages feature |
-| `mark.svg` | Five voice-level bars, with the tallest in red | Header, footer |
+| `mark.svg` | The app icon's five bars (same 824 grid): cobalt, with the tallest in pink. No tile or background ink; it sits on white paper | Header, footer, favicon |
 
 ## Type
 
@@ -82,8 +82,11 @@ All three are system fonts, so nothing is downloaded.
 Plain and confident. Say what it does: "Speak. It types." Don't use emojis, and don't
 use exclamation marks.
 
-## Not changed by v1
+## The app
 
-The app icon (`platform-macos/.../AppIcon`) and the in-app green (`BrandColor.swift`) stay as
-they are. v1 covers marketing: the site, social images and release art. Bringing the app
-itself into the riso system is a separate decision.
+Since 29 Oct 2026 the app wears the same inks. The icon (`platform-macos/App/AppIcon/render-icon.swift`)
+keeps its original geometry and white plate, with cobalt bars and a pink peak, drawn in sRGB so the
+hex values land exactly. `BrandColor.swift` has `accent` (pink: bars and fills), `accentStrong`
+(cobalt: emphasis text and buttons, because pink is too light to carry text), `accentSoft` and
+`accentWash`, plus `button` (cobalt fills with white labels). In light mode the pinks are deepened
+(`#D9578B` marks, `#EE8FB2` past-day bars) so they stay visible on white. The HUD's live waveform is pink.

@@ -47,10 +47,10 @@ public final class OverlayHUD {
         glyphLabel.font = .systemFont(ofSize: 13, weight: .medium)
         let monoFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         levelLabel.font = monoFont
-        // Rich green — the live "mic is hearing you" waveform, matched to the app icon's
+        // Riso pink — the live "mic is hearing you" waveform, matched to the app icon's
         // peak bar so the brand's one accent color shows up wherever sound is visualized.
-        // A brighter shade than the icon so it pops on the dark HUD material.
-        levelLabel.textColor = NSColor(red: 0.36, green: 0.71, blue: 0.40, alpha: 1) // #5CB567
+        // The brand pink reads clearly on the dark HUD material.
+        levelLabel.textColor = NSColor(srgbRed: 0.949, green: 0.635, blue: 0.749, alpha: 1) // #F2A2BF
         partialLabel.font = .systemFont(ofSize: 13)
         partialLabel.lineBreakMode = .byTruncatingHead
         partialLabel.maximumNumberOfLines = 1
