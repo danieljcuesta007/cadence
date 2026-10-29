@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="t">
+  <title id="t">A sheet of paper with fresh lines of type and a blinking cursor</title>
+  <defs>
+    <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
+      <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -2.6 0 0 0 2.3" result="speck"/>
+      <feComposite in="SourceGraphic" in2="speck" operator="in"/>
+    </filter>
+  </defs>
+  <g filter="url(#grain)">
+  <g fill="#F2A2BF" transform="translate(5 4)">
+    <path d="M52 30 H170 L196 56 V214 H52 Z" transform="rotate(-4 120 120)"/>
+  </g>
+  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round">
+    <rect x="136" y="126" width="6" height="22" stroke="none" transform="rotate(-4 120 120)"/>
+  </g>
+  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="rotate(-4 120 120)">
+      <path d="M52 30 H170 L196 56 V214 H52 Z"/>
+      <path d="M170 30 V56 H196" stroke-width="4"/>
+      <path d="M72 78 H172 M72 98 H164 M72 118 H176 M72 138 H130 M72 178 H150" stroke-width="5"/>
+    </g>
+  </g>
+  </g>
+</svg>
