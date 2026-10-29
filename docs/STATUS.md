@@ -2,6 +2,18 @@
 
 Updated: 2026-10-29 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
+## Waveform-only widget mark (2026-10-29)
+
+Daniel requested removing the white plate around the widget logo, keeping the
+colored waveform. Removed only that background in Cadence and Vitals; logo
+clicks, layout and metrics are unchanged. Cadence source PRs #55/#56, tag
+v0.1.3 at 20cc6eb, build 5. Widget 16/16 and source CI pass; preview inspected.
+DMG SHA-256 `63e315ea93b98916ac648cd7b1d70ad8cfe885bdf94ba031f3dea38cf57c31c1`.
+Existing Vitals change shipped through #211/#212; rebuilt and activated with
+the same stable signer. App icon's white plate remains unchanged (widget-only
+request). Original rollback apps remain pending Daniel's real dictation.
+Homepage brand-line options are under discussion; no copy change made.
+
 ## Desktop widget and v0.1.2 release (2026-10-29)
 
 Daniel authorized the pink/cobalt release and site deployment, plus an optional
