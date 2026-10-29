@@ -1,8 +1,8 @@
 # STATUS — Cadence build progress
 
-Updated: 2026-10-14 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
+Updated: 2026-10-29 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
-## Desktop widget and v0.1.2 release (2026-10-29, in progress)
+## Desktop widget and v0.1.2 release (2026-10-29)
 
 Daniel authorized the pink/cobalt release and site deployment, plus an optional
 public desktop widget and matching branding for his existing Vitals tile.
@@ -20,11 +20,19 @@ Release builds now pin native dependencies and SwiftPM to macOS 14; the old
 build inherited this Mac's macOS 26.5 target despite advertising Sonoma support.
 The multilingual model remains `ggml-small.bin`, hash pinned by `make-dmg.sh`.
 
-Handoff: worktree `~/cadence-widget-release`, branch `feat/desktop-widget-v012`.
-Next: finish desktop interaction QA; reviewed feature → dev → main PRs;
-package 0.1.2, record checksum, publish release, deploy `cadence-dictation`,
-verify download and installed app. Cloudflare OAuth renewal has succeeded.
-Keep `~/Applications/Cadence.app.prev-20261029` until Daniel confirms real speech.
+Released as **v0.1.2** at main `e8fdd88` (PRs #51 and #52), with
+`Cadence.dmg` SHA-256 `f6c33ee8cc0398ebef900e22953b1ccb17c13285d63b9018faa19fbcdad35721`.
+Installed app doctor: 0.1.2 (4), engine/hotkeys ready, bilingual model available,
+Microphone/Accessibility retained, login enabled. Full Rust suite: 114 passed;
+appearance 10/10. Matching tile's native logo/open callback and hide control
+were exercised live. GitHub's macOS jobs were queued at merge; equivalent
+local checks completed, and site/release CI subsequently passed.
+
+Source implementation handoff: none. Real speech and an actual macOS 14 Mac
+remain manual acceptance. Keep `~/Applications/Cadence.app.prev-20261029` and
+`~/Applications/Cadence.app.pre-v012` until Daniel confirms real speech.
+The existing Vitals tile was released via wow-command-center #209/#210
+(main `8839ce7`) and its stable-signed app binary was rebuilt and activated.
 
 ## Lifecycle diagnostics (2026-10-14)
 
