@@ -1,6 +1,6 @@
 # Cadence brand, v1 (riso)
 
-Cadence looks like a risograph print: two inks on cream paper, drawn with one confident
+Cadence looks like a risograph print: two inks on white paper, drawn with one confident
 line. It's warm, a little handmade and a little off-register. That suits a tool about your
 own voice, and it sets Cadence apart from the glossy gradients every other dictation app uses.
 Adopted 29 Oct 2026, when Daniel picked the riso direction for Cadence marketing.
@@ -16,16 +16,16 @@ One paper and three inks. The art is printed only in the three inks, and the pap
 
 | Colour | Hex | Use |
 | --- | --- | --- |
-| Paper | `#F3ECDC` | Background, and the card behind every illustration |
+| Paper | `#FFFFFF` | Background, and the card behind every illustration. White, never cream (Daniel, 29 Oct). Alternate bands use a faint pink wash, `#FDF3F7` |
 | Cobalt | `#2443C4` | Line work, headings, buttons. The main ink |
 | Pink | `#F2A2BF` | Fills, and the offset "plate" shadow behind cards and buttons |
 | Red | `#EC4A32` | The spot colour: one accent per view (mouth, caret, peak bar) |
 
-Small red **text** (labels, kickers) uses the deeper `#B02D18`, because bright red on cream
+Small red **text** (labels, kickers) uses the deeper `#B02D18`, because bright red on white
 is only 3.2:1. The deeper red passes WCAG AA (4.5:1) on every surface.
 
 Night mode keeps the same inks on a deep ink-blue sheet (`#141A3D`). Cobalt and red *text* lift to
-`#8FA2FF` and `#FF7A63` so they stay readable (site tokens only, never inside the art), and the illustrations stay on cream cards, like prints
+`#8FA2FF` and `#FF7A63` so they stay readable (site tokens only, never inside the art), and the illustrations stay on white cards, like prints
 pinned to a dark wall.
 
 ## Rules for the art
