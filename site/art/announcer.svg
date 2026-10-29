@@ -10,16 +10,17 @@
     </filter>
     <path id="ribbon" d="M404 236 C444 206 470 152 522 122 C548 108 570 104 590 106"/>
   </defs>
+  <g filter="url(#grain)">
 
   <!-- Pink plate -->
-  <g fill="#F2A2BF" filter="url(#grain)" transform="translate(6 5)">
+  <g fill="#F2A2BF" transform="translate(6 5)">
     <path d="M182 400 L186 330 C170 290 168 220 200 180 C220 160 245 160 252 172 C262 192 266 210 268 222 C276 236 290 252 298 262 C296 270 286 272 279 273 C283 280 284 285 281 290 L275 293 L280 300 C280 312 276 324 270 332 C258 342 244 344 236 342 L236 384 C236 390 238 396 240 400 Z"/>
     <rect x="338" y="214" width="64" height="124" rx="32"/>
     <path d="M392 214 C430 186 462 136 516 104 C546 88 574 84 596 88 L598 124 C574 120 552 124 530 138 C488 166 456 214 402 240 Z"/>
   </g>
 
   <!-- Red spot -->
-  <g fill="#EC4A32" filter="url(#grain)">
+  <g fill="#EC4A32">
     <path d="M279 285 C291 284 293 297 281 300 C276 297 275 289 279 285 Z"/>
     <rect x="338" y="270" width="64" height="12"/>
     <path d="M304 276 Q314 290 304 304" fill="none" stroke="#EC4A32" stroke-width="5" stroke-linecap="round"/>
@@ -28,7 +29,7 @@
   </g>
 
   <!-- Cobalt plate -->
-  <g fill="none" stroke="#2443C4" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" filter="url(#grain)">
+  <g fill="none" stroke="#2443C4" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
     <!-- hair -->
     <path fill="#2443C4" stroke="none" d="M196 186 C205 140 272 126 294 160 C300 172 290 182 262 180 C252 179 246 186 242 198 C236 214 228 224 214 230 C204 260 200 300 186 318 C166 300 164 230 196 186 Z"/>
     <!-- ear -->
@@ -54,7 +55,8 @@
   </g>
 
   <!-- The words leaving the microphone -->
-  <text font-family="Georgia,'Iowan Old Style',serif" font-style="italic" font-size="25" fill="#2443C4" filter="url(#grain)">
+  <text font-family="'Iowan Old Style','New York',Georgia,serif" font-style="italic" font-size="25" fill="#2443C4">
     <textPath href="#ribbon" startOffset="8">speak, and it types</textPath>
   </text>
+  </g>
 </svg>

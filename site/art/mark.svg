@@ -7,14 +7,16 @@
       <feComposite in="SourceGraphic" in2="speck" operator="in"/>
     </filter>
   </defs>
-  <g fill="#F2A2BF" filter="url(#grain)" transform="translate(5 4)">
+  <g filter="url(#grain)">
+  <g fill="#F2A2BF" transform="translate(5 4)">
     <rect x="24" y="24" width="192" height="192" rx="48"/>
   </g>
-  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round" filter="url(#grain)">
+  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round">
     <rect x="111" y="56" width="18" height="128" rx="9" stroke="none"/>
   </g>
-  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#grain)">
+  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
     <rect x="24" y="24" width="192" height="192" rx="48"/>
     <path d="M64 100 V140 M92 80 V160 M148 80 V160 M176 100 V140" stroke-width="18"/>
+  </g>
   </g>
 </svg>

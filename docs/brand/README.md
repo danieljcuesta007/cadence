@@ -10,17 +10,22 @@ guide both read from. Don't copy them anywhere else.
 
 ![Brand guide](cadence-brand-guide.png)
 
-## Inks
+## Paper and inks
 
-| Ink | Hex | Use |
+One paper and three inks. The art is printed only in the three inks, and the paper is whatever it sits on.
+
+| Colour | Hex | Use |
 | --- | --- | --- |
 | Paper | `#F3ECDC` | Background, and the card behind every illustration |
 | Cobalt | `#2443C4` | Line work, headings, buttons. The main ink |
 | Pink | `#F2A2BF` | Fills, and the offset "plate" shadow behind cards and buttons |
-| Red | `#EC4A32` | The spot colour: one accent per view (mouth, caret, kicker, peak bar) |
+| Red | `#EC4A32` | The spot colour: one accent per view (mouth, caret, peak bar) |
 
-Night mode keeps the same inks on a deep ink-blue sheet (`#141A3D`). Cobalt text lifts to
-`#8FA2FF` so it stays readable, and the illustrations stay on cream cards, like prints
+Small red **text** (labels, kickers) uses the deeper `#B02D18`, because bright red on cream
+is only 3.2:1. The deeper red passes WCAG AA (4.5:1) on every surface.
+
+Night mode keeps the same inks on a deep ink-blue sheet (`#141A3D`). Cobalt and red *text* lift to
+`#8FA2FF` and `#FF7A63` so they stay readable (site tokens only, never inside the art), and the illustrations stay on cream cards, like prints
 pinned to a dark wall.
 
 ## Rules for the art
@@ -30,8 +35,9 @@ pinned to a dark wall.
 - **Line.** One weight per drawing (6–7 at the drawing's scale), with round caps and joins.
   There are no gradients and no outlines on the pink.
 - **Grain.** Every ink carries the same speckle filter (`#grain`, fractal noise, seed 7),
-  so the colour looks pressed into the paper rather than flat.
-- **Only these three inks.** The site tests reject any other colour in `site/art/`.
+  so the colour looks pressed into the paper rather than flat. Apply it once, on one group
+  that wraps the whole drawing.
+- **Only the three inks.** No paper fill inside the art. The site tests reject any other colour in `site/art/`.
 - **Self-contained.** No scripts, no inline CSS, no remote fonts or images. The site's
   strict Content-Security-Policy covers the SVGs too.
 - **Original.** Draw the art fresh. Riso is the technique, not a borrowed character.

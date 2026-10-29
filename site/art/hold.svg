@@ -7,15 +7,16 @@
       <feComposite in="SourceGraphic" in2="speck" operator="in"/>
     </filter>
   </defs>
-  <g fill="#F2A2BF" filter="url(#grain)" transform="translate(5 4)">
+  <g filter="url(#grain)">
+  <g fill="#F2A2BF" transform="translate(5 4)">
     <rect x="40" y="132" width="160" height="78" rx="16"/>
     <rect x="100" y="-24" width="92" height="84" rx="28"/>
     <path d="M114 50 H146 V100 C146 112 138 118 130 118 C121 118 114 112 114 100 Z"/>
   </g>
-  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round" filter="url(#grain)">
+  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round">
     <path d="M96 120 L84 110 M164 120 L176 110" fill="none"/>
   </g>
-  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#grain)">
+  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
     <rect x="40" y="132" width="160" height="78" rx="16"/>
     <path d="M54 138 V188 C54 194 58 198 64 198 H176 C182 198 186 194 186 188 V138" stroke-width="4"/>
     <path d="M114 40 V100 C114 112 121 118 130 118 C139 118 146 112 146 100 V60"/>
@@ -25,5 +26,6 @@
     <path d="M150 40 C160 42 168 36 170 26 M156 18 C166 20 174 14 176 6" stroke-width="4"/>
     <rect x="94" y="-6" width="104" height="16" rx="4" fill="#2443C4" stroke="none"/>
   </g>
-  <text x="120" y="182" text-anchor="middle" font-family="Georgia,'Iowan Old Style',serif" font-size="34" fill="#2443C4" filter="url(#grain)">option</text>
+  <text x="120" y="182" text-anchor="middle" font-family="'Iowan Old Style','New York',Georgia,serif" font-size="34" fill="#2443C4">option</text>
+  </g>
 </svg>

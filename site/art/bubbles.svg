@@ -7,15 +7,17 @@
       <feComposite in="SourceGraphic" in2="speck" operator="in"/>
     </filter>
   </defs>
-  <g fill="#F2A2BF" filter="url(#grain)" transform="translate(5 4)">
+  <g filter="url(#grain)">
+  <g fill="#F2A2BF" transform="translate(5 4)">
     <path d="M24 44 H130 C140 44 146 50 146 60 V104 C146 114 140 120 130 120 H64 L40 140 L44 120 H40 C30 120 24 114 24 104 Z"/>
   </g>
-  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round" filter="url(#grain)">
+  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round">
     <path d="M96 116 H200 C210 116 216 122 216 132 V176 C216 186 210 192 200 192 H196 L200 212 L176 192 H112 C102 192 96 186 96 176 Z" fill="none" stroke-width="6" stroke-linejoin="round"/>
   </g>
-  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#grain)">
+  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
     <path d="M24 44 H130 C140 44 146 50 146 60 V104 C146 114 140 120 130 120 H64 L40 140 L44 120 H40 C30 120 24 114 24 104 Z"/>
   </g>
-  <text x="85" y="94" text-anchor="middle" font-family="Georgia,'Iowan Old Style',serif" font-style="italic" font-size="36" fill="#2443C4" filter="url(#grain)">hi</text>
-  <text x="156" y="166" text-anchor="middle" font-family="Georgia,'Iowan Old Style',serif" font-style="italic" font-size="36" fill="#EC4A32" filter="url(#grain)">hola</text>
+  <text x="85" y="94" text-anchor="middle" font-family="'Iowan Old Style','New York',Georgia,serif" font-style="italic" font-size="36" fill="#2443C4">hi</text>
+  <text x="156" y="166" text-anchor="middle" font-family="'Iowan Old Style','New York',Georgia,serif" font-style="italic" font-size="36" fill="#EC4A32">hola</text>
+  </g>
 </svg>
