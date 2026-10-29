@@ -208,5 +208,8 @@ test('the riso art is self-contained and works under the strict policy', async (
   for (const file of ART.filter(f => !f.endsWith('mark.svg'))) assert.ok(home.includes(`src="${file}"`), `${file} is on the home page`);
   assert.ok(home.includes('src="art/mark.svg"') && legal.includes('src="art/mark.svg"'), 'both pages carry the mark');
   assert.match(css, /--red-text:#b02d18;/, 'small red text uses the AA red');
+  // White, not cream (Daniel, 29 Oct): the paper and every print card are pure white.
+  assert.match(css, /--paper:#ffffff;/); assert.match(css, /--print:#ffffff;/); assert.match(css, /--card:#ffffff;/);
+  assert.doesNotMatch(css + home + legal, /#f3ecdc|#ebe2cc|#fbf7ee/i, 'no cream left anywhere');
   assert.match(css, /--blue:#2443c4;/); assert.match(css, /--pink:#f2a2bf;/); assert.match(css, /--red:#ec4a32;/);
 });
