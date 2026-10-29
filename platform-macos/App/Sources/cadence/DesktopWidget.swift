@@ -124,7 +124,6 @@ struct DesktopTile: View {
                     }
                 }
                 .frame(width: 22, height: 22)
-                .background(.white, in: RoundedRectangle(cornerRadius: 5))
                 .overlay { DesktopAction(title: "Open Cadence", transparent: true, action: open) }
                 .accessibilityLabel("Open Cadence")
                 Text("Cadence").font(.system(size: 15, weight: .bold, design: .rounded))
