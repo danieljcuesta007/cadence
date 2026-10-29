@@ -230,7 +230,7 @@ test('the white is textured paper on every surface', async () => {
   assert.doesNotMatch(paper, /<script|\sstyle=|https?:\/\/(?!www\.w3\.org\/2000\/svg)/);
   assert.match(css, /--texture:url\(paper\.svg\); --print-texture:url\(paper\.svg\);/);
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  const lists = [...bare.matchAll(/([^{}]+)\{ background-image:var\(--(?:print-)?texture\); background-size:320px; \}/g)].map(m => m[1].split(',').map(s => s.trim()));
+  const lists = [...bare.matchAll(/([^{}]+)\{ background-image:var\(--(?:print-)?texture\); background-size:400px; \}/g)].map(m => m[1].split(',').map(s => s.trim()));
   const textured = new Set(lists.flat());
   assert.ok(textured.has('body') && textured.has('.print'), 'the page and the prints are paper');
   for (const [, sel] of bare.matchAll(/([^{}@]+)\{[^}]*background:var\(--(?:paper|card|paper-2|print)\)/g))
@@ -257,14 +257,24 @@ test('voice level is boosted RMS, clamped to 1; the orb only turns while it hear
   orbMotion(s, 0.5, 1, 1.2, 0.8); assert.ok(Math.abs(s.rot - 1.5) < 1e-9); assert.equal(s.hover, 1); assert.ok(Math.abs(s.hoverIntensity - 0.32) < 1e-9);
 });
 
-function fakeTry({ grant = true, withOrb = false, hold = false, level = 51 } = {}) {
+function fakeTry({ grant = true, withOrb = false, hold = false, level = 51, words = 0, loopBox = null } = {}) {
   const calls = { getUserMedia: 0, stopped: 0, closed: 0, order: [], frames: 0 };
   let release, lost; const loud = { value: level };
   const el = () => ({ textContent: '', hidden: true, disabled: false, attrs: {}, classes: new Set(), listeners: {},
     setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this.listeners[t] = f; }, classList: null, querySelector: () => null });
   const button = el(), status = el(), root = el(), title = el();
+  const classy = () => { const set = new Set(); return { set, add: c => set.add(c), remove: c => set.delete(c), contains: c => set.has(c), toggle: (c, on) => on ? set.add(c) : set.delete(c) }; };
   for (const e of [root, title]) e.classList = { add: c => e.classes.add(c) };
-  const doc = { querySelector: s => ({ '[data-orb]': root, '[data-orb-toggle]': button, '[data-orb-status]': status })[s] || null,
+  const wordEls = Array.from({ length: words }, () => ({ classList: classy() }));
+  const typed = words ? { classList: classy(), querySelectorAll: () => wordEls } : null;
+  const props = {};
+  if (loopBox) {
+    const path = { getTotalLength: () => 1200, getPointAtLength: l => ({ x: l, y: 0 }) };
+    const svg = { querySelector: () => path, getBoundingClientRect: () => loopBox.current };
+    title.querySelector = s => s === 'svg' ? svg : null;
+    title.style = { setProperty: (k, v) => { props[k] = v; } };
+  }
+  const doc = { querySelector: s => ({ '[data-orb]': root, '[data-orb-toggle]': button, '[data-orb-status]': status, '.typed': typed })[s] || null,
     querySelectorAll: s => s === '.circled' ? [title] : [] };
   const stream = { getTracks: () => [{ stop: () => calls.stopped++ }] };
   const mediaDevices = { getUserMedia: async () => { calls.getUserMedia++; calls.order.push('getUserMedia'); if (!grant) throw new Error('denied');
@@ -278,7 +288,7 @@ function fakeTry({ grant = true, withOrb = false, hold = false, level = 51 } = {
   root.querySelector = s => s === 'canvas' ? {} : null;
   const api = ctx.initTry(doc, { createOrb, createListener: ctx.createListener, mediaDevices, AudioContext,
     raf: fn => frames.push(fn), IntersectionObserver: null, reducedMotion: false, onHide: fn => { hide = fn; } });
-  return { api, calls, button, status, root, title, frames, loud, hide: () => hide(), grantNow: () => release(), loseContext: () => lost() };
+  return { api, calls, button, status, root, title, frames, loud, typed, wordEls, props, hide: () => hide(), grantNow: () => release(), loseContext: () => lost() };
 }
 
 test('the microphone opens only from the button, and Stop or leaving gives it back', async () => {
@@ -355,4 +365,28 @@ test('the stretched loop is measured on screen, so its draw is a full line, not 
   const tall = { getTotalLength: () => 600, getPointAtLength: l => ({ x: 0, y: l }) };
   assert.ok(Math.abs(loopLength(tall, { width: 600, height: 100 }, 1200, 600) - 100) < 1e-6, 'vertical runs scale by the height');
   assert.match(css, /stroke-dasharray:var\(--loop\)/);
+});
+
+test('talking types the note word by word; Stop keeps what was said, or brings the sample back', async () => {
+  const t = fakeTry({ words: 4 });
+  await t.button.listeners.click();
+  assert.ok(t.typed.classList.contains('live'), 'the note goes live: the sample is hidden');
+  assert.equal(t.wordEls.filter(w => w.classList.contains('on')).length, 0);
+  t.frames.at(-1)(0); t.frames.at(-1)(100); t.frames.at(-1)(200); t.frames.at(-1)(300); t.frames.at(-1)(400);
+  assert.equal(t.wordEls.filter(w => w.classList.contains('on')).length, 2, '0.4 s of voice shows two words');
+  await t.button.listeners.click();
+  assert.ok(t.typed.classList.contains('live'), 'Stop keeps the two words you said');
+  const quiet = fakeTry({ words: 4 });
+  await quiet.button.listeners.click(); await quiet.button.listeners.click();
+  assert.equal(quiet.typed.classList.contains('live'), false, 'nothing said: the sample sentence comes back');
+});
+
+test('the loop length is written to --loop, and never as 0 before layout', () => {
+  const box = { current: { width: 0, height: 0 } };
+  const t = fakeTry({ loopBox: box });
+  assert.equal(t.props['--loop'], undefined, 'an unlaid-out box writes nothing, so the loop stays drawn');
+  box.current = { width: 600, height: 100 };
+  const again = fakeTry({ loopBox: box });
+  assert.equal(again.props['--loop'], '600.0px');
+  assert.doesNotMatch(html, /pathLength=/, 'one length system: no pathLength on the measured loop');
 });

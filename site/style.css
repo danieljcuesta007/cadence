@@ -1,7 +1,7 @@
 /* Cadence: riso print. Two inks on white paper, cobalt #2443C4 and pink #F2A2BF, red #EC4A32 as the
    spot. Night mode is the same inks on a deep ink-blue sheet, and the illustrations stay on white
    cards, like prints pinned to a dark wall. White, not cream: Daniel, 29 Oct. The white is paper, not
-   screen: paper.svg lays a fine tooth and faint fibres over every surface. Illustration cards may run
+   screen: paper.svg is embossed cold-press paper (lit fractal relief plus a fine tooth) on every surface. Illustration cards may run
    a breath warmer (--print) so the figures sit on a sheet, while the page itself stays white. Brand guide: docs/brand/README.md. */
 :root {
   --paper:#ffffff; --paper-2:#fdf3f7; --ink:#1d2a6b; --muted:#4f557a; --line:#e4e2ee; --card:#ffffff;
@@ -44,7 +44,7 @@ code { font-size:.88em; }
 
 .site-header { position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;
   padding:10px var(--gutter); background:color-mix(in srgb,var(--paper) 88%,transparent); backdrop-filter:saturate(1.4) blur(12px); -webkit-backdrop-filter:saturate(1.4) blur(12px); border-bottom:2px solid var(--blue); }
-.brand img,.footer-brand img { background:var(--print); border-radius:10px; }
+.brand img,.footer-brand img { background:var(--paper); border-radius:10px; }
 .brand { display:flex; align-items:center; gap:10px; text-decoration:none; font:700 23px/1 var(--serif); letter-spacing:-.01em; color:var(--blue); }
 .site-header nav { display:flex; gap:clamp(12px,3vw,28px); align-items:center; flex-wrap:wrap; font:600 13px/1 var(--sans); letter-spacing:.12em; text-transform:uppercase; }
 .site-header nav a { text-decoration:none; color:var(--muted); min-height:44px; display:inline-flex; align-items:center; }
@@ -106,7 +106,8 @@ h3 { font:700 21px/1.25 var(--serif); }
 .scribble path { fill:none; stroke:var(--red); stroke-width:4.5px; stroke-linecap:round; stroke-linejoin:round; opacity:.92; }
 /* try.js measures the on-screen length into --loop. Gap of 2 and offset 1.05: the round cap
    sits fully inside the gap, so no stray dot before the draw. Without JS the loop is just drawn. */
-.circled.armed .scribble path { stroke-dasharray:var(--loop) calc(var(--loop) * 2); stroke-dashoffset:calc(var(--loop) * 1.05); }
+.circled.armed .scribble path { stroke-dasharray:var(--loop, none); stroke-dashoffset:calc(var(--loop, 0px) * 1.05); }
+.circled.armed[style*="--loop"] .scribble path { stroke-dasharray:var(--loop) calc(var(--loop) * 2); }
 .circled.drawn .scribble path { animation:draw 2.5s .4s cubic-bezier(.43,.13,.23,.96) forwards; }
 @keyframes draw { to { stroke-dashoffset:0; } }
 
@@ -220,14 +221,15 @@ pre { background:var(--paper); border:2px dashed var(--line); border-radius:12px
 .doc-date { font-size:13px; color:var(--muted); }
 
 /* Paper: one list of every surface that carries the texture. Prints keep theirs in night mode. */
-body,.site-header,pre,.window,.steps-band,.steps li,kbd,.feature-grid li,.compare,.table-wrap,.download-card,.copy,.creator,.creator-card,.site-footer { background-image:var(--texture); background-size:320px; }
-.print,.spot,.lead-art,.brand img,.footer-brand img { background-image:var(--print-texture); background-size:320px; }
+body,.site-header,pre,.window,.steps-band,.steps li,kbd,.feature-grid li,.compare,.table-wrap,.download-card,.copy,.creator,.creator-card,.site-footer { background-image:var(--texture); background-size:400px; }
+.print,.spot,.lead-art,.brand img,.footer-brand img { background-image:var(--print-texture); background-size:400px; }
 
 @media (max-width:900px) {
   .hero-grid,.steps,.download-grid,.creator-card,.site-footer { grid-template-columns:minmax(0,1fr); }
   .hero-art { max-width:520px; }
   .feature-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .feature-grid li,.feature-grid li:nth-child(2),.feature-grid li:nth-child(3) { grid-column:span 1; }
+  .feature-grid li:last-child { grid-column:1 / -1; } /* lead + 2 + 2 + 1 wide: no empty cell */
   .demo-grid { grid-template-columns:minmax(0,1fr); row-gap:44px; }
   .orb-card { min-height:0; aspect-ratio:16 / 9; }
   .hero-art { justify-self:center; }
