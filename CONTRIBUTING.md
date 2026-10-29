@@ -1,6 +1,6 @@
 # How we work
 
-This is the working philosophy behind every repo Daniel Cuesta builds, with Claude Code as a pair programmer and with collaborators like Izaiah. Much of it comes from JP Burford's course *Shipping Code in the Age of AI* (Notre Dame, fall 2026). Pull requests are where you can see it in practice.
+This is the working philosophy behind every repo Daniel Cuesta builds, with AI pair programmers and with collaborators like Izaiah. Much of it comes from JP Burford's course *Shipping Code in the Age of AI* (Notre Dame, fall 2026). Pull requests are where you can see it in practice.
 
 ## Every idea is a pull request
 - **Branches:** `main` is production and `dev` is where features meet. Work happens on a feature branch cut from `dev`, one feature or fix per branch.

@@ -1,7 +1,7 @@
 // Renders the Cadence app icon master (1024×1024 PNG) — run: swift render-icon.swift out.png
 //
 // Design: white squircle (Apple continuous corner curve via CALayer cornerCurve),
-// five-bar cadence soundwave in neutral ink, peak bar in a rich green. No emoji, no gloss —
+// five-bar cadence soundwave in riso cobalt, peak bar in riso pink. No emoji, no gloss —
 // clean at 16 px, distinctive at Dock size. Regenerate AppIcon.icns via make-icns.sh.
 
 import AppKit
@@ -12,9 +12,10 @@ let canvas: CGFloat = 1024
 let plate: CGFloat = 824 // standard macOS icon grid: 100 px margin each side
 let corner: CGFloat = plate * 0.2237
 
+// sRGB, so brand hex values land exactly (the generic-RGB initializer shifts them).
 func color(_ hex: UInt32) -> CGColor {
     CGColor(
-        red: CGFloat((hex >> 16) & 0xFF) / 255,
+        srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
         green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
 }
@@ -53,12 +54,12 @@ keyline.borderColor = CGColor(gray: 0.20, alpha: 0.14)
 plateLayer.addSublayer(keyline)
 
 // The cadence mark: five bars tapering symmetrically from a center peak — a clean
-// soundwave silhouette. The peak carries the sage highlight; the rest read as the wave.
+// soundwave silhouette. Riso inks (brand v1): cobalt bars, the peak in pink.
 let heights: [CGFloat] = [0.45, 0.78, 1.00, 0.78, 0.45]
 let barW: CGFloat = 76, gap: CGFloat = 46, maxH: CGFloat = 400
 let markW = barW * 5 + gap * 4
 let x0 = (plate - markW) / 2
-let ink = color(0x23262B) // neutral near-black, reads clean on white
+let ink = color(0x2443C4) // riso cobalt, the brand's line ink
 
 for (i, h) in heights.enumerated() {
     let barH = maxH * h
@@ -69,7 +70,7 @@ for (i, h) in heights.enumerated() {
     bar.cornerRadius = barW / 2
     bar.cornerCurve = .continuous
     if h == 1.0 {
-        bar.colors = [color(0x4FA25F), color(0x3F8A4F)] // rich green, subtle top light
+        bar.colors = [color(0xF5B3CB), color(0xEE8FB2)] // riso pink, subtle top light
         bar.startPoint = CGPoint(x: 0.5, y: 1)
         bar.endPoint = CGPoint(x: 0.5, y: 0)
     } else {

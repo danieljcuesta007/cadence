@@ -44,7 +44,6 @@ code { font-size:.88em; }
 
 .site-header { position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;
   padding:10px var(--gutter); background:color-mix(in srgb,var(--paper) 88%,transparent); backdrop-filter:saturate(1.4) blur(12px); -webkit-backdrop-filter:saturate(1.4) blur(12px); border-bottom:2px solid var(--blue); }
-.brand img,.footer-brand img { background:var(--paper); border-radius:10px; }
 .brand { display:flex; align-items:center; gap:10px; text-decoration:none; font:700 23px/1 var(--serif); letter-spacing:-.01em; color:var(--blue); }
 .site-header nav { display:flex; gap:clamp(12px,3vw,28px); align-items:center; flex-wrap:wrap; font:600 13px/1 var(--sans); letter-spacing:.12em; text-transform:uppercase; }
 .site-header nav a { text-decoration:none; color:var(--muted); min-height:44px; display:inline-flex; align-items:center; }
@@ -222,7 +221,7 @@ pre { background:var(--paper); border:2px dashed var(--line); border-radius:12px
 
 /* Paper: one list of every surface that carries the texture. Prints keep theirs in night mode. */
 body,.site-header,pre,.window,.steps-band,.steps li,kbd,.feature-grid li,.compare,.table-wrap,.download-card,.copy,.creator,.creator-card,.site-footer { background-image:var(--texture); background-size:400px; }
-.print,.spot,.lead-art,.brand img,.footer-brand img { background-image:var(--print-texture); background-size:400px; }
+.print,.spot,.lead-art { background-image:var(--print-texture); background-size:400px; }
 
 @media (max-width:900px) {
   .hero-grid,.steps,.download-grid,.creator-card,.site-footer { grid-template-columns:minmax(0,1fr); }

@@ -6,7 +6,7 @@
 // Every headline number is computed here from the utterance rows (words from text, day from
 // ts, pace from capture duration) — no aggregation lives in the core.
 //
-// Design: native system materials + SF Pro, one accent (BrandColor green), inset-grouped
+// Design: native system materials + SF Pro, one accent (BrandColor: riso pink, cobalt for emphasis), inset-grouped
 // cards like Settings.app, a Health-style activity chart. No emoji, typographic marks only.
 
 import AVFoundation
@@ -418,7 +418,7 @@ final class DashboardWindowController: NSWindowController {
         b.target = self
         b.action = action
         if primary {
-            b.bezelColor = BrandColor.green
+            b.bezelColor = BrandColor.button
             b.contentTintColor = .white
         }
     }
@@ -528,12 +528,12 @@ final class DashboardWindowController: NSWindowController {
     // MARK: hero — time saved
 
     private func makeHero(_ s: Stats) -> NSView {
-        let card = roundedCard(fill: BrandColor.greenWash, border: BrandColor.greenSoft)
+        let card = roundedCard(fill: BrandColor.accentWash, border: BrandColor.accentSoft)
 
-        let label = tag("TIME SAVED", color: BrandColor.greenStrong)
+        let label = tag("TIME SAVED", color: BrandColor.accentStrong)
         let dot = NSView()
         dot.wantsLayer = true
-        dot.layer?.backgroundColor = BrandColor.green.cgColor
+        dot.layer?.backgroundColor = BrandColor.accent.cgColor
         dot.layer?.cornerRadius = 3.5
         dot.translatesAutoresizingMaskIntoConstraints = false
         dot.widthAnchor.constraint(equalToConstant: 7).isActive = true
@@ -595,7 +595,7 @@ final class DashboardWindowController: NSWindowController {
         let v = bigNumber(value, unit: unit, size: 30)
         let n = NSTextField(labelWithString: note)
         n.font = .systemFont(ofSize: 11)
-        n.textColor = noteBold ? BrandColor.greenStrong : .tertiaryLabelColor
+        n.textColor = noteBold ? BrandColor.accentStrong : .tertiaryLabelColor
         if noteBold { n.font = .systemFont(ofSize: 11, weight: .semibold) }
         let stack = NSStackView(views: [l, v, n])
         stack.orientation = .vertical
@@ -613,7 +613,7 @@ final class DashboardWindowController: NSWindowController {
             let frac = CGFloat(day.words) / CGFloat(maxW)
             let bar = NSView()
             bar.wantsLayer = true
-            bar.layer?.backgroundColor = (day.isToday ? BrandColor.green : BrandColor.greenSoft).cgColor
+            bar.layer?.backgroundColor = (day.isToday ? BrandColor.accent : BrandColor.accentSoft).cgColor
             bar.layer?.cornerRadius = 5
             bar.layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
             bar.translatesAutoresizingMaskIntoConstraints = false
@@ -625,7 +625,7 @@ final class DashboardWindowController: NSWindowController {
             cap.textColor = .secondaryLabelColor
             let name = NSTextField(labelWithString: day.label)
             name.font = .systemFont(ofSize: 11, weight: day.isToday ? .bold : .medium)
-            name.textColor = day.isToday ? BrandColor.greenStrong : .tertiaryLabelColor
+            name.textColor = day.isToday ? BrandColor.accentStrong : .tertiaryLabelColor
 
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -667,7 +667,7 @@ final class DashboardWindowController: NSWindowController {
 
             let fill = NSView()
             fill.wantsLayer = true
-            fill.layer?.backgroundColor = BrandColor.green.cgColor
+            fill.layer?.backgroundColor = BrandColor.accent.cgColor
             fill.layer?.cornerRadius = 4
             fill.translatesAutoresizingMaskIntoConstraints = false
             track.addSubview(fill)
@@ -1011,7 +1011,7 @@ final class DashboardWindowController: NSWindowController {
             attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 12)])
         s.append(NSAttributedString(
             string: bold,
-            attributes: [.foregroundColor: BrandColor.greenStrong, .font: NSFont.systemFont(ofSize: 12, weight: .semibold)]))
+            attributes: [.foregroundColor: BrandColor.accentStrong, .font: NSFont.systemFont(ofSize: 12, weight: .semibold)]))
         s.append(NSAttributedString(
             string: tail,
             attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 12)]))
@@ -1107,7 +1107,7 @@ final class HistoryRowView: NSView {
 
         let audio = NSTextField(labelWithString: entry.audioBlobId != nil ? "♪" : "")
         audio.font = .systemFont(ofSize: 12)
-        audio.textColor = BrandColor.green
+        audio.textColor = BrandColor.accentStrong
         audio.translatesAutoresizingMaskIntoConstraints = false
         audio.widthAnchor.constraint(equalToConstant: 12).isActive = true
 
@@ -1158,7 +1158,7 @@ final class HistoryRowView: NSView {
 
     private func resolveBG() {
         bg.backgroundColor = isSelected
-            ? BrandColor.green.withAlphaComponent(0.16).cgColor
+            ? BrandColor.accent.withAlphaComponent(0.16).cgColor
             : (hovering ? NSColor.separatorColor.withAlphaComponent(0.4).cgColor : NSColor.clear.cgColor)
     }
 
@@ -1187,10 +1187,10 @@ final class PillView: NSView {
         let isEN = language == "en"
         layer?.cornerRadius = 8
         layer?.backgroundColor = (isEN ? NSColor.separatorColor.withAlphaComponent(0.5)
-            : BrandColor.greenWash).cgColor
+            : BrandColor.accentWash).cgColor
         let l = NSTextField(labelWithString: text)
         l.font = .systemFont(ofSize: 10, weight: .semibold)
-        l.textColor = isEN ? .secondaryLabelColor : BrandColor.greenStrong
+        l.textColor = isEN ? .secondaryLabelColor : BrandColor.accentStrong
         l.translatesAutoresizingMaskIntoConstraints = false
         addSubview(l)
         NSLayoutConstraint.activate([
