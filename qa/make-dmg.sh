@@ -40,6 +40,11 @@ Cadence: dictation that never leaves your Mac.
    blocked", click Open Anyway, then confirm.
 4. Allow Microphone and Accessibility when asked.
 
+Optional desktop widget: open Cadence's menu in the menu bar and choose
+Show Desktop Widget. Drag it to place it; hide it from that menu or its close
+button. Click its logo to open Cadence. It shows today's and this week's
+words, streak, pace, time saved and all-time words while Cadence is running.
+
 Hold Right Option, speak, release. More: https://cadence-dictation.pages.dev
 TXT
 
