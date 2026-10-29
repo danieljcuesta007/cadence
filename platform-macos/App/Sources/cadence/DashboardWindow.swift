@@ -418,7 +418,7 @@ final class DashboardWindowController: NSWindowController {
         b.target = self
         b.action = action
         if primary {
-            b.bezelColor = BrandColor.accentStrong
+            b.bezelColor = BrandColor.button
             b.contentTintColor = .white
         }
     }

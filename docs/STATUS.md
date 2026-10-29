@@ -262,7 +262,7 @@ never-live-tested recovery path.
 
 - **Dashboard v3, native** (`fe77e8f`): value-first layout — time-saved hero, activity chart,
   top apps, streak, wpm; engine latency demoted to a footer. Stats computed Swift-side from
-  utterance rows; no aggregation in the core. Brand moved muted-sage → richer green `#3F8A4F`
+  utterance rows; no aggregation in the core. Brand moved muted-sage → richer green `#3F8A4F` → riso pink + cobalt (29 Oct 2026, brand v1; see docs/brand/README.md)
   (`BrandColor.swift`, icon + overlay regenerated).
 - **Runtime language toggle + dashboard v2** (`5cbf29b`): bilingual auto-detect on the
   multilingual model, Language menu (Automatic/English/Spanish), per-decode — no model reload.

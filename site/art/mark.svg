@@ -1,7 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 824" role="img" aria-labelledby="t">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="92 92 640 640" role="img" aria-labelledby="t">
   <title id="t">Cadence mark: five bars of a voice level in cobalt, the tallest in pink</title>
   <!-- The app icon's own geometry (render-icon.swift, 824 plate): bars 76 wide, 122 apart,
-       heights 180/312/400. No background ink: the mark sits on white paper. -->
+       heights 180/312/400. The viewBox crops the plate margin so the bars fill the mark.
+       No background ink and no tile: the mark sits straight on the page. -->
   <defs>
     <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="824" height="824">
       <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="7" result="n"/>
