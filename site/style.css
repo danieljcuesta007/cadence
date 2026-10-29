@@ -205,6 +205,7 @@ pre { background:var(--paper); border:2px dashed var(--line); border-radius:12px
 .footer-brand { display:flex; gap:12px; align-items:center; }
 .footer-brand p { margin:0; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
 .footer-brand strong { color:var(--blue); font:700 22px/1.2 var(--serif); letter-spacing:0; text-transform:none; }
+.footer-brand .footer-tagline { display:inline-block; margin:4px 0; color:var(--blue); font:500 16px/1.4 var(--serif); letter-spacing:0; text-transform:none; }
 .site-footer nav { display:flex; flex-wrap:wrap; gap:6px 22px; justify-content:flex-end; font-size:14px; }
 .site-footer nav a { text-decoration:none; color:var(--muted); min-height:44px; display:inline-flex; align-items:center; }
 .site-footer nav a:hover { color:var(--blue); }
