@@ -9,7 +9,8 @@ const css = await readFile('style.css', 'utf8');
 const js = await readFile('site.js', 'utf8');
 const headers = await readFile('_headers', 'utf8');
 const cask = await readFile('../Casks/cadence.rb', 'utf8');
-const SHIPPED = ['index.html', 'legal.html', 'style.css', 'site.js', 'favicon.png', 'apple-touch-icon.png', 'icon-512.png', '_headers'];
+const ART = (await readdir('art')).filter(f => f.endsWith('.svg')).sort().map(f => `art/${f}`);
+const SHIPPED = ['index.html', 'legal.html', 'style.css', 'site.js', 'favicon.png', 'apple-touch-icon.png', 'icon-512.png', '_headers', ...ART];
 const OUTBOUND = /^https:\/\/(github\.com\/danieljcuesta007\/cadence(\/|$)|danielcuesta007\.com$|addisuna\.com$|skeptic\.pages\.dev$|wisprflow\.ai\/(pricing|privacy)$|superwhisper\.com$|support\.apple\.com\/)/;
 
 test('internal links and fragments resolve, IDs are unique per page', () => {
@@ -28,7 +29,7 @@ test('internal links and fragments resolve, IDs are unique per page', () => {
 });
 
 test('local assets exist and nothing loads from another origin', async () => {
-  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+\.(?:css|js|png))"/g)) await access(ref);
+  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+\.(?:css|js|png|svg))"/g)) await access(ref);
   assert.doesNotMatch(html, /<(?:script|link|img|iframe)\b[^>]*(?:src|href)="https?:/);
   for (const [, href] of html.matchAll(/<a\b[^>]*href="(https?:[^"]+)"/g)) assert.match(href, OUTBOUND, href);
   assert.doesNotMatch(js, /fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage|https?:\/\//);
@@ -171,11 +172,13 @@ test('copy degrades: no selection API gives an honest message; no status line ke
 });
 
 test('build ships exactly the reviewed files, unchanged and free of private data', async () => {
-  assert.deepEqual((await readdir('dist')).sort(), [...SHIPPED].sort());
+  const builtFiles = (await readdir('dist', { recursive: true })).filter(f => f !== 'art');
+  assert.deepEqual(builtFiles.sort(), [...SHIPPED].sort());
+  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+\.(?:css|js|png|svg))"/g)) await access(`dist/${ref}`);
   for (const file of SHIPPED) {
     const built = await readFile(`dist/${file}`), source = await readFile(file);
     assert.ok(built.equals(source), file);
-    if (/\.(html|css|js)$|_headers/.test(file)) assert.doesNotMatch(built.toString(), /\/Users\/|\/private\/tmp\/|ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|@nd\.edu/);
+    if (/\.(html|css|js|svg)$|_headers/.test(file)) assert.doesNotMatch(built.toString(), /\/Users\/|\/private\/tmp\/|ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|@nd\.edu/);
   }
 });
 
@@ -188,4 +191,22 @@ test('the content cap tracks the window instead of stopping at a fixed width', (
       `above ${bp}px the cap becomes ${cap} or the window minus its gutters`);
   }
   assert.match(css, /main > section > \* \{ max-width:var\(--max\)/, 'the column reads the cap, so every section follows');
+});
+
+// Riso brand, 29 Oct: the art is self-hosted SVG, so it must obey the same strict CSP as the pages.
+test('the riso art is self-contained and works under the strict policy', async () => {
+  for (const file of ART) {
+    const svg = await readFile(file, 'utf8');
+    assert.match(svg, /<title id="t">[^<]{12,}<\/title>/, `${file} describes itself`);
+    assert.doesNotMatch(svg, /<script|\sstyle=|<style|\son[a-z]+=|https?:\/\/(?!www\.w3\.org\/2000\/svg)/, `${file} has no script, inline CSS or remote reference`);
+    const paints = [...svg.matchAll(/\b(?:fill|stroke|stop-color|flood-color|color)="([^"]+)"/g)].map(m => m[1]);
+    assert.ok(paints.length, `${file} paints something`);
+    for (const paint of paints) assert.ok(['#2443C4', '#F2A2BF', '#EC4A32', 'NONE'].includes(paint.toUpperCase()), `${file}: ${paint} is not a Cadence ink`);
+    assert.doesNotMatch(svg, /rgba?\(|hsla?\(/, `${file} uses hex inks only`);
+    assert.equal((svg.match(/filter="url\(#grain\)"/g) || []).length, 1, `${file} runs the grain once`);
+  }
+  for (const file of ART.filter(f => !f.endsWith('mark.svg'))) assert.ok(home.includes(`src="${file}"`), `${file} is on the home page`);
+  assert.ok(home.includes('src="art/mark.svg"') && legal.includes('src="art/mark.svg"'), 'both pages carry the mark');
+  assert.match(css, /--red-text:#b02d18;/, 'small red text uses the AA red');
+  assert.match(css, /--blue:#2443c4;/); assert.match(css, /--pink:#f2a2bf;/); assert.match(css, /--red:#ec4a32;/);
 });

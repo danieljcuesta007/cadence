@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="t">
+  <title id="t">A laptop sealed under a glass bell jar: nothing leaves your Mac</title>
+  <defs>
+    <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
+      <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -2.6 0 0 0 2.3" result="speck"/>
+      <feComposite in="SourceGraphic" in2="speck" operator="in"/>
+    </filter>
+  </defs>
+  <g filter="url(#grain)">
+  <g fill="#F2A2BF" transform="translate(5 4)">
+    <rect x="70" y="118" width="100" height="64" rx="6"/>
+    <rect x="52" y="182" width="136" height="14" rx="4"/>
+  </g>
+  <g fill="#EC4A32" stroke="#EC4A32" stroke-width="5" stroke-linecap="round">
+    <circle cx="120" cy="28" r="9" stroke="none"/>
+    <path d="M104 148 L114 158 L136 136" fill="none" stroke-width="6"/>
+  </g>
+  <g fill="none" stroke="#2443C4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 206 V110 C40 66 76 38 120 38 C164 38 200 66 200 110 V206"/>
+    <path d="M28 210 H212"/>
+    <path d="M62 96 C66 78 80 64 96 58" stroke-width="4"/>
+    <rect x="70" y="118" width="100" height="64" rx="6"/>
+    <path d="M52 186 H188 L180 198 H60 Z"/>
+  </g>
+  </g>
+</svg>

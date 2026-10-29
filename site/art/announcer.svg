@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="60 70 540 480" role="img" aria-labelledby="t">
+  <title id="t">A radio announcer speaks into a vintage microphone, and the words leave it as a line of type</title>
+  <!-- Cadence riso set. Two inks over paper: cobalt #2443C4 and pink #F2A2BF, red #EC4A32 as the spot.
+       The pink plate is printed slightly off register (translate 6,5) on purpose. -->
+  <defs>
+    <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="600" height="560">
+      <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -2.6 0 0 0 2.3" result="speck"/>
+      <feComposite in="SourceGraphic" in2="speck" operator="in"/>
+    </filter>
+    <path id="ribbon" d="M404 236 C444 206 470 152 522 122 C548 108 570 104 590 106"/>
+  </defs>
+  <g filter="url(#grain)">
+
+  <!-- Pink plate -->
+  <g fill="#F2A2BF" transform="translate(6 5)">
+    <path d="M182 400 L186 330 C170 290 168 220 200 180 C220 160 245 160 252 172 C262 192 266 210 268 222 C276 236 290 252 298 262 C296 270 286 272 279 273 C283 280 284 285 281 290 L275 293 L280 300 C280 312 276 324 270 332 C258 342 244 344 236 342 L236 384 C236 390 238 396 240 400 Z"/>
+    <rect x="338" y="214" width="64" height="124" rx="32"/>
+    <path d="M392 214 C430 186 462 136 516 104 C546 88 574 84 596 88 L598 124 C574 120 552 124 530 138 C488 166 456 214 402 240 Z"/>
+  </g>
+
+  <!-- Red spot -->
+  <g fill="#EC4A32">
+    <path d="M279 285 C291 284 293 297 281 300 C276 297 275 289 279 285 Z"/>
+    <rect x="338" y="270" width="64" height="12"/>
+    <path d="M304 276 Q314 290 304 304" fill="none" stroke="#EC4A32" stroke-width="5" stroke-linecap="round"/>
+    <path d="M316 266 Q332 290 316 314" fill="none" stroke="#EC4A32" stroke-width="5" stroke-linecap="round"/>
+    <rect x="574" y="86" width="7" height="26" transform="rotate(4 577 99)"/>
+  </g>
+
+  <!-- Cobalt plate -->
+  <g fill="none" stroke="#2443C4" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <!-- hair -->
+    <path fill="#2443C4" stroke="none" d="M196 186 C205 140 272 126 294 160 C300 172 290 182 262 180 C252 179 246 186 242 198 C236 214 228 224 214 230 C204 260 200 300 186 318 C166 300 164 230 196 186 Z"/>
+    <!-- ear -->
+    <path d="M204 244 C188 236 182 262 190 278 C196 290 206 292 212 286" fill="#F2A2BF" stroke-width="6"/>
+    <path d="M200 256 C196 264 200 272 206 274" stroke-width="4"/>
+    <!-- brow, closed eye, nostril, jaw -->
+    <path d="M240 208 Q254 199 268 207" stroke-width="8"/>
+    <path d="M246 228 Q256 236 266 228" stroke-width="5"/>
+    <path d="M284 266 Q290 268 287 273" stroke-width="4"/>
+    <path d="M236 342 C228 338 222 330 218 318" stroke-width="5"/>
+    <!-- shoulders, collar, button (raised to shorten the neck) -->
+    <g transform="translate(0 -36)">
+    <path d="M90 600 C104 488 150 452 204 440"/>
+    <path d="M240 432 C286 442 322 476 340 600"/>
+    <path d="M206 438 L234 476 L252 436"/>
+    <circle cx="236" cy="512" r="6" fill="#2443C4" stroke="none"/>
+    </g>
+    <!-- microphone: capsule, grille, yoke, stand -->
+    <rect x="338" y="214" width="64" height="124" rx="32"/>
+    <path d="M352 238 H388 M348 254 H392 M348 298 H392 M348 314 H392" stroke-width="4"/>
+    <path d="M326 296 C326 356 414 356 414 296"/>
+    <path d="M370 352 V536 M332 540 H408"/>
+  </g>
+
+  <!-- The words leaving the microphone -->
+  <text font-family="'Iowan Old Style','New York',Georgia,serif" font-style="italic" font-size="25" fill="#2443C4">
+    <textPath href="#ribbon" startOffset="8">speak, and it types</textPath>
+  </text>
+  </g>
+</svg>
