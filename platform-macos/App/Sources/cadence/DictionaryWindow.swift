@@ -64,7 +64,7 @@ final class DictionaryWindowController: NSWindowController, NSWindowDelegate {
         let save = NSButton(title: "Save", target: self, action: #selector(save))
         save.bezelStyle = .rounded
         save.keyEquivalent = "\r"  // Return
-        save.bezelColor = BrandColor.green
+        save.bezelColor = BrandColor.accentStrong
         save.contentTintColor = .white
 
         let buttons = NSStackView(views: [NSView(), cancel, save])

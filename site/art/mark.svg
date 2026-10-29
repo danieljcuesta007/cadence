@@ -1,23 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="t">
-  <title id="t">Cadence mark: five bars of a voice level in pink and cobalt, the tallest in red</title>
-  <!-- No background ink: the mark sits on white paper. Pink, cobalt and red are the bars themselves. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 824" role="img" aria-labelledby="t">
+  <title id="t">Cadence mark: five bars of a voice level in cobalt, the tallest in pink</title>
+  <!-- The app icon's own geometry (render-icon.swift, 824 plate): bars 76 wide, 122 apart,
+       heights 180/312/400. No background ink: the mark sits on white paper. -->
   <defs>
-    <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
-      <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
-      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -2.6 0 0 0 2.3" result="speck"/>
+    <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="824" height="824">
+      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1.6 0 0 0 1.95" result="speck"/>
       <feComposite in="SourceGraphic" in2="speck" operator="in"/>
     </filter>
   </defs>
-  <g filter="url(#grain)">
-  <g fill="none" stroke="#2443C4" stroke-linecap="round" stroke-width="22">
-    <path d="M91 78 V162 M149 78 V162"/>
-  </g>
-  <g fill="none" stroke="#F2A2BF" stroke-linecap="round" stroke-width="22">
-    <path d="M62 102 V138 M178 102 V138"/>
-  </g>
-  <g fill="none" stroke="#EC4A32" stroke-linecap="round" stroke-width="22">
-    <path d="M120 54 V186"/>
-  </g>
-  <rect x="24" y="24" width="192" height="192" rx="52" fill="none" stroke="#2443C4" stroke-width="7"/>
+  <g filter="url(#grain)" fill="none" stroke-linecap="round" stroke-width="76">
+    <path stroke="#2443C4" d="M168 360 V464 M656 360 V464 M290 294 V530 M534 294 V530"/>
+    <path stroke="#F2A2BF" d="M412 250 V574"/>
   </g>
 </svg>

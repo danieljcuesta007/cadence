@@ -66,7 +66,7 @@ stays white. In night mode only the prints keep the texture, because grey speckl
 | `release.svg` | A page of fresh type with a red caret | Step 3 |
 | `jar.svg` | A laptop under a bell jar: nothing leaves your Mac | Privacy feature |
 | `bubbles.svg` | "hi" and "hola" | Two-languages feature |
-| `mark.svg` | Five voice-level bars, with the tallest in red | Header, footer |
+| `mark.svg` | The app icon's five bars (same 824 grid): cobalt, with the tallest in pink. No tile or background ink; it sits on white paper | Header, footer, favicon |
 
 ## Type
 
@@ -82,8 +82,10 @@ All three are system fonts, so nothing is downloaded.
 Plain and confident. Say what it does: "Speak. It types." Don't use emojis, and don't
 use exclamation marks.
 
-## Not changed by v1
+## The app
 
-The app icon (`platform-macos/.../AppIcon`) and the in-app green (`BrandColor.swift`) stay as
-they are. v1 covers marketing: the site, social images and release art. Bringing the app
-itself into the riso system is a separate decision.
+Since 29 Oct 2026 the app wears the same inks. The icon (`platform-macos/App/AppIcon/render-icon.swift`)
+keeps its original geometry and white plate, with cobalt bars and a pink peak, drawn in sRGB so the
+hex values land exactly. `BrandColor.swift` has `accent` (pink: bars and fills), `accentStrong`
+(cobalt: emphasis text and buttons, because pink is too light to carry text), `accentSoft` and
+`accentWash`. The HUD's live waveform is pink.
