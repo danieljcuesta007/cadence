@@ -10,6 +10,8 @@ guide both read from. Don't copy them anywhere else.
 
 ![Brand guide](cadence-brand-guide.png)
 
+Editable reference: [brand-guide.svg](brand-guide.svg).
+
 ## Paper and inks
 
 One paper and three inks. The art is printed only in the three inks, and the paper is whatever it sits on.
@@ -90,3 +92,18 @@ hex values land exactly. `BrandColor.swift` has `accent` (pink: bars and fills),
 (cobalt: emphasis text and buttons, because pink is too light to carry text), `accentSoft` and
 `accentWash`, plus `button` (cobalt fills with white labels). In light mode the pinks are deepened
 (`#D9578B` marks, `#EE8FB2` past-day bars) so they stay visible on white. The HUD's live waveform is pink.
+
+## Icon delivery and cache refresh
+
+`site/art/mark.svg` remains the geometry source. Run `swift qa/render-web-icons.swift`
+from the repository root to derive the clean small-size browser icons. Both HTML
+pages use the versioned `favicon-riso-v2.svg` / `.png` and
+`apple-touch-icon-riso-v2.png`, so old green browser caches cannot keep selecting
+the old URLs. `/favicon.ico` and `/favicon.png` remain branded fallbacks. Share
+metadata uses `icon-512-riso-v2.png`. When changing icon artwork again, change the
+URL version on both pages and in `site/files.mjs`.
+
+The standalone and widget marks have no plate. The macOS application icon keeps
+its white rounded plate. Tiny browser icons use solid inks without grain so the
+five bars remain distinct. The reference image above is generated from the SVG
+reference; it is not a screenshot of an earlier site or an old logo proposal.
