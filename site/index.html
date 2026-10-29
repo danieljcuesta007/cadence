@@ -36,8 +36,8 @@
 <section class="hero" aria-labelledby="hero-title">
   <div class="hero-grid">
   <div class="hero-copy">
-  <p class="eyebrow">A DC Labs product · Free &amp; open source · macOS</p>
-  <h1 id="hero-title">Speak. It types.<br><span>Nothing leaves your Mac.</span></h1>
+  <p class="eyebrow">DC Labs · Free &amp; open source · macOS</p>
+  <h1 id="hero-title">Speak. It types.<br><span class="circled">Nothing leaves your Mac.<svg class="scribble" viewBox="0 0 1200 600" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path vector-effect="non-scaling-stroke" d="M 950 90 C 1250 300, 1050 480, 600 520 C 250 520, 150 480, 150 300 C 150 120, 350 80, 600 80 C 850 80, 950 180, 950 180"/></svg></span></h1>
   <p class="lede">Hold a key, say what you mean, let go. Cadence turns your voice into text in whatever app you're using, transcribed entirely on your Mac. Works offline, in two languages, for free.</p>
   <div class="hero-actions">
     <a class="button" href="#download">Download for Mac</a>
@@ -46,39 +46,25 @@
   </div>
   <figure class="hero-art print"><img src="art/announcer.svg" alt="An illustrated announcer speaks into a vintage microphone, and the words leave it as a line of type" width="540" height="480"></figure>
   </div>
-  <div class="demo" aria-hidden="true">
-    <div class="window">
+  <div class="demo" id="try">
+    <div class="demo-grid">
+      <div class="demo-note" aria-hidden="true">
+        <div class="window">
       <div class="window-bar"><span></span><span></span><span></span><p>Notes</p></div>
       <p class="typed"><span class="w">Quick</span> <span class="w">thought</span> <span class="w">before</span> <span class="w">I</span> <span class="w">forget:</span> <span class="w">the</span> <span class="w">launch</span> <span class="w">email</span> <span class="w">goes</span> <span class="w">out</span> <span class="w">Thursday,</span> <span class="w">and</span> <span class="w">the</span> <span class="w">Spanish</span> <span class="w">version</span> <span class="w">too.</span><span class="caret"></span></p>
     </div>
     <div class="pill"><span class="dot"></span><span class="bars"><i></i><i></i><i></i><i></i><i></i></span><span class="pill-label">Listening · EN</span></div>
-  </div>
-</section>
-
-<section class="try" id="try" aria-labelledby="try-title">
-  <div class="scribble-title">
-    <svg class="scribble" viewBox="0 0 1200 600" aria-hidden="true" focusable="false">
-      <defs>
-        <filter id="scribble-grain" filterUnits="userSpaceOnUse" x="0" y="0" width="1200" height="600">
-          <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
-          <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -2.6 0 0 0 2.3" result="speck"/>
-          <feComposite in="SourceGraphic" in2="speck" operator="in"/>
-        </filter>
-      </defs>
-      <path pathLength="1" filter="url(#scribble-grain)" d="M 950 90 C 1250 300, 1050 480, 600 520 C 250 520, 150 480, 150 300 C 150 120, 350 80, 600 80 C 850 80, 950 180, 950 180"/>
-    </svg>
-    <p class="kicker">Try it</p>
-    <h2 id="try-title">Say something.</h2>
-    <p class="scribble-sub">The orb listens in this tab, the way Cadence listens on your Mac.</p>
-  </div>
-  <div class="try-stage">
-    <figure class="orb-card print" data-orb>
-      <canvas aria-hidden="true"></canvas>
-      <img class="orb-fallback" src="art/speak.svg" alt="" width="240" height="240">
-    </figure>
-    <button type="button" class="button" data-orb-toggle aria-pressed="false" hidden>Try it with your voice</button>
-    <p class="orb-status" data-orb-status role="status" aria-live="polite"></p>
-    <p class="small orb-note">Your voice stays in this browser tab. The orb reads only how loud you are, and nothing is recorded, saved or sent. Stop gives the microphone back.</p>
+      </div>
+      <figure class="orb-card print" data-orb>
+        <canvas aria-hidden="true"></canvas>
+        <img class="orb-fallback" src="art/speak.svg" alt="" width="240" height="240">
+      </figure>
+    </div>
+    <div class="demo-controls">
+      <button type="button" class="button" data-orb-toggle aria-pressed="false" hidden>Try it with your voice</button>
+      <p class="orb-status" data-orb-status role="status" aria-live="polite"></p>
+      <p class="small orb-note">A browser demo: talk and the note fills in. The browser only hears how loud you are, so it types a sample sentence; the app types your real words. Nothing is recorded, saved or sent, and Stop gives the microphone back.</p>
+    </div>
   </div>
 </section>
 
@@ -159,8 +145,8 @@ brew install --cask cadence</code></pre>
     <div class="monogram" aria-hidden="true">DC</div>
     <div>
       <p class="kicker">About the creator</p>
-      <h2 id="creator-title">Built by Daniel Cuesta at DC&nbsp;Labs.</h2>
-      <p>Daniel is a student founder who runs a lot at once: Addisuna Coffee, a coffee company where every bag funds a student's learning in Ethiopia, and Wednesdays of Wisdom, a weekly letter. He talks faster than he types, in English and Spanish, and wanted dictation that kept his words on his own machine. So he built it. Cadence is a DC Labs product, the label for the tools he makes.</p>
+      <h2 id="creator-title">Built by DC Labs, a Daniel J. Cuesta company.</h2>
+      <p>Daniel is a student founder who runs a lot at once: Addisuna Coffee, a coffee company where every bag funds a student's learning in Ethiopia, and Wednesdays of Wisdom, a weekly letter. He talks faster than he types, in English and Spanish, and wanted dictation that kept his words on his own machine. So he built it. DC Labs is the studio behind the tools he makes.</p>
       <ul class="creator-links">
         <li><a href="https://danielcuesta007.com" rel="noopener">danielcuesta007.com</a></li>
         <li><a href="https://addisuna.com" rel="noopener">Addisuna Coffee</a></li>
@@ -185,7 +171,7 @@ brew install --cask cadence</code></pre>
 </main>
 
 <footer class="site-footer">
-  <div class="footer-brand"><img src="art/mark.svg" alt="" width="40" height="40"><p><strong>Cadence</strong><br>A DC Labs product</p></div>
+  <div class="footer-brand"><img src="art/mark.svg" alt="" width="40" height="40"><p><strong>Cadence</strong><br>Built by DC Labs, a Daniel J. Cuesta company.</p></div>
   <nav aria-label="Footer">
     <a href="legal.html#privacy">Privacy</a>
     <a href="legal.html#license">License</a>

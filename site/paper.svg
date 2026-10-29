@@ -1,14 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
   <title>Paper texture</title>
-  <!-- White paper: a fine tooth of grey speckle plus long, faint fibres. Tiles seamlessly. -->
+  <filter id="press" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.07" numOctaves="5" seed="11" stitchTiles="stitch" result="relief"/>
+    <feDiffuseLighting in="relief" lighting-color="#ffffff" surfaceScale="1.6" diffuseConstant="1.05" result="lit">
+      <feDistantLight azimuth="235" elevation="58"/>
+    </feDiffuseLighting>
+    <feColorMatrix in="lit" type="matrix" values="0 0 0 0 0.46  0 0 0 0 0.43  0 0 0 0 0.40  -0.75 0 0 0 0.71" result="shade"/>
+  </filter>
   <filter id="tooth" x="0" y="0" width="100%" height="100%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="4" stitchTiles="stitch"/>
-    <feColorMatrix values="0 0 0 0 0.38  0 0 0 0 0.37  0 0 0 0 0.45  0 0 0 0.13 -0.04"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" stitchTiles="stitch"/>
+    <feColorMatrix values="0 0 0 0 0.4  0 0 0 0 0.39  0 0 0 0 0.45  0 0 0 0.10 -0.03"/>
   </filter>
-  <filter id="fibre" x="0" y="0" width="100%" height="100%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.035 0.09" numOctaves="3" seed="9" stitchTiles="stitch"/>
-    <feColorMatrix values="0 0 0 0 0.42  0 0 0 0 0.40  0 0 0 0 0.48  0 0 0 0.10 -0.045"/>
-  </filter>
-  <rect width="320" height="320" filter="url(#tooth)"/>
-  <rect width="320" height="320" filter="url(#fibre)"/>
+  <rect width="400" height="400" filter="url(#press)"/>
+  <rect width="400" height="400" filter="url(#tooth)"/>
 </svg>

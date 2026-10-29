@@ -225,3 +225,7 @@ MIT — see [LICENSE](LICENSE). Note that the vendored dependencies carry their 
 continue to apply to any built artifact: whisper.cpp and ggml (MIT), SQLCipher (BSD-style),
 OpenSSL (Apache-2.0). Model weights are downloaded from their publishers under their own terms
 and are not redistributed here.
+
+---
+
+Built by DC Labs, a Daniel J. Cuesta company.
