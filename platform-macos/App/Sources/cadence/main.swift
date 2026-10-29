@@ -93,6 +93,7 @@ func parseArgs() -> Config {
         case "selftest-wav":
             c.mode = "selftest"
             c.wav = it.next()
+        case "selftest-widget": c.mode = "selftest-widget"
         case "selftest-stats": c.mode = "selftest-stats"
         case "selftest-store": c.mode = "selftest-store"
         case "selftest-hotkeys": c.mode = "selftest-hotkeys"
@@ -125,6 +126,8 @@ let config = parseArgs()
 switch config.mode {
 case "selftest":
     exit(runSelftest(config))
+case "selftest-widget":
+    exit(runDesktopWidgetSelftest(outDir: config.outDir))
 case "selftest-stats":
     exit(runStatsSelftest())
 case "selftest-store":

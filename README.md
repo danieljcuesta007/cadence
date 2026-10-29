@@ -130,6 +130,7 @@ Disk-level protection is FileVault's job.
 cargo test --workspace                             # core: orchestrator, cleanup, store, models, ffi
 cargo test -p cadence-asr --features whisper       # ASR against real model files
 platform-macos/.build/release/insertctl selftest   # insertion + readback logic
+platform-macos/.build/release/cadence selftest-widget    # desktop stats, stale data and settings
 platform-macos/.build/release/cadence selftest-stats     # dashboard metric maths
 platform-macos/.build/release/cadence selftest-store     # store key: keep, rescue, or reset
 python3 -m unittest discover -s tools -p 'test_*.py'      # log recovery (tools/recover_from_log.py)
@@ -229,3 +230,7 @@ and are not redistributed here.
 ---
 
 Built by DC Labs, a Daniel J. Cuesta company.
+
+### Optional desktop widget
+
+In the Cadence menu, turn on **Show Desktop Widget** for the same wide Cadence stats tile: today’s and this week’s words, streak, pace, time saved and all-time words. Click its logo to open Cadence. Drag it to place it; hide it from the menu or its close button. It remembers your choice and position across launches. The tile is included in Cadence and reads only local aggregate stats; no Command Center or extra download is needed. It stays on the desktop while Cadence runs.
