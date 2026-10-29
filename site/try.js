@@ -1,5 +1,5 @@
-// Cadence site: the "Try it" section. A hand-drawn loop around the title, and a voice orb
-// that reacts to how loud you are. The microphone is opt-in (a button), the analyser reads
+// Cadence site: the live demo in the hero. A hand-drawn loop around "Nothing leaves your Mac",
+// and a voice orb beside the Notes window: while you talk, the orb swells and the note types. The microphone is opt-in (a button), the analyser reads
 // loudness only, and nothing is recorded, stored or sent. Stop releases the microphone.
 // Without WebGL the orb is a still illustration; without JavaScript the loop is already drawn.
 
@@ -9,6 +9,29 @@ function voiceLevel(bins, sensitivity) {
   let sum = 0;
   for (let i = 0; i < bins.length; i++) { const v = bins[i] / 255; sum += v * v; }
   return Math.min(Math.sqrt(sum / bins.length) * sensitivity * 3, 1);
+}
+
+// The demo note: one more word for every WORD_SECONDS of voice, so the note fills as you talk.
+// The browser only hears loudness, so it types the sample sentence; the app types your words.
+const WORD_SECONDS = 0.18;
+const VOICE = 0.12; // loudness that counts as talking
+function typeAlong(state, level, dt, total) {
+  if (level > VOICE) { state.voiced += dt; state.quiet = 0; } else state.quiet += dt;
+  while (state.voiced >= WORD_SECONDS && state.shown < total) { state.shown++; state.voiced -= WORD_SECONDS; }
+  if (state.shown >= total && state.quiet > 2) { state.shown = 0; state.voiced = 0; } // finished and quiet: start a fresh note
+  return state;
+}
+
+// On-screen length of the stretched loop. Its stroke doesn't scale, so the browser dashes it in
+// screen pixels: sample the path and scale each step by how much the line box stretches it.
+function loopLength(path, box, viewW, viewH) {
+  const sx = box.width / viewW, sy = box.height / viewH, total = path.getTotalLength();
+  let len = 0, prev = path.getPointAtLength(0);
+  for (let i = 1; i <= 120; i++) {
+    const p = path.getPointAtLength(total * i / 120);
+    len += Math.hypot((p.x - prev.x) * sx, (p.y - prev.y) * sy); prev = p;
+  }
+  return len;
 }
 
 // Spin and wobble for one frame: the orb only turns while it hears you.
@@ -69,7 +92,7 @@ vec4 draw(vec2 uv) {
   float v2 = smoothstep(1.0, mix(innerRadius, 1.0, n0 * 0.5), len);
   float v3 = smoothstep(innerRadius, mix(innerRadius, 1.0, 0.5), len);
   // Ink amounts instead of light: the ring is pink turning to cobalt, the travelling spark is red.
-  float ink = clamp(v0 * v2 * v3 * 1.7, 0.0, 1.0);
+  float ink = clamp(v0 * v2 * v3 * (1.7 + hover * 1.2), 0.0, 1.0); // your voice darkens the ink
   vec3 col = mix(pink, cobalt, cl);
   float spark = clamp(v1 * v2 * v3, 0.0, 1.0);
   col = mix(col, red, spark * 0.85);
@@ -169,7 +192,7 @@ function createListener(mediaDevices, AudioContextClass) {
 const TRY_TEXT = {
   idle: 'Try it with your voice',
   stop: 'Stop listening',
-  listening: 'Listening. Say something.',
+  listening: 'Listening. Say something, and watch the note.',
   hearing: 'Hearing you.',
   denied: 'No microphone was shared, so the orb is just breathing. That is fine too.',
   stopped: 'Microphone off.',
@@ -180,33 +203,41 @@ function initTry(doc, env) {
   const button = doc.querySelector('[data-orb-toggle]');
   const status = doc.querySelector('[data-orb-status]');
   const canvas = root && root.querySelector('canvas');
+  const typed = doc.querySelector('.typed');
+  const words = typed && typed.querySelectorAll ? [...typed.querySelectorAll('.w')] : [];
+  const note = { voiced: 0, quiet: 0, shown: 0 };
+  const showWords = n => words.forEach((w, i) => w.classList.toggle('on', i < n));
   const fallBack = () => { orb = null; if (root) root.classList.add('no-webgl'); };
   let orb = canvas ? env.createOrb(canvas, fallBack) : null;
   if (!orb) fallBack();
   const listener = env.createListener(env.mediaDevices, env.AudioContext);
   const motion = { rot: 0, hover: 0, hoverIntensity: 0 };
   const still = env.reducedMotion;
-  let last = 0, rafId = 0, heard = false, loudAt = -Infinity, onScreen = !env.IntersectionObserver;
+  let last = null, rafId = 0, heard = false, loudAt = -Infinity, onScreen = !env.IntersectionObserver;
   const say = text => { if (status && status.textContent !== text) status.textContent = text; };
   // Frames run only while there is something to show: the orb on screen and moving, or a live mic.
   const wanted = () => listener.listening || (!!orb && onScreen && !still);
   const schedule = () => { if (!rafId && (wanted() || (orb && onScreen))) rafId = env.raf(tick); };
   function tick(t) {
     rafId = 0;
-    const dt = last ? Math.min((t - last) / 1000, 0.1) : 0; last = t;
+    const dt = last === null ? 0 : Math.min((t - last) / 1000, 0.1); last = t;
     const level = listener.level(1.5);
     orbMotion(motion, level, dt, 1.2, 0.8);
     if (orb) orb.frame(still ? 1.5 : t / 1000, motion);
     // Announce sparingly: "Hearing you" once you get loud, back to "Listening" after 1.5 s of quiet.
     if (listener.listening) {
-      if (level > 0.12) loudAt = t;
+      const before = note.shown;
+      typeAlong(note, level, dt, words.length);
+      if (note.shown !== before) showWords(note.shown);
+      if (level > VOICE) loudAt = t;
       const now = t - loudAt < 1500;
       if (now !== heard) { heard = now; say(now ? TRY_TEXT.hearing : TRY_TEXT.listening); }
     }
     if (wanted()) rafId = env.raf(tick);
   }
   const setButton = on => { if (!button) return; button.textContent = on ? TRY_TEXT.stop : TRY_TEXT.idle; button.setAttribute('aria-pressed', on ? 'true' : 'false'); };
-  const stop = message => { listener.stop(); heard = false; loudAt = -Infinity; setButton(false); if (button) button.disabled = false; if (message) say(message); };
+  // Stop keeps the words you "said"; if you said nothing, the sample sentence comes back.
+  const stop = message => { listener.stop(); if (typed && note.shown === 0) typed.classList.remove('live'); heard = false; loudAt = -Infinity; setButton(false); if (button) button.disabled = false; if (message) say(message); };
   // The button only appears where a microphone could actually work.
   if (button && env.mediaDevices && env.mediaDevices.getUserMedia && env.AudioContext) button.hidden = false;
   if (button) button.addEventListener('click', async () => {
@@ -217,6 +248,8 @@ function initTry(doc, env) {
     if (ok === null) return;           // cancelled while asking (page hidden): stay quiet
     if (!ok) return say(TRY_TEXT.denied);
     setButton(true); say(TRY_TEXT.listening);
+    note.voiced = note.quiet = note.shown = 0; showWords(0);
+    if (typed) typed.classList.add('live');
     schedule();
   });
   // Leaving or hiding the page always gives the microphone back, even mid-permission-prompt.
@@ -224,8 +257,19 @@ function initTry(doc, env) {
   if (root && env.IntersectionObserver) new env.IntersectionObserver(entries => { onScreen = entries.some(e => e.isIntersecting); schedule(); }).observe(root);
   if (canvas && env.ResizeObserver) new env.ResizeObserver(() => schedule()).observe(canvas);
   schedule();
-  // The loop draws itself when the title scrolls into view (already drawn without JS).
-  doc.querySelectorAll('.scribble-title').forEach(el => {
+  // The loop draws itself when the line scrolls into view (already drawn without JS).
+  doc.querySelectorAll('.circled').forEach(el => {
+    const svg = el.querySelector && el.querySelector('svg'), path = svg && svg.querySelector('path');
+    const measure = () => {
+      if (!path || !path.getTotalLength || !el.style) return;
+      const box = svg.getBoundingClientRect();
+      if (!box.width || !box.height) return; // not laid out yet: keep the last length (or none: drawn)
+      el.style.setProperty('--loop', loopLength(path, box, 1200, 600).toFixed(1) + 'px');
+    };
+    measure();
+    if (svg && env.ResizeObserver) new env.ResizeObserver(measure).observe(svg);
+    if (env.fontsReady) env.fontsReady.then(measure, () => {});
+    if (env.onResize) env.onResize(measure);
     el.classList.add('armed');
     if (still || !env.IntersectionObserver) return el.classList.add('drawn');
     const io = new env.IntersectionObserver(entries => entries.forEach(e => { if (e.isIntersecting) { el.classList.add('drawn'); io.disconnect(); } }), { threshold: 0.4 });
@@ -242,6 +286,8 @@ if (typeof document !== 'undefined' && document.querySelector && document.queryS
     raf: fn => requestAnimationFrame(fn),
     IntersectionObserver: typeof IntersectionObserver !== 'undefined' ? IntersectionObserver : null,
     ResizeObserver: typeof ResizeObserver !== 'undefined' ? ResizeObserver : null,
+    fontsReady: document.fonts && document.fonts.ready,
+    onResize: fn => addEventListener('resize', fn),
     reducedMotion: typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches,
     onHide: fn => { addEventListener('pagehide', fn); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') fn(); }); },
   });
