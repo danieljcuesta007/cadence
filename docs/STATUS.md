@@ -2,6 +2,46 @@
 
 Updated: 2026-10-29 · Phase: **1 (MVP spine)** · Blueprint: docs/CADENCE_BLUEPRINT.md
 
+## Brand voice — Keep your cadence (2026-10-29)
+
+Daniel approved **Keep your cadence.** with **Your words. Your rhythm.**
+(“yeah all of it go”). Applied the direction to the hero, page/share metadata,
+announcer ribbon, README and brand reference. The plain explanation and explicit
+“Nothing leaves your Mac” promise remain alongside the brand line.
+
+Verified: site 28/28; desktop preview and 390px/320px phone layouts inspected,
+with no horizontal overflow. This is a website/documentation update; verified
+v0.1.3 download, app branding and widget instructions remain current.
+
+## Handoff
+
+_No active handoff._
+
+## Favicon cleanup and public-download verification (2026-10-29)
+
+Completed after the quota reset. PR #59/#60 merged; main `b915874` deployed to
+`cadence-dictation`, production deployment `0f4ee3be`. All 21 public files match
+the build byte-for-byte; site 28/28 and PR CI pass. Both pages use new versioned
+cobalt/pink browser/touch/share icons. Updated brand reference no longer shows
+the obsolete boxed/red-centre mark. Existing Chrome Cadence tab was reloaded.
+
+Downloaded the actual public latest asset: v0.1.3 (5), SHA-256
+`63e315ea93b98916ac648cd7b1d70ad8cfe885bdf94ba031f3dea38cf57c31c1`.
+Signature verified; bundled multilingual model matches its pin. Public app's
+appearance 10/10 and widget 16/16 pass. Pixel scans of its actual icon,
+light/dark dashboard and widget preview found no old green accents.
+
+The existing Vitals tile had one additional green element: its shared Live dot.
+Scoped it to Cadence pink (other engines keep their indicators), added four
+color checks, and confirmed a planted green regression fails. Small/Medium
+live-state renders have no green pixels. Released wow-command-center #213/#214,
+main `9079185`; production binary rebuilt, same stable signing requirement
+verified, and restarted. Shared dirty Command Center source checkout remains
+untouched; reviewed source stays in `~/ai-search-tracker-cadence-brand`.
+
+Real speech/first-install manual acceptance remains outstanding; preserve the
+original backup apps. Homepage brand-line exploration is unchanged.
+
 ## Waveform-only widget mark (2026-10-29)
 
 Daniel requested removing the white plate around the widget logo, keeping the

@@ -81,8 +81,14 @@ All three are system fonts, so nothing is downloaded.
 
 ## Voice
 
-Plain and confident. Say what it does: "Speak. It types." Don't use emojis, and don't
-use exclamation marks.
+**Keep your cadence.** is the brand line. **Your words. Your rhythm.** is its
+supporting line (Daniel approved this direction on 29 Oct 2026).
+
+Explain the product plainly alongside it: “Speak naturally. Cadence types entirely
+on your Mac.” Keep the privacy promise explicit: “Nothing leaves your Mac.”
+The name connects the product to a person's own pace and voice; avoid promises
+that Cadence records or preserves the sound of their voice. Don't use emojis or
+exclamation marks.
 
 ## The app
 

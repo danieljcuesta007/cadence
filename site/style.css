@@ -99,7 +99,7 @@ h3 { font:700 21px/1.25 var(--serif); }
 @keyframes word { from { opacity:0; filter:blur(3px); } to { opacity:1; filter:none; } }
 @keyframes blink { 50% { opacity:0; } }
 
-/* The loop: a red pencil circle drawn once around "Nothing leaves your Mac." (stretches to the line) */
+/* The loop: a red pencil circle drawn once around "Your words. Your rhythm." (stretches to the line) */
 .hero h1 .circled { position:relative; display:inline-block; padding:.08em .22em; margin-left:-.22em; }
 .scribble { position:absolute; left:-18%; top:-34%; width:140%; height:168%; overflow:visible; pointer-events:none; }
 .scribble path { fill:none; stroke:var(--red); stroke-width:4.5px; stroke-linecap:round; stroke-linejoin:round; opacity:.92; }
