@@ -1,6 +1,8 @@
 # Cadence
 
-Local-first, cloud-optional, system-wide AI voice dictation for macOS.
+**Keep your cadence.** Your words. Your rhythm.
+
+Private, on-device voice dictation for macOS.
 
 Hold Right-Option, speak, release — the text lands in whatever field has focus. Transcription
 runs entirely on-device (Whisper via Metal); nothing leaves the machine, and the app contains no

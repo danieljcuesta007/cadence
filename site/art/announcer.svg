@@ -55,8 +55,8 @@
   </g>
 
   <!-- The words leaving the microphone -->
-  <text font-family="'Iowan Old Style','New York',Georgia,serif" font-style="italic" font-size="25" fill="#2443C4">
-    <textPath href="#ribbon" startOffset="8">speak, and it types</textPath>
+  <text font-family="'Iowan Old Style','New York',Georgia,serif" font-style="italic" font-size="23" fill="#2443C4">
+    <textPath href="#ribbon" startOffset="8">your words, your rhythm</textPath>
   </text>
   </g>
 </svg>
