@@ -1,10 +1,10 @@
-/* Cadence: riso print. Two inks on cream paper, cobalt #2443C4 and pink #F2A2BF, red #EC4A32 as the
-   spot. Night mode is the same inks on a deep ink-blue sheet, and the illustrations stay on cream
-   cards, like prints pinned to a dark wall. Brand guide: docs/brand/README.md. */
+/* Cadence: riso print. Two inks on white paper, cobalt #2443C4 and pink #F2A2BF, red #EC4A32 as the
+   spot. Night mode is the same inks on a deep ink-blue sheet, and the illustrations stay on white
+   cards, like prints pinned to a dark wall. White, not cream: Daniel, 29 Oct. Brand guide: docs/brand/README.md. */
 :root {
-  --paper:#f3ecdc; --paper-2:#ebe2cc; --ink:#1d2a6b; --muted:#4f557a; --line:#d8cdb2; --card:#fbf7ee;
-  --blue:#2443c4; --blue-ink:#fbf7ee; --pink:#f2a2bf; --pink-soft:#f8d5e1; --red:#ec4a32; --red-text:#b02d18; --pill:#1d2a6b; --pill-fg:#fbf7ee;
-  --print:#f3ecdc;
+  --paper:#ffffff; --paper-2:#fdf3f7; --ink:#1d2a6b; --muted:#4f557a; --line:#e4e2ee; --card:#ffffff;
+  --blue:#2443c4; --blue-ink:#ffffff; --pink:#f2a2bf; --pink-soft:#f8d5e1; --red:#ec4a32; --red-text:#b02d18; --pill:#1d2a6b; --pill-fg:#ffffff;
+  --print:#ffffff;
   --serif:"Iowan Old Style","New York","Palatino Linotype",Georgia,serif;
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,monospace;
@@ -19,8 +19,8 @@
 @media (min-width:1800px) { :root { --max:min(1640px, calc(100vw - 2 * var(--gutter))); } }
 @media (min-width:2400px) { :root { --max:min(1840px, calc(100vw - 2 * var(--gutter))); } }
 @media (prefers-color-scheme:dark) {
-  :root { --paper:#141a3d; --paper-2:#1a2150; --ink:#f3ecdc; --muted:#b9b8cf; --line:#2c356c; --card:#1b2250;
-    --blue:#8fa2ff; --blue-ink:#141a3d; --pink:#f2a2bf; --pink-soft:#3a2a52; --red:#ff7a63; --red-text:#ff7a63; --pill:#f3ecdc; --pill-fg:#141a3d; }
+  :root { --paper:#141a3d; --paper-2:#1a2150; --ink:#f5f6fc; --muted:#b9b8cf; --line:#2c356c; --card:#1b2250;
+    --blue:#8fa2ff; --blue-ink:#141a3d; --pink:#f2a2bf; --pink-soft:#3a2a52; --red:#ff7a63; --red-text:#ff7a63; --pill:#ffffff; --pill-fg:#141a3d; }
 }
 *,*::before,*::after { box-sizing:border-box; }
 html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
@@ -36,7 +36,7 @@ code { font-size:.88em; }
 .skip:focus { top:12px; }
 
 /* Red text uses --red-text (AA on every surface); bright --red is for art, carets and dots only. */
-/* A print: illustration on a cream card with a pink plate offset behind it */
+/* A print: illustration on a white card with a pink plate offset behind it */
 .print { background:var(--print); border:2px solid var(--blue); border-radius:22px; box-shadow:8px 8px 0 var(--pink); }
 
 .site-header { position:sticky; top:0; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;
