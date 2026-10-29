@@ -92,9 +92,10 @@ void main() {
 }`;
 
 // Returns { frame(time, motion) } or null when WebGL or the shader is unavailable.
-function createOrb(canvas) {
+function createOrb(canvas, onLost) {
   const gl = canvas.getContext && (canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: true }) || canvas.getContext('experimental-webgl'));
   if (!gl) return null;
+  if (canvas.addEventListener && onLost) canvas.addEventListener('webglcontextlost', onLost);
   const compile = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null; };
   const vs = compile(gl.VERTEX_SHADER, ORB_VERT), fs = compile(gl.FRAGMENT_SHADER, ORB_FRAG);
   if (!vs || !fs) return null;
@@ -128,34 +129,40 @@ function createOrb(canvas) {
 // The microphone, opened only from the button. Loudness only: the stream feeds an analyser and
 // is never connected to the speakers, recorded or sent. stop() releases every track.
 function createListener(mediaDevices, AudioContextClass) {
-  let stream = null, context = null, source = null, analyser = null, bins = null;
+  let stream = null, context = null, source = null, analyser = null, bins = null, turn = 0;
+  const release = () => {
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    if (source) source.disconnect();
+    if (context && context.state !== 'closed' && context.close) context.close();
+    stream = context = source = analyser = bins = null;
+  };
   return {
     get listening() { return !!analyser; },
+    // Resolves true (listening), false (no microphone) or null (cancelled by stop() while asking).
+    // The audio context is made before the first await, inside the click, so Safari lets it run.
     async start() {
       if (!mediaDevices || !mediaDevices.getUserMedia || !AudioContextClass) return false;
+      const mine = ++turn;
       try {
-        stream = await mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
         context = new AudioContextClass();
-        if (context.state === 'suspended' && context.resume) await context.resume();
+        if (context.state === 'suspended' && context.resume) context.resume().catch(() => {});
+        const granted = await mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        if (mine !== turn) { granted.getTracks().forEach(track => track.stop()); return null; } // hidden or stopped while asking
+        stream = granted;
         analyser = context.createAnalyser();
         analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.3; analyser.minDecibels = -90; analyser.maxDecibels = -10;
         source = context.createMediaStreamSource(stream);
         source.connect(analyser);
         bins = new Uint8Array(analyser.frequencyBinCount);
         return true;
-      } catch { this.stop(); return false; }
+      } catch { if (mine === turn) release(); return mine === turn ? false : null; }
     },
     level(sensitivity) {
       if (!analyser) return 0;
       analyser.getByteFrequencyData(bins);
       return voiceLevel(bins, sensitivity);
     },
-    stop() {
-      if (stream) stream.getTracks().forEach(track => track.stop());
-      if (source) source.disconnect();
-      if (context && context.state !== 'closed' && context.close) context.close();
-      stream = context = source = analyser = bins = null;
-    },
+    stop() { turn++; release(); },
   };
 }
 
@@ -173,24 +180,33 @@ function initTry(doc, env) {
   const button = doc.querySelector('[data-orb-toggle]');
   const status = doc.querySelector('[data-orb-status]');
   const canvas = root && root.querySelector('canvas');
-  const orb = canvas ? env.createOrb(canvas) : null;
-  if (root && !orb) root.classList.add('no-webgl');
+  const fallBack = () => { orb = null; if (root) root.classList.add('no-webgl'); };
+  let orb = canvas ? env.createOrb(canvas, fallBack) : null;
+  if (!orb) fallBack();
   const listener = env.createListener(env.mediaDevices, env.AudioContext);
   const motion = { rot: 0, hover: 0, hoverIntensity: 0 };
   const still = env.reducedMotion;
-  let last = 0, heard = null, rafId = 0;
+  let last = 0, rafId = 0, heard = false, loudAt = -Infinity, onScreen = !env.IntersectionObserver;
   const say = text => { if (status && status.textContent !== text) status.textContent = text; };
-  const tick = t => {
+  // Frames run only while there is something to show: the orb on screen and moving, or a live mic.
+  const wanted = () => listener.listening || (!!orb && onScreen && !still);
+  const schedule = () => { if (!rafId && (wanted() || (orb && onScreen))) rafId = env.raf(tick); };
+  function tick(t) {
     rafId = 0;
     const dt = last ? Math.min((t - last) / 1000, 0.1) : 0; last = t;
     const level = listener.level(1.5);
     orbMotion(motion, level, dt, 1.2, 0.8);
     if (orb) orb.frame(still ? 1.5 : t / 1000, motion);
-    if (listener.listening) { const now = level > 0.1; if (now !== heard) { heard = now; say(now ? TRY_TEXT.hearing : TRY_TEXT.listening); } }
-    if (!still || listener.listening) rafId = env.raf(tick);
-  };
+    // Announce sparingly: "Hearing you" once you get loud, back to "Listening" after 1.5 s of quiet.
+    if (listener.listening) {
+      if (level > 0.12) loudAt = t;
+      const now = t - loudAt < 1500;
+      if (now !== heard) { heard = now; say(now ? TRY_TEXT.hearing : TRY_TEXT.listening); }
+    }
+    if (wanted()) rafId = env.raf(tick);
+  }
   const setButton = on => { if (!button) return; button.textContent = on ? TRY_TEXT.stop : TRY_TEXT.idle; button.setAttribute('aria-pressed', on ? 'true' : 'false'); };
-  const stop = message => { listener.stop(); heard = null; setButton(false); if (message) say(message); };
+  const stop = message => { listener.stop(); heard = false; loudAt = -Infinity; setButton(false); if (button) button.disabled = false; if (message) say(message); };
   // The button only appears where a microphone could actually work.
   if (button && env.mediaDevices && env.mediaDevices.getUserMedia && env.AudioContext) button.hidden = false;
   if (button) button.addEventListener('click', async () => {
@@ -198,13 +214,16 @@ function initTry(doc, env) {
     button.disabled = true;
     const ok = await listener.start();
     button.disabled = false;
+    if (ok === null) return;           // cancelled while asking (page hidden): stay quiet
     if (!ok) return say(TRY_TEXT.denied);
     setButton(true); say(TRY_TEXT.listening);
-    if (!rafId) rafId = env.raf(tick);
+    schedule();
   });
-  // Leaving the page always gives the microphone back.
-  if (env.onHide) env.onHide(() => { if (listener.listening) stop(TRY_TEXT.stopped); });
-  rafId = env.raf(tick);
+  // Leaving or hiding the page always gives the microphone back, even mid-permission-prompt.
+  if (env.onHide) env.onHide(() => { const was = listener.listening; stop(was ? TRY_TEXT.stopped : ''); });
+  if (root && env.IntersectionObserver) new env.IntersectionObserver(entries => { onScreen = entries.some(e => e.isIntersecting); schedule(); }).observe(root);
+  if (canvas && env.ResizeObserver) new env.ResizeObserver(() => schedule()).observe(canvas);
+  schedule();
   // The loop draws itself when the title scrolls into view (already drawn without JS).
   doc.querySelectorAll('.scribble-title').forEach(el => {
     el.classList.add('armed');
@@ -222,6 +241,7 @@ if (typeof document !== 'undefined' && document.querySelector && document.queryS
     AudioContext: typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null,
     raf: fn => requestAnimationFrame(fn),
     IntersectionObserver: typeof IntersectionObserver !== 'undefined' ? IntersectionObserver : null,
+    ResizeObserver: typeof ResizeObserver !== 'undefined' ? ResizeObserver : null,
     reducedMotion: typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches,
     onHide: fn => { addEventListener('pagehide', fn); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') fn(); }); },
   });

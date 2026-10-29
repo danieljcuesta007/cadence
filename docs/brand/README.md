@@ -28,6 +28,20 @@ Night mode keeps the same inks on a deep ink-blue sheet (`#141A3D`). Cobalt and 
 `#8FA2FF` and `#FF7A63` so they stay readable (site tokens only, never inside the art), and the illustrations stay on white cards, like prints
 pinned to a dark wall.
 
+## Paper texture
+
+The white is paper, not screen. `site/paper.svg` tiles a fine tooth and faint fibres over the page,
+the cards and the bands (one CSS rule lists every surface, and a test checks nothing is left flat).
+Illustration cards may run a breath warmer (`#FDFAF3`) so the figures sit on a sheet, while the page
+stays white. In night mode only the prints keep the texture, because grey speckle on ink-blue reads as static.
+
+## Motion
+
+- **Hand-drawn loop:** a red pencil loop draws itself around a key title once (2.5 s), with the
+  same grain as the art. Use it once per page at most.
+- **Voice orb:** pink turning to cobalt, with a red spark, printed with the speckle. It moves only
+  with your voice, and the microphone is opt-in, loudness only, never recorded.
+
 ## Rules for the art
 
 - **Two plates.** The pink plate prints first and sits slightly off register (about 5px
