@@ -52,7 +52,11 @@ test('each page has one h1, a skip link and labelled navigation', () => {
     for (const [img] of page.matchAll(/<img\b[^>]*>/g)) assert.match(img, /\salt="/, img);
   }
   assert.match(css, /prefers-reduced-motion:reduce/);
-  assert.match(css, /prefers-color-scheme:dark/);
+  // One white-paper sheet for every visitor: no navy night palette, and no auto-darkening.
+  assert.doesNotMatch(css, /prefers-color-scheme/);
+  assert.match(css, /color-scheme:light;/);
+  assert.match(home, /<meta name="color-scheme" content="light">/);
+  assert.doesNotMatch(home, /theme-color[^>]*prefers-color-scheme: dark/);
   assert.match(css, /min-height:44px/);
 });
 
@@ -61,6 +65,10 @@ test('the notarization choice is explained plainly', () => {
   assert.match(home, /not passing that cost on to you/);
   assert.match(home, /deliberate choice/);
   assert.match(home, /Open Anyway/);
+  // Sonoma and earlier show "Apple cannot check it" with OK, not Done; it needs its own route.
+  assert.match(home, /macOS 14 Sonoma there's a shortcut: Control-click/);
+  assert.match(home, /not from the disk image/);
+  assert.match(home, /data-copy="xattr -dr com\.apple\.quarantine \/Applications\/Cadence\.app"/);
   assert.match(home, /Microphone<\/b>.*Accessibility<\/b>/s);
   assert.doesNotMatch(html, /\bis notarized\b|signed by Apple|Developer ID/i);
 });

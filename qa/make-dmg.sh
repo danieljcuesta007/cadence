@@ -33,11 +33,16 @@ cp "$APP/Contents/Resources/LICENSE" "$APP/Contents/Resources/THIRD_PARTY_NOTICE
 cat > "$STAGE/Read me first.txt" <<'TXT'
 Cadence: dictation that never leaves your Mac.
 
-1. Drag Cadence onto Applications.
-2. Open it. macOS will say it can't verify the app: click Done.
+1. Drag Cadence onto Applications, eject this disk, and open Cadence from
+   Applications (not from this window).
+2. macOS will say it can't check or verify the app: click Done (or OK).
    (Cadence isn't notarized: that costs $99 a year, and Cadence is free.)
 3. System Settings > Privacy & Security > Security: next to "Cadence was
    blocked", click Open Anyway, then confirm.
+   On macOS 14 Sonoma you can instead Control-click Cadence in
+   Applications, choose Open, then Open again.
+   No Open Anyway button? Paste this into Terminal, then open Cadence:
+   xattr -dr com.apple.quarantine /Applications/Cadence.app
 4. Allow Microphone and Accessibility when asked.
 
 Optional desktop widget: open Cadence's menu in the menu bar and choose

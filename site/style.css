@@ -1,6 +1,8 @@
 /* Cadence: riso print. Two inks on white paper, cobalt #2443C4 and pink #F2A2BF, red #EC4A32 as the
-   spot. Night mode is the same inks on a deep ink-blue sheet, and the illustrations stay on white
-   cards, like prints pinned to a dark wall. White, not cream: Daniel, 29 Oct. The white is paper, not
+   spot. One sheet for everyone: a Mac in dark mode gets the same white paper, because the inks are
+   printed for paper and the navy night version read as a different, stranger site (Daniel, 29 Oct:
+   "it looks very strange in dark mode"). color-scheme:light keeps form controls and scrollbars on the
+   same sheet. White, not cream: Daniel, 29 Oct. The white is paper, not
    screen: paper.svg is embossed cold-press paper (lit fractal relief plus a fine tooth) on every surface. Illustration cards may run
    a breath warmer (--print) so the figures sit on a sheet, while the page itself stays white. Brand guide: docs/brand/README.md. */
 :root {
@@ -16,15 +18,11 @@
      dead margins either side on any screen wider than ~1250px (Daniel, 14 Oct: "no matter what
      computer it's loaded in it fixes itself accordingly"). Gutters already scale, so the column
      and the margins move together. */
-  color-scheme:light dark;
+  color-scheme:light;
 }
 @media (min-width:1300px) { :root { --max:min(1400px, calc(100vw - 2 * var(--gutter))); } }
 @media (min-width:1800px) { :root { --max:min(1640px, calc(100vw - 2 * var(--gutter))); } }
 @media (min-width:2400px) { :root { --max:min(1840px, calc(100vw - 2 * var(--gutter))); } }
-@media (prefers-color-scheme:dark) {
-  :root { --paper:#141a3d; --paper-2:#1a2150; --ink:#f5f6fc; --muted:#b9b8cf; --line:#2c356c; --card:#1b2250;
-    --blue:#8fa2ff; --blue-ink:#141a3d; --pink:#f2a2bf; --pink-soft:#3a2a52; --red:#ff7a63; --red-text:#ff7a63; --pill:#ffffff; --pill-fg:#141a3d; --texture:none; }
-}
 *,*::before,*::after { box-sizing:border-box; }
 html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
 body { margin:0; background:var(--paper); color:var(--ink); font:17px/1.6 var(--sans); overflow-wrap:anywhere; }
@@ -220,7 +218,7 @@ pre { background:var(--paper); border:2px dashed var(--line); border-radius:12px
 .doc li { margin-bottom:10px; }
 .doc-date { font-size:13px; color:var(--muted); }
 
-/* Paper: one list of every surface that carries the texture. Prints keep theirs in night mode. */
+/* Paper: one list of every surface that carries the texture. */
 body,.site-header,pre,.window,.steps-band,.steps li,kbd,.feature-grid li,.compare,.table-wrap,.download-card,.copy,.creator,.creator-card,.site-footer { background-image:var(--texture); background-size:400px; }
 .print,.spot,.lead-art { background-image:var(--print-texture); background-size:400px; }
 
