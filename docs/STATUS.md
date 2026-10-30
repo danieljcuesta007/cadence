@@ -15,7 +15,14 @@ v0.1.3 download, app branding and widget instructions remain current.
 
 ## Handoff
 
-_No active handoff._
+Capture latency investigation and measurements live in
+`~/cadence-capture-latency/docs/STATUS.md`, branch `diag/capture-start-latency`.
+Six real presses showed start paths 32–57 ms, no rebuilds/retries, and tap reuse.
+Hardware probes found ~100 ms tap delivery batching; requesting smaller buffers
+did not improve it. No latency optimization applied; diagnostic app remains running
+for a future intermittent slow press. See that worktree's Handoff for exact state,
+verification and rollback. Return exclusion is local commit `17097a0`; nothing
+pushed. Rebuilding from this checkout would replace the installed diagnostics.
 
 ## Favicon cleanup and public-download verification (2026-10-29)
 
