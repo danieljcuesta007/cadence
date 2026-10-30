@@ -15,6 +15,7 @@ final class EffectRouter {
     var overlay: OverlayHUD?
     var statusUpdate: ((String) -> Void)?
     var capture: AudioCapture?
+    var pttDownUptime: TimeInterval?
     var engine: (() -> CoreEngine?) = { nil }
     /// nil = allowed; otherwise the refusal reason. Selftest installs a frontmost-app
     /// guard here; live dictation intentionally has none — the focused field IS the target.
@@ -35,13 +36,25 @@ final class EffectRouter {
     private let audioLock = NSLock()
     private var retainedAudio: [Int16] = []
     private var retainingAudio = false
+    private var firstChunkTiming: (start: TimeInterval, ptt: TimeInterval?)?
 
     /// Tee from the capture callback (AppMain's onChunk) — a no-op unless this utterance
     /// is being retained.
     func retainChunk(_ samples: [Int16]) {
         audioLock.lock()
         if retainingAudio { retainedAudio.append(contentsOf: samples) }
+        let timing = samples.isEmpty ? nil : firstChunkTiming
+        if timing != nil { firstChunkTiming = nil }
+        let now = ProcessInfo.processInfo.systemUptime
         audioLock.unlock()
+        if let timing {
+            let startMS = Int((now - timing.start) * 1000)
+            let pttMS = timing.ptt.map { String(Int((now - $0) * 1000)) } ?? "unknown"
+            // Never write files or stderr on the audio render thread.
+            DispatchQueue.main.async { [weak self] in
+                self?.log("capture first chunk start_ms=\(startMS) ptt_ms=\(pttMS)")
+            }
+        }
     }
 
     private func setRetaining(_ on: Bool, clear: Bool = false) {
@@ -244,6 +257,12 @@ final class EffectRouter {
             return
         }
         let t0 = Date()
+        let began = ProcessInfo.processInfo.systemUptime
+        let pttMS = pttDownUptime.map { String(Int((began - $0) * 1000)) } ?? "unknown"
+        audioLock.lock()
+        firstChunkTiming = (began, pttDownUptime)
+        audioLock.unlock()
+        log("capture start requested ptt_ms=\(pttMS)")
         // Arm the accumulator before the tap starts so the first chunk is never missed;
         // clear stale audio from any utterance that ended without a persist.
         setRetaining(retainAudioEnabled(), clear: true)
@@ -252,19 +271,27 @@ final class EffectRouter {
         _ = takeMetrics()
         do {
             try capture.start()
-            let ms = Int(Date().timeIntervalSince(t0) * 1000)
+            let ms = Int((ProcessInfo.processInfo.systemUptime - began) * 1000)
             captureStartedAt = t0
             setMetric("capture_start_ms", ms)
             // §28: perceived start ≤ 50 ms — measured here. Device named so audio-quality
             // reports are diagnosable from the log (HFP headset mic vs built-in).
             log("capture started in \(ms) ms via \(capture.inputDescription)")
         } catch {
-            log("capture start failed: \(error) — cancelling utterance")
+            audioLock.lock()
+            firstChunkTiming = nil
+            audioLock.unlock()
+            log("capture start failed after \(Int((ProcessInfo.processInfo.systemUptime - began) * 1000)) ms: \(error) — cancelling utterance")
             engine()?.cancel()
         }
     }
 
     private func stopCapture() {
+        audioLock.lock()
+        let missingFirstChunk = firstChunkTiming != nil
+        firstChunkTiming = nil
+        audioLock.unlock()
+        if missingFirstChunk { log("capture stopped before first chunk") }
         if let capture {
             capture.stop()
             if let t0 = captureStartedAt {

@@ -15,7 +15,64 @@ v0.1.3 download, app branding and widget instructions remain current.
 
 ## Handoff
 
-_No active handoff._
+Capture-start latency diagnosis (Codex, 2026-10-29): first investigation batch
+complete; diagnostic build remains installed for the next intermittent slow press.
+Daniel completed six real Option presses. No latency optimization has been applied:
+the rebuild hypothesis was not reproduced. See measurements below before changing
+engine lifecycle or replacing the capture backend.
+
+Source worktree `~/cadence-capture-latency`, branch `diag/capture-start-latency`,
+based on `17097a0`; instrumentation remains uncommitted in AudioCapture.swift,
+EffectRouter.swift and AppMain.swift. Return exclusion committed separately as
+`17097a0` in `~/cadence` (local main, not pushed). Canonical checkout points here.
+
+### Measurements and decision
+
+- Six user presses: start path **57, 35, 32, 32, 33, 35 ms** (median 34 ms).
+  First converted chunk from Option callback: **165, 136, 135, 136, 135, 138 ms**.
+- ensureTap **0–1 ms**, first attempt every time, mic authorized,
+  `rebuild_pending=false` throughout; Option callback→router **0–5 ms**.
+  No configuration-change rebuild occurred during the sample.
+- Launch prewarm **1868 ms**; launch's subsequent debounced rebuild **<1 ms**,
+  fired 151 ms after notification. This launch cost was paid before user presses.
+- Local isolated capture probe, six runs at requested 2048 frames: actual input
+  buffers **4410 frames at 44100 Hz** (100 ms), first chunk **136–143 ms**.
+  Requesting 512 frames still produced **4410-frame** buffers and **135–142 ms**.
+- Six further probe runs with the native buffer's valid host timestamp:
+  first audio sample **53, 29, 32, 32, 31, 29 ms** after start request;
+  delivery **158, 135, 138, 138, 137, 135 ms**. Thus the ~100 ms callback delay
+  is batching, not evidence that the first 100 ms of speech was lost.
+- Codex decision: do not change rebuild/format caching based on these data.
+  A smaller requested tap buffer did not help. No pause/always-running engine
+  experiment was applied; full stop between utterances remains intact.
+  Intermittent larger engine-start stalls remain unproven by this sample.
+
+### Verification and exact state
+
+Release Swift build; lifecycle **17/17**, store **22/22**, hotkeys **37/37**;
+`git diff --check`. Installed doctor reports mic/AX granted, hotkeys/core ready.
+The local probes captured briefly without persisting audio/transcripts and exercised
+18 additional start/stop cycles without failure. Probe source and output are in
+ignored `dist/capture-probe/` (`baseline.txt`, `small-buffer.txt`, `host-timing.txt`).
+Probe uses the current AudioCapture implementation plus requested-buffer and native
+timestamp measurement substitutions; it is a local hardware experiment, not CI.
+
+Stable signing requirement and bundled multilingual model hash unchanged
+(`1be3a9b2…`). Diagnostic binary reused `~/cadence/target/release/libcadence_ffi.a`,
+which emits native macOS 26.5-vs-14 deployment warnings: local diagnostics only,
+not a distributable release. No push/publish/merge. Timings use monotonic uptime
+from the hotkey callback, not the physical key edge. Additional synchronous
+lifecycle diagnostics can add small measurement overhead.
+
+Installed app: `~/Applications/Cadence.app`; rollback:
+`~/Applications/Cadence.app.before-capture-diagnostics-20261029T175930`.
+Staged copy and install receipt remain in ignored `dist/`.
+Next: when a noticeably slow press occurs, inspect `~/.cadence/logs/cadence.log`
+for ensureTap/engine_start/retries/rebuilds and the first-chunk delta. If low delivery
+latency is required beyond the current tap's ~100 ms batching, evaluate a dedicated
+low-latency input backend with audio continuity, real-time safety and privacy tests;
+that is a separate implementation decision, not an established fix for the original
+intermittent startup report.
 
 ## Favicon cleanup and public-download verification (2026-10-29)
 

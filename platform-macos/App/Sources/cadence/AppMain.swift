@@ -232,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         router.overlay = overlay
         router.capture = capture
+        capture.onDiagnostic = { [weak self] in self?.router.log($0) }
         router.uiQueue = .main
         // Encrypted store (§24): key from the login keychain, DB at ~/.cadence/store.db.
         // Nil (keychain refused / bad open) keeps the JSONL stand-in — never a gate.
@@ -269,6 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkeys.secondaryEnabled = { [weak self] in (self?.secondaryLanguage ?? "off") != "off" }
         hotkeys.onPTTDown = { [weak self] key in
             guard let self else { return }
+            self.router.pttDownUptime = ProcessInfo.processInfo.systemUptime
             // Per-app rule: dictation is off here — say so briefly, touch nothing else.
             let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
             if self.disabledApps.contains(front) {

@@ -42,6 +42,13 @@ public final class AudioCapture {
     private var routeChangeObserver: NSObjectProtocol?
     private var rebuildWork: DispatchWorkItem?
 
+    /// Content-free lifecycle timings; called off the audio render thread.
+    public var onDiagnostic: ((String) -> Void)?
+
+    private func elapsedMS(_ since: TimeInterval) -> Int {
+        Int((ProcessInfo.processInfo.systemUptime - since) * 1000)
+    }
+
     /// (samples16k, level 0…1) — called on the audio tap thread. Only fires while running:
     /// the tap checks this flag so a buffer straggling in after stop() is still delivered
     /// (no-lost-words), but nothing arrives once the engine is stopped.
@@ -176,15 +183,29 @@ public final class AudioCapture {
     /// instead of on the first key-down. Does NOT start audio I/O — no mic indicator.
     /// Safe to call without mic permission (start() will re-derive if this failed).
     public func prewarm() {
-        try? ensureTap()
-        engine.prepare()
+        let began = ProcessInfo.processInfo.systemUptime
+        do {
+            try ensureTap()
+            engine.prepare()
+            onDiagnostic?("audio prewarm completed ms=\(elapsedMS(began))")
+        } catch {
+            engine.prepare()
+            onDiagnostic?("audio prewarm failed ms=\(elapsedMS(began)) error=\(error)")
+        }
     }
 
     public func start() throws {
         guard !running else { return }
+        let began = ProcessInfo.processInfo.systemUptime
+        var attempts = 1
+        defer {
+            onDiagnostic?("audio start completed ms=\(elapsedMS(began)) attempts=\(attempts) running=\(running) rebuild_pending=\(rebuildWork != nil) mic_authorized=\(Self.micAuthorized())")
+        }
         do {
             try startOnce()
         } catch {
+            onDiagnostic?("audio start retry error=\(error)")
+            attempts += 1
             // Route changed under a stale tap. reset() proved insufficient live
             // (2026-07-19 13:03–13:06: four consecutive tap rejections, every dictation
             // cancelling) — an AVAudioEngine can keep serving stale formats for the life
@@ -198,6 +219,8 @@ public final class AudioCapture {
                 // drop it for the session and go bare before giving up.
                 guard voiceIsolation, !vpDisabledFallback else { throw error }
                 vpDisabledFallback = true
+                attempts += 1
+                onDiagnostic?("audio start retry without voice processing error=\(error)")
                 recreateEngine()
                 try startOnce()
             }
@@ -206,7 +229,15 @@ public final class AudioCapture {
     }
 
     private func startOnce() throws {
-        try ensureTap()
+        var began = ProcessInfo.processInfo.systemUptime
+        let hadTap = tapInstalled
+        do { try ensureTap() } catch {
+            onDiagnostic?("audio ensure_tap failed ms=\(elapsedMS(began)) error=\(error)")
+            throw error
+        }
+        onDiagnostic?("audio ensure_tap ms=\(elapsedMS(began)) had_tap=\(hadTap)")
+        began = ProcessInfo.processInfo.systemUptime
+        defer { onDiagnostic?("audio engine_start ms=\(elapsedMS(began))") }
         do { try engine.start() } catch { throw CaptureError.engineStart(error) }
     }
 
@@ -224,6 +255,8 @@ public final class AudioCapture {
             routeChangeObserver = nil
         }
         rebuildWork?.cancel()
+        rebuildWork = nil
+        onDiagnostic?("audio recreate_engine")
         let old = engine
         tapInstalled = false
         tapFormat = nil
@@ -346,11 +379,18 @@ public final class AudioCapture {
                 forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
+                let scheduled = ProcessInfo.processInfo.systemUptime
+                self.onDiagnostic?("audio config_change running=\(self.running) rescheduled=\(self.rebuildWork != nil)")
                 self.rebuildWork?.cancel()
                 let work = DispatchWorkItem { [weak self] in
-                    guard let self, !self.running else { return }  // mid-capture: start() rebuilds after
+                    guard let self else { return }
+                    self.rebuildWork = nil
+                    self.onDiagnostic?("audio rebuild fired queue_ms=\(self.elapsedMS(scheduled)) running=\(self.running)")
+                    guard !self.running else { return } // mid-capture: start() rebuilds after
+                    let began = ProcessInfo.processInfo.systemUptime
                     self.teardownTap()
                     self.prewarm()
+                    self.onDiagnostic?("audio rebuild completed ms=\(self.elapsedMS(began)) since_notification_ms=\(self.elapsedMS(scheduled))")
                 }
                 self.rebuildWork = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
