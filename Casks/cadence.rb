@@ -19,6 +19,7 @@ cask "cadence" do
   caveats <<~EOS
     Cadence isn't notarized by Apple (that costs $99 a year, and Cadence is free).
     The first time you open it: System Settings > Privacy & Security > Open Anyway.
+    No Open Anyway button? Run: xattr -dr com.apple.quarantine /Applications/Cadence.app
     Your dictation history lives in ~/.cadence; uninstalling the app leaves it in place.
   EOS
 end
