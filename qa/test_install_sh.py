@@ -49,7 +49,7 @@ class InstallShTests(unittest.TestCase):
                         break
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def run_installer(self, sha=None):
+    def run_installer(self, sha=None, cut=None):
         script = (ROOT / 'site/install.sh').read_text()
         lines = [f'SHA256="{sha or self.sha}"' if l.startswith('SHA256="') else l for l in script.splitlines()]
         installer = self.tmp / 'install.sh'
@@ -58,7 +58,8 @@ class InstallShTests(unittest.TestCase):
         env = dict(os.environ, HOME=str(self.home), TMPDIR=str(self.tmp / 'tmpdir'), CADENCE_URL=self.dmg.as_uri(),
                    CADENCE_APPS=str(self.apps), CADENCE_NO_OPEN='1')
         # Piped into sh, exactly as the site tells people to run it.
-        return subprocess.run(['sh'], input=installer.read_text(), env=env, capture_output=True, text=True, timeout=300)
+        text = installer.read_text()
+        return subprocess.run(['sh'], input=text[:cut] if cut else text, env=env, capture_output=True, text=True, timeout=300)
 
     def quarantined(self, app):
         return subprocess.run(['xattr', '-p', 'com.apple.quarantine', str(app)], capture_output=True).returncode == 0
@@ -91,6 +92,12 @@ class InstallShTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('different app', result.stderr)
         self.assertIn('com.example.other', (self.apps / 'Cadence.app/Contents/Info.plist').read_text())
+
+    def test_a_download_cut_short_runs_nothing(self):
+        script = (ROOT / 'site/install.sh').read_text()
+        result = self.run_installer(cut=script.index('ditto "$src"'))  # stops mid-script
+        self.assertNotIn('downloading', result.stdout)
+        self.assertFalse((self.apps / 'Cadence.app').exists())
 
     def test_leaves_no_disk_image_mounted(self):
         self.run_installer()
