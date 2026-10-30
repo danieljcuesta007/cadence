@@ -2,7 +2,7 @@
 // the way our inspiration (Wispr Flow) does: time saved, words, speaking pace, streak, a
 // week of activity, and where you dictate — engine latency demoted to a footer.
 //
-// Data: the encrypted store (§24) when present, else the ~/.cadence/history.jsonl stand-in.
+// Data: the encrypted store (§24) when present, plus memory-only recovery and read-only legacy history.
 // Every headline number is computed here from the utterance rows (words from text, day from
 // ts, pace from capture duration) — no aggregation lives in the core.
 //
@@ -45,18 +45,22 @@ enum HistoryReader {
     static var store: HistoryStore?
 
     static func load() -> [HistoryEntry] {
+        var records: [[String: Any]] = []
         if let store {
-            return store.recent(limit: 1000).map(entry(from:))
+            records = store.recent(limit: 1000)
+        } else if let data = try? Data(contentsOf: History.url),
+                  let content = String(data: data, encoding: .utf8) {
+            records = content.split(separator: "\n").compactMap { line in
+                guard let data = line.data(using: .utf8) else { return nil }
+                return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            }
         }
-        guard let data = try? Data(contentsOf: History.url),
-            let content = String(data: data, encoding: .utf8)
-        else { return [] }
-        return content.split(separator: "\n").compactMap { line in
-            guard let d = line.data(using: .utf8),
-                let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
-            else { return nil }
-            return entry(from: obj)
-        }.reversed()
+        var seen = Set<String>()
+        return (Array(PendingHistory.shared.snapshot.map(\.record).reversed()) + records)
+            .filter { record in
+                let key = "\(record["utterance"] ?? "")|\(record["ts"] ?? "")"
+                return seen.insert(key).inserted
+            }.map(entry(from:)).sorted { ($0.ts ?? .distantPast) > ($1.ts ?? .distantPast) }
     }
 
     private static func entry(from obj: [String: Any]) -> HistoryEntry {

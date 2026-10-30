@@ -13,9 +13,71 @@ Verified: site 28/28; desktop preview and 390px/320px phone layouts inspected,
 with no horizontal overflow. This is a website/documentation update; verified
 v0.1.3 download, app branding and widget instructions remain current.
 
-## Handoff
+## Handoff — paused by Daniel at 5% reserve (2026-10-29)
 
-_No active handoff._
+Daniel explicitly said “pls pause, keep 5% margin”. Latest live official quota
+read via the existing codex-usage.py helper: primary used95% (5% remaining),
+source=live, resets_at1793310640. Stop work; do not resume merely because a new
+session starts. This latest user instruction sets the requested reserve to5%.
+
+**Goal authorized:** take Cadence toward serious competitive readiness. Start
+with confirmed plaintext fallback/privacy-claim gap, then onboarding/signing,
+human benchmarks, beta preparation. External purchases/legal/account/user
+recruitment steps still require the appropriate owner actions. Async question
+about existing Apple Developer membership is pending; no reply received.
+
+**Current live product:** unchanged v0.1.3 (5), installed and running; website
+main140276b, productionda81e08d with approved Keep-your-cadence branding.
+No privacy fix has been published or installed. Normal history is SQLCipher;
+old failure paths can still write plaintext in the LIVE app.
+
+**Local draft only:** ~/cadence-readiness, branchfix/private-history-fallback
+from origin/dev d88056f. No commits/PRs yet. Files touched:
+- New PendingHistory.swift: thread-safe memory-only buffer, snapshot/copy,
+  retry removes only successfully saved token; main-thread change notifications.
+- EffectRouter.swift: History.append now enriches and keeps records in RAM;
+  legacyHistory.url remains read/import-only. No new fallback file writes.
+- HistoryStore.swift: failed persists retain enriched record in memory;
+  persistRecoveredRecord + finishPendingWrites added; legacy import no longer
+  deletes a previous .imported archive (unique suffix instead).
+- DashboardWindow.swift: combines stored/legacy rows with pending RAM records.
+- AppMain.swift: persistent menu warning/recovery controls, copy/retry modal,
+  first-failure warning, modal PTT guard, quit confirmation for unsaved history;
+  shutdown cleanup moved to applicationWillTerminate so cancel keeps engine live.
+
+**NOT VERIFIED:** Draft has no new tests yet, no code review, no confirmed
+successful build. Build qa/build-shell.sh was started with CMAKE pointing to
+~/cadence/tools/cmake-local/... and output /tmp/cadence-readiness-build.log,
+then interrupted at Daniel's pause. No test has simulated storage failure. Do
+not package/install/merge this draft until reviewed and failure-tested.
+Generated local symlinks: target→../cadence-widget-release/target (existing
+macOS14 artifacts), models/artifacts→../../cadence/models/artifacts. Never stage
+those symlinks. No live keys, databases, legacy transcripts or credentials were
+modified for this draft.
+
+**Next on authorized resume after reserve reset:**
+1. Review the draft carefully before more features. Inspect compiler errors.
+   In particular validate pending-row deduplication and store JSON field names,
+   retry thread safety, timestamps/ids, nil/weak-store failures, audio failures,
+   quit cancellation, queued-write draining, model shutdown and modal focus.
+   New-store retry currently wires storage back but does not yet restore all
+   cached language/audio/dictionary/settings; address that or narrow the retry.
+2. Add meaningful fault-injection tests: no plaintext creation on unavailable/
+   failed store, failed retry preserves all words, success clears exact records,
+   records arriving during retry survive, clipboard only changes on explicit
+   Copy All, cancelled quit keeps engine available, legacy files preserved.
+   Observe a planted regression fail. Build and run relevant native suites.
+3. Update privacy UI/docs accurately: memory recovery is session-only and cannot
+   survive forced quit/crash; disclose that <=v0.1.3 may have legacy plaintext
+   history.jsonl/.imported files. Preserve those files; no automatic deletion.
+   Account for audio-blob failure semantics and 0600 local key-file threat model.
+4. Write a concrete prioritized readiness roadmap + beta kit, human benchmark
+   procedure and notarization preparation. No payments, legal filings, outreach
+   or new privacy-policy decisions should be invented from the broad goal.
+5. Only after validation: normal reviewed feature→dev→main PR workflow and
+   deliberate release/checksum/site deployment. Preserve existing app backups
+   pending Daniel's real dictation acceptance.
+
 
 ## Favicon cleanup and public-download verification (2026-10-29)
 

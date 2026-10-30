@@ -8,7 +8,7 @@
 // fresh one starts. Disk-level protection is FileVault's job.
 //
 // AC-22 (no words ever lost): if the store cannot open or a persist fails, callers fall
-// back to the append-only JSONL exactly as before — the store is an upgrade, never a gate.
+// back to visible, memory-only recovery. No plaintext history is written.
 
 import CCadenceFFI
 import Foundation
@@ -203,7 +203,7 @@ final class HistoryStore {
     }
     private let queue = DispatchQueue(label: "cadence.store", qos: .utility)
 
-    /// Nil when no key opens the store — callers keep the JSONL path.
+    /// Nil when no key opens the store — callers keep unsaved words in memory.
     init?() {
         let dbExists = FileManager.default.fileExists(atPath: Self.dbURL.path)
         var opened: (Data, OpaquePointer)?
@@ -234,7 +234,7 @@ final class HistoryStore {
         case .reset(let k):
             // No key we hold opens it: the key is gone. Keep the old file (renamed, never
             // deleted, in case its key turns up) and start a fresh store, instead of
-            // silently living on JSONL forever.
+            // silently running without encrypted persistence forever.
             let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
             if let aside = Self.moveAside() {
                 // Every key we held goes with it, so remember() below can't erase the one
@@ -247,7 +247,7 @@ final class HistoryStore {
         }
         guard let (key, db) = opened else {
             let msg = cadence_last_error().map { String(cString: $0) } ?? "unknown"
-            LogFile.append("store open failed — staying on JSONL: \(msg)")
+            LogFile.append("store open failed — history is memory-only: \(msg)")
             return nil
         }
         StoreKey.remember(key, keychain: found.keychain, file: found.file)
@@ -280,7 +280,7 @@ final class HistoryStore {
         cadence_store_free(handle)
     }
 
-    /// Persist the enriched history record; falls back to JSONL on any failure (AC-22).
+    /// Persist the enriched history record; retain failed writes in memory only.
     /// Async on the store queue — never blocks the effect router. `audio` is the utterance's
     /// 16 kHz mono capture, retained as an encrypted WAV blob only when the user opted in
     /// (§24; the router passes nil otherwise). Audio is best-effort: a blob failure costs
@@ -294,7 +294,7 @@ final class HistoryStore {
         rec.merge(metrics) { current, _ in current }
         queue.async { [weak self] in
             guard let self, let handle = self.handle else {
-                History.append(record: record, text: text, metrics: metrics)
+                PendingHistory.shared.append(rec)
                 return
             }
             // Blob first so the record can carry the link. Redacted utterances never
@@ -321,10 +321,23 @@ final class HistoryStore {
                 cadence_store_persist_json(handle, json)
             else {
                 let msg = cadence_last_error().map { String(cString: $0) } ?? "encode failed"
-                LogFile.append("store persist failed — JSONL fallback: \(msg)")
-                History.append(record: record, text: text, metrics: metrics)
+                LogFile.append("store persist failed — history is memory-only: \(msg)")
+                PendingHistory.shared.append(rec)
                 return
             }
+        }
+    }
+
+    func finishPendingWrites() { queue.sync {} }
+
+    /// Explicit user-requested recovery, off the UI thread. Uses the original record id
+    /// and timestamp; the store's upsert makes a retry idempotent.
+    func persistRecoveredRecord(_ record: [String: Any]) -> Bool {
+        queue.sync {
+            guard let handle,
+                  let data = try? JSONSerialization.data(withJSONObject: record),
+                  let json = String(data: data, encoding: .utf8) else { return false }
+            return cadence_store_persist_json(handle, json)
         }
     }
 
@@ -587,8 +600,10 @@ final class HistoryStore {
         guard FileManager.default.fileExists(atPath: jsonl.path), let handle else { return }
         let imported = cadence_store_import_jsonl(handle, jsonl.path)
         if imported >= 0 {
-            let aside = jsonl.appendingPathExtension("imported")
-            try? FileManager.default.removeItem(at: aside)
+            var aside = jsonl.appendingPathExtension("imported")
+            if FileManager.default.fileExists(atPath: aside.path) {
+                aside = jsonl.appendingPathExtension("imported-" + UUID().uuidString)
+            }
             try? FileManager.default.moveItem(at: jsonl, to: aside)
             LogFile.append("store: imported \(imported) JSONL records; JSONL moved aside")
         } else {

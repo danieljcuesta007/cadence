@@ -23,7 +23,7 @@ final class EffectRouter {
     var earconsEnabled = true
     /// Selftest hook: fires on fade-to-idle with the last inserted text (nil = none).
     var onIdle: ((String?) -> Void)?
-    /// Encrypted store (§24); nil (keychain/open failure) keeps the JSONL stand-in.
+    /// Encrypted store (§24); nil (keychain/open failure) keeps unsaved words in memory.
     var historyStore: HistoryStore?
     /// §24 retained audio: opt-in check, read at capture start (the composition root caches
     /// the setting; default off — never accumulate audio the user didn't ask to keep).
@@ -378,8 +378,7 @@ enum LogFile {
     }
 }
 
-/// Stand-in for core/store (§24): append-only JSONL so no utterance is ever unrecoverable
-/// (AC-22 baseline until the encrypted SQLite store lands).
+/// Legacy path is read/import-only. New recovery records are never written in plaintext.
 enum History {
     static let url = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".cadence/history.jsonl")
@@ -389,19 +388,7 @@ enum History {
         rec["text"] = text
         rec["ts"] = ISO8601DateFormatter().string(from: Date())
         rec.merge(metrics) { current, _ in current }
-        guard let data = try? JSONSerialization.data(withJSONObject: rec),
-            var line = String(data: data, encoding: .utf8)
-        else { return }
-        line += "\n"
-        let dir = url.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        if let handle = try? FileHandle(forWritingTo: url) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: Data(line.utf8))
-        } else {
-            try? Data(line.utf8).write(to: url)
-        }
+        PendingHistory.shared.append(rec)
     }
 }
 
