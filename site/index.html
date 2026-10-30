@@ -119,15 +119,22 @@
   <div class="download-grid">
     <div class="download-card">
       <img src="icon-512.png" alt="The Cadence app icon" width="120" height="120">
-      <a class="button" href="https://github.com/danieljcuesta007/cadence/releases/latest/download/Cadence.dmg">Download Cadence.dmg</a>
+      <h3 class="install-title">Install with one line</h3>
+      <p class="small">Open <b>Terminal</b> (press ⌘ Space, type Terminal, press Return), paste this and press Return:</p>
+      <pre class="install-line"><code>curl -fsSL https://cadence-dictation.pages.dev/install.sh | sh</code></pre>
+      <button type="button" class="copy" data-copy="curl -fsSL https://cadence-dictation.pages.dev/install.sh | sh">Copy</button>
+      <p class="small">It downloads Cadence, checks it's the genuine file, puts it in Applications and opens it. No security warning, no admin password. Run the same line again to update. <a href="install.sh">Read the script first</a>, it's short.</p>
       <p class="small">Apple silicon Mac · macOS 14 Sonoma or later · about 500 MB, because the speech model comes with it</p>
+      <p class="or"><span>or</span></p>
+      <a class="button ghost" href="https://github.com/danieljcuesta007/cadence/releases/latest/download/Cadence.dmg">Download Cadence.dmg</a>
       <p class="small">Or with Homebrew:</p>
       <pre><code>brew tap danieljcuesta007/cadence https://github.com/danieljcuesta007/cadence
 brew install --cask cadence</code></pre>
       <button type="button" class="copy" data-copy="brew tap danieljcuesta007/cadence https://github.com/danieljcuesta007/cadence &amp;&amp; brew install --cask cadence">Copy</button>
     </div>
     <div class="first-open">
-      <h3 id="why-warning">Why macOS asks you to confirm</h3>
+      <h3 id="why-warning">Used the .dmg? Why macOS asks you to confirm</h3>
+      <p>The one-line install skips all of this: Terminal downloads aren't flagged the way browser downloads are, and the script checks the file itself. If you downloaded the .dmg instead, read on.</p>
       <p>Apple only skips that warning for apps from developers who pay $99 a year for its Developer Program. Cadence is free, and staying free meant not passing that cost on to you. So it isn't notarized by Apple, and macOS will ask you to confirm once, the first time you open it. That was a deliberate choice, not an oversight.</p>
       <h3>Open it the first time</h3>
       <ol>
@@ -175,7 +182,8 @@ brew install --cask cadence</code></pre>
   <details><summary>Is it really free?</summary><p>Yes. Cadence is open source under the MIT license, with no account, trial or word limit.</p></details>
   <details><summary>Does anything I say leave my Mac?</summary><p>No. Transcription runs on your Mac, and Cadence has no networking code. History is encrypted on your disk, and audio is only kept if you turn that on.</p></details>
   <details><summary>Which languages?</summary><p>Any language the bundled Whisper model handles, two at a time: one per Option key, or set either key to detect the language automatically. English and Spanish are tested the most.</p></details>
-  <details><summary>Why does macOS warn me when I first open it?</summary><p>It isn't notarized, because that costs $99 a year and Cadence is free. <a href="#why-warning">Here's how to open it</a> on any macOS version, and how to check the file is genuine.</p></details>
+  <details><summary>Is the Terminal line safe?</summary><p>It runs <a href="install.sh">a short script</a> you can read first. It only downloads the release from GitHub, stops if the file doesn't match the published checksum, and copies Cadence.app into Applications. No admin password, and it never touches your history in ~/.cadence.</p></details>
+  <details><summary>Why does macOS warn me when I first open it?</summary><p>It isn't notarized, because that costs $99 a year and Cadence is free. The one-line install avoids the warning entirely. If you used the .dmg, <a href="#why-warning">here's how to open it</a> on any macOS version, and how to check the file is genuine.</p></details>
   <details><summary>Intel Mac? Windows? iPhone?</summary><p>Not yet. Cadence is built for Apple silicon Macs only, so it won't open on an Intel Mac. Windows is planned.</p></details>
   <details><summary>Is it affiliated with Wispr Flow, Superwhisper, Apple or OpenAI?</summary><p>No. They're named only to compare and to credit. Cadence is an independent project.</p></details>
 </section>

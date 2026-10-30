@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class MakeDmgTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix='cadence-dmg-')).resolve()
-        for rel in ('qa/make-dmg.sh', 'Casks/cadence.rb', 'site/index.html', 'LICENSE', 'THIRD_PARTY_NOTICES.md'):
+        for rel in ('qa/make-dmg.sh', 'Casks/cadence.rb', 'site/index.html', 'site/install.sh', 'LICENSE', 'THIRD_PARTY_NOTICES.md'):
             (self.tmp / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / rel, self.tmp / rel)
         model = b'fake multilingual model'
@@ -49,6 +49,9 @@ class MakeDmgTests(unittest.TestCase):
         self.assertIn(f'sha256 "{sha}"', cask)
         self.assertIn('version "9.9.9"', cask)
         self.assertIn(f'<code data-sha>{sha}</code>', (self.tmp / 'site/index.html').read_text())
+        installer = (self.tmp / 'site/install.sh').read_text()
+        self.assertIn(f'SHA256="{sha}"\n', installer)
+        self.assertIn('VERSION="9.9.9"\n', installer)
 
     def test_refuses_a_model_that_is_not_the_pinned_one(self):
         (self.app / 'Contents/Resources/models/ggml-small.bin').write_bytes(b'english only')
