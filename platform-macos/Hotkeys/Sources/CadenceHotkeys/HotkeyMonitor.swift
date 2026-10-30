@@ -105,6 +105,8 @@ public final class HotkeyMonitor {
     private static let kRightOption: Int64 = 61
     private static let kLeftOption: Int64 = 58
     private static let kEscape: Int64 = 53
+    private static let kReturn: Int64 = 36
+    private static let kEnter: Int64 = 76  // keypad Enter, and fn-Return on a laptop
     private static let kZ: Int64 = 6
     private static let kV: Int64 = 9
     /// Device-dependent modifier bits (IOLLEvent.h). The general .maskAlternate cannot tell
@@ -170,7 +172,7 @@ public final class HotkeyMonitor {
         }
         // Typing while a PTT is held is not speech — it is ⌥e for an accent, or a shortcut.
         // Retract rather than transcribe silence. Esc above has already been handled.
-        if type == .keyDown, arbiter.held != nil {
+        if type == .keyDown, arbiter.held != nil, Self.typingRetracts(keyCode: keyCode) {
             fire(arbiter.retract())
         }
         let repeating = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
@@ -196,6 +198,12 @@ public final class HotkeyMonitor {
             }
         }
         return Unmanaged.passUnretained(event)
+    }
+
+    /// Whether a key typed during a held push-to-talk retracts it. Return and Enter do not:
+    /// hitting one by accident must not cancel a dictation. Pure, so `cadence selftest-hotkeys` pins it.
+    public static func typingRetracts(keyCode: Int64) -> Bool {
+        keyCode != kReturn && keyCode != kEnter
     }
 
     /// The app's own chords, all on ⌃⌥⌘ so none can collide with a plain shortcut — ⌘V in
