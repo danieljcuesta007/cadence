@@ -154,6 +154,12 @@ func runHotkeySelftest() -> Int32 {
         // belongs to the app.
         check("unfired_repeat_passes_through",
               M.chordAction(keyCode: v, flags: hyper, autorepeat: true, fired: nil) == nil)
+        // Typing during a hold retracts it (⌥e is an accent, not speech), but an accidental
+        // Return or Enter must not throw the dictation away.
+        let e: Int64 = 14, ret: Int64 = 36, enter: Int64 = 76
+        check("typing_retracts", M.typingRetracts(keyCode: e))
+        check("return_does_not_retract", !M.typingRetracts(keyCode: ret))
+        check("enter_does_not_retract", !M.typingRetracts(keyCode: enter))
     }
 
     // 8. A sticky verbatim mode is visible in the menu bar when idle, so cleanup never goes
