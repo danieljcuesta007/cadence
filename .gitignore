@@ -13,3 +13,6 @@ Cargo.lock.orig
 .env
 /dist
 /qa/fixtures/wer-es/*.wav
+
+# Cloudflare Pages deploy cache (wrangler pages deploy from site/)
+site/.wrangler/
