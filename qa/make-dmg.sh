@@ -1,8 +1,8 @@
 #!/bin/bash
 # Turn dist/Cadence.app into a release disk image and point the installers at it.
 #   qa/package-app.sh && qa/make-dmg.sh 0.1.0
-# Writes dist/Cadence.dmg, records its SHA-256 in Casks/cadence.rb and on the site's
-# download section, and prints the publish steps. It never publishes anything itself.
+# Writes dist/Cadence.dmg, records its SHA-256 in Casks/cadence.rb, the site's
+# download section and site/install.sh (the one-line installer), and prints the publish steps. It never publishes anything itself.
 set -euo pipefail
 VERSION="${1:?usage: qa/make-dmg.sh <version, e.g. 0.1.0>}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "make-dmg: version must look like 0.1.0 (no leading v)" >&2; exit 1; }
@@ -59,6 +59,7 @@ SHA=$(shasum -a 256 "$DMG" | cut -d' ' -f1)
 
 sed -i '' -e "s|^  version \".*\"|  version \"$VERSION\"|" -e "s|^  sha256 \".*\"|  sha256 \"$SHA\"|" Casks/cadence.rb
 sed -i '' -E "s|<code data-sha>[^<]*</code>|<code data-sha>$SHA</code>|" site/index.html
+sed -i '' -e "s|^VERSION=\".*\"|VERSION=\"$VERSION\"|" -e "s|^SHA256=\".*\"|SHA256=\"$SHA\"|" site/install.sh
 
 cat <<MSG
 Built $DMG ($(du -h "$DMG" | cut -f1))

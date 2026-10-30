@@ -20,7 +20,7 @@ test('internal links and fragments resolve, IDs are unique per page', () => {
     for (const [, href] of page.matchAll(/<a\b[^>]*href="([^"]+)"/g)) {
       if (/^https?:/.test(href)) continue;
       const [file, fragment] = href.split('#');
-      assert.ok(!file || pages[file], href);
+      assert.ok(!file || pages[file] || SHIPPED.includes(file), href);  // a page, or a shipped file such as install.sh
       if (fragment) assert.ok(pages[file || name].includes(`id="${fragment}"`), `${name}: ${href}`);
     }
   }
@@ -68,6 +68,7 @@ test('the notarization choice is explained plainly', () => {
   // Sonoma and earlier show "Apple cannot check it" with OK, not Done; it needs its own route.
   assert.match(home, /macOS 14 Sonoma there's a shortcut: Control-click/);
   assert.match(home, /not from the disk image/);
+  assert.match(home, /data-copy="curl -fsSL https:\/\/cadence-dictation\.pages\.dev\/install\.sh \| sh"/);
   assert.match(home, /data-copy="xattr -dr com\.apple\.quarantine \/Applications\/Cadence\.app"/);
   assert.match(home, /Microphone<\/b>.*Accessibility<\/b>/s);
   assert.doesNotMatch(html, /\bis notarized\b|signed by Apple|Developer ID/i);
@@ -419,4 +420,19 @@ test('both pages select versioned transparent brand icons and share the current 
   const ico = await readFile('favicon.ico');
   assert.equal(ico.readUInt16LE(2), 1); assert.equal(ico.readUInt16LE(4), 3);
   assert.deepEqual([ico[6], ico[22], ico[38]], [16, 32, 64]);
+});
+
+// 29 Oct: "i like the one terminal line that takes care of it all" — the installer ships with
+// the site, pins the same release and checksum as the download section, and is served as text.
+test('the one-line installer pins the published release', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const sh = await readFile(new URL('./install.sh', import.meta.url), 'utf8');
+  const sha = home.match(/<code data-sha>([0-9a-f]{64})<\/code>/)[1];
+  assert.match(sh, new RegExp(`^SHA256="${sha}"$`, 'm'));
+  assert.match(sh, /^VERSION="\d+\.\d+\.\d+"$/m);
+  assert.match(sh, /releases\/download\/v\$VERSION\/Cadence\.dmg/);
+  assert.doesNotMatch(sh, /^[^#\n]*\bsudo\b/m);  // the header may say "No sudo"; no line may run it
+  assert.doesNotMatch(sh, /rm -rf[^\n]*\.cadence/);
+  const headers = await readFile(new URL('./_headers', import.meta.url), 'utf8');
+  assert.match(headers, /\/install\.sh\n  Content-Type: text\/plain/);
 });
