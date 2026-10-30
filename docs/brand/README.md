@@ -26,16 +26,16 @@ One paper and three inks. The art is printed only in the three inks, and the pap
 Small red **text** (labels, kickers) uses the deeper `#B02D18`, because bright red on white
 is only 3.2:1. The deeper red passes WCAG AA (4.5:1) on every surface.
 
-Night mode keeps the same inks on a deep ink-blue sheet (`#141A3D`). Cobalt and red *text* lift to
-`#8FA2FF` and `#FF7A63` so they stay readable (site tokens only, never inside the art), and the illustrations stay on white cards, like prints
-pinned to a dark wall.
+The website is one white sheet for everyone, even on a Mac in dark mode (`color-scheme: light`).
+The navy night version it used to switch to read as a stranger, different site (Daniel, 29 Oct
+2026), so it was removed. The app keeps its own System/Light/Dark appearance setting.
 
 ## Paper texture
 
 The white is paper, not screen. `site/paper.svg` tiles a fine tooth and faint fibres over the page,
 the cards and the bands (one CSS rule lists every surface, and a test checks nothing is left flat).
 Illustration cards may run a breath warmer (`#FDFAF3`) so the figures sit on a sheet, while the page
-stays white. In night mode only the prints keep the texture, because grey speckle on ink-blue reads as static.
+stays white.
 
 ## Motion
 

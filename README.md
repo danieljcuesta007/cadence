@@ -55,7 +55,9 @@ brew install --cask cadence
 ```
 
 Cadence isn't notarized by Apple (that costs $99 a year, and Cadence is free), so the first
-open needs **System Settings › Privacy & Security › Open Anyway**. Releases:
+open needs **System Settings › Privacy & Security › Open Anyway** (on macOS 14, Control-click
+the app › Open also works; if neither appears, `xattr -dr com.apple.quarantine /Applications/Cadence.app`).
+Releases:
 `qa/package-app.sh && qa/make-dmg.sh <version>` (it refuses a wrong model, missing licenses
 or a broken signature, and fills in the checksum for the cask and site).
 

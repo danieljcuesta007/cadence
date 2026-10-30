@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cadence — Your words. Your rhythm.</title>
 <meta name="description" content="Your words. Your rhythm. Speak naturally and let Cadence type entirely on your Mac. Private, offline, bilingual dictation. Free and open source from DC Labs.">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141a3d" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#ffffff">
 <meta property="og:title" content="Keep your cadence.">
 <meta property="og:description" content="Your words. Your rhythm. Speak naturally and let Cadence type entirely on your Mac. Private, offline, bilingual dictation. Free and open source from DC Labs.">
 <meta property="og:url" content="https://cadence-dictation.pages.dev/">
@@ -131,11 +131,18 @@ brew install --cask cadence</code></pre>
       <p>Apple only skips that warning for apps from developers who pay $99 a year for its Developer Program. Cadence is free, and staying free meant not passing that cost on to you. So it isn't notarized by Apple, and macOS will ask you to confirm once, the first time you open it. That was a deliberate choice, not an oversight.</p>
       <h3>Open it the first time</h3>
       <ol>
-        <li>Drag Cadence to Applications and open it. macOS says it can't verify the app. Click <b>Done</b>.</li>
-        <li>Open <b>System Settings › Privacy &amp; Security</b> and scroll to <b>Security</b>.</li>
-        <li>Next to "Cadence was blocked", click <b>Open Anyway</b>, then confirm.</li>
+        <li>Drag Cadence onto <b>Applications</b>, then eject the Cadence disk. Open Cadence from Applications, not from the disk image.</li>
+        <li>macOS says it can't check or verify the app. Click <b>Done</b> (or <b>OK</b>). Nothing is wrong with the file; this is the one-time notice for apps Apple hasn't notarized.</li>
+        <li>Open <b>System Settings › Privacy &amp; Security</b> and scroll down to <b>Security</b>. Next to "Cadence was blocked", click <b>Open Anyway</b>, then confirm with your password or Touch ID.</li>
       </ol>
+      <p>On macOS 14 Sonoma there's a shortcut: Control-click Cadence in Applications, choose <b>Open</b>, then click <b>Open</b> again.</p>
       <p>After that it opens normally. Cadence then asks for two permissions: <b>Microphone</b> to hear you and <b>Accessibility</b> to type into other apps.</p>
+      <h3 id="no-open-anyway">No Open Anyway button?</h3>
+      <p>It only shows for about an hour after macOS blocks the app, so open Cadence once more and look again. If it still isn't there, paste this into Terminal, press Return, then open Cadence normally:</p>
+      <pre><code>xattr -dr com.apple.quarantine /Applications/Cadence.app</code></pre>
+      <button type="button" class="copy" data-copy="xattr -dr com.apple.quarantine /Applications/Cadence.app">Copy</button>
+      <p>That removes the "downloaded from the internet" flag macOS puts on the app, and changes nothing else. Only run it on a download whose checksum matches the one below.</p>
+      <p>Cadence needs an Apple silicon Mac (M1 or newer) on macOS 14 Sonoma or later. On an older Mac it won't open, even after these steps.</p>
       <h3>Want a desktop widget?</h3>
       <p>It comes with the app. Open the Cadence menu in your Mac’s menu bar and turn on <b>Show Desktop Widget</b> to see today’s and this week’s words, streak, pace, time saved and all-time words. Click the widget’s logo to open Cadence. Drag it to place it; hide it anytime from the same menu or its close button. It stays on your desktop while Cadence is running, and remembers your choice next time.</p>
       <h3>Check it's the real file</h3>
@@ -168,7 +175,7 @@ brew install --cask cadence</code></pre>
   <details><summary>Is it really free?</summary><p>Yes. Cadence is open source under the MIT license, with no account, trial or word limit.</p></details>
   <details><summary>Does anything I say leave my Mac?</summary><p>No. Transcription runs on your Mac, and Cadence has no networking code. History is encrypted on your disk, and audio is only kept if you turn that on.</p></details>
   <details><summary>Which languages?</summary><p>Any language the bundled Whisper model handles, two at a time: one per Option key, or set either key to detect the language automatically. English and Spanish are tested the most.</p></details>
-  <details><summary>Why does macOS warn me when I first open it?</summary><p>It isn't notarized, because that costs $99 a year and Cadence is free. <a href="#why-warning">Here's how to open it</a>, and how to check the file is genuine.</p></details>
+  <details><summary>Why does macOS warn me when I first open it?</summary><p>It isn't notarized, because that costs $99 a year and Cadence is free. <a href="#why-warning">Here's how to open it</a> on any macOS version, and how to check the file is genuine.</p></details>
   <details><summary>Intel Mac? Windows? iPhone?</summary><p>Not yet. Cadence is built for Apple silicon Macs. Intel is untested, and Windows is planned.</p></details>
   <details><summary>Is it affiliated with Wispr Flow, Superwhisper, Apple or OpenAI?</summary><p>No. They're named only to compare and to credit. Cadence is an independent project.</p></details>
 </section>
